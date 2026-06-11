@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    // @modelcontextprotocol/sdk's Transport types declare `prop: T | undefined`
+    // where the interface says `prop?: T` — incompatible with exactOptionalPropertyTypes.
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["src", "test"]
+}

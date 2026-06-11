@@ -5,4 +5,5 @@ coverage/
 .env
 .env.*
 !.env.example
+manual.txt
 .DS_Store
