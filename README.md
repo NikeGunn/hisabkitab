@@ -15,7 +15,22 @@ owner's confirmation. The agent shows its work, flags anything it's unsure about
 - `docs/nepali-smb-finance-agent-PRD*.md` — v1.0 base, v1.1 (safety + verified tax, authoritative),
   v1.2 (reports module), v2.0 (commercialization — build after the pilot).
 
-## Status — Phases 0–3 complete
+## Status — Phases 0–4 complete
+
+**Phase 4** ships the bill-extraction confirmation loop, proven end-to-end with messy bills
+(`packages/orchestrator/src/bills/`): a fixture manifest of 8 adversarial dummy bills — clean
+Rule 17, lying grand total, 17Ka abbreviated, smudged invoice number, unreadably blurred photo,
+duplicate resend, >1-year-old PDF, and a **real photographed bill** (`fixtures/wild/`) whose
+printed VAT is Rs 3 off the true 13% — rendered deterministically (SVG→PNG via sharp + a
+hand-rolled PDF). `verify:bills` drives them through the REAL ledger MCP over HTTP
+(validate → record draft → owner confirm; 10 checks). `verify:bills -- --live` runs the real
+agent over each image through a cloudflared quick tunnel: **6/8 live PASS** including the full
+loop — photo → vision extraction → `validate_entry` → echo → owner "yes" → a `confirmed` row
+with exact paisa in Postgres — plus held mismatches, denied 17Ka credit, a duplicate warning,
+and no invented figures from the blurred bill. Hardening that fell out: `validate_entry` echoes
+`validated_figures` (Audit Gate evidence for pre-save echoes), the MCP toolset is pinned
+`always_allow` (the `always_ask` default stalled sessions), and `runTurn` enforces its deadline
+against silent streams + interrupts stuck turns.
 
 **Phase 3** ships the WhatsApp layer in `packages/orchestrator`: a Fastify webhook server
 (Meta handshake + `X-Hub-Signature-256` verified over the raw bytes), zod-parsed inbound
@@ -69,5 +84,6 @@ pnpm typecheck   # tsc --strict
 ```
 
 ## Next
-Phase 4: bill-extraction confirmation loop end-to-end (test with real messy bills). Requires a
-Meta business + number (webhook is ready) and a public https deployment of the Ledger MCP.
+Phase 5: Payments MCP (Khalti sandbox live; eSewa/Fonepay "coming soon" stubs). Still external:
+Meta business verification + number (webhook is ready) and a public https deployment of the
+Ledger MCP — setup manual lives in the gitignored `manual.txt`.

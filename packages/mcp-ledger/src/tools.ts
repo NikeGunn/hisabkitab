@@ -415,7 +415,17 @@ export function createToolHandlers(ctx: ToolContext) {
       await inTenantTx((tx) =>
         logWrite(tx, ctx, 'validate_entry', { entry_type: args.entry_type }, { report, entryType: `${args.entry_type}_candidate`, entryId: null }),
       );
-      return serializeValidation(report);
+      return {
+        ...serializeValidation(report),
+        // Echo the validated figures back: the relay Audit Gate only delivers
+        // outbound figures it can match against same-turn tool results, and
+        // the agent must echo a bill BEFORE anything is saved.
+        validated_figures: {
+          ...(args.taxable_paisa !== undefined ? { taxable_paisa: args.taxable_paisa } : {}),
+          ...(args.vat_paisa !== undefined ? { vat_paisa: args.vat_paisa } : {}),
+          ...(args.total_paisa !== undefined ? { total_paisa: args.total_paisa } : {}),
+        },
+      };
     },
 
     async confirm_entry(args: Args<'confirm_entry'>) {

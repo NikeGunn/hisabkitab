@@ -13,6 +13,8 @@
     "agent:setup": "tsx src/agent/setup.ts",
     "start": "tsx src/main.ts",
     "templates:submit": "tsx src/whatsapp/templates.ts",
+    "fixtures:bills": "tsx src/bills/generate-fixtures.ts",
+    "verify:bills": "tsx src/verify-bills.ts",
     "verify:live": "tsx src/verify-live.ts",
     "verify:wa": "tsx src/verify-wa.ts"
   },
@@ -26,7 +28,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "postgres": "^3.4.9",
+    "sharp": "^0.35.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.8"

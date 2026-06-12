@@ -8,3 +8,4 @@ coverage/
 manual.txt
 *.local.json
 .DS_Store
+packages/orchestrator/fixtures/bills/

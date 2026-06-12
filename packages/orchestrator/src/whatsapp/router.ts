@@ -44,6 +44,8 @@ export interface RouterDeps extends SessionStoreDeps {
   gateLogger: GateLogger;
   queues: SerialQueues;
   log?: (msg: string) => void;
+  /** Per-turn hard cap, ms; default 10 min (see runTurn). */
+  turnTimeoutMs?: number;
 }
 
 export const UNSUPPORTED_REPLY =
@@ -96,7 +98,8 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       try {
         const mountPath = await attachInboundMedia(deps.anthropic, deps.wa, sessionId, msg.media);
         turnText =
-          `The owner sent a ${msg.kind} (saved at ${mountPath}). ` +
+          `The owner sent a ${msg.kind} (saved at ${mountPath}; files added mid-session ` +
+          `can also appear under /mnt/session/uploads${mountPath} — check both). ` +
           `Follow the bill-extraction skill on it.` +
           (msg.text ? ` Their caption: "${msg.text}"` : '');
       } catch (err) {
@@ -110,11 +113,14 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       return true;
     }
 
-    await runTurn(deps.anthropic, sessionId, turnText, {
+    const turn = await runTurn(deps.anthropic, sessionId, turnText, {
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,
       deliver: (text) => deps.wa.sendText(msg.fromE164, text),
+      ...(deps.turnTimeoutMs !== undefined ? { timeoutMs: deps.turnTimeoutMs } : {}),
+      ...(deps.log ? { onEvent: (type: string) => deps.log?.(`event ${type}`) } : {}),
     });
+    if (turn.status === 'timeout') deps.log?.(`turn TIMED OUT for ${msg.waMessageId}`);
     return true;
   });
 }

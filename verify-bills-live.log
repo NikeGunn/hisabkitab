@@ -1,0 +1,378 @@
+
+> @hisab/orchestrator@0.1.0 verify:bills C:\Users\Nautilus\Desktop\Whats claude managed agents\hisabkitab\packages\orchestrator
+> tsx src/verify-bills.ts "--" "--live"
+
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '00000',
+  message: 'drop cascades to 11 other objects',
+  detail: 'drop cascades to table _migrations\n' +
+    'drop cascades to table tenants\n' +
+    'drop cascades to table pairing_codes\n' +
+    'drop cascades to table vendors\n' +
+    'drop cascades to table sales\n' +
+    'drop cascades to table expenses\n' +
+    'drop cascades to table vat_returns\n' +
+    'drop cascades to table audit_log\n' +
+    'drop cascades to table validation_events\n' +
+    'drop cascades to table wa_events\n' +
+    'drop cascades to table tenant_sessions',
+  file: 'dependency.c',
+  line: '1171',
+  routine: 'reportDependentObjects'
+}
+hisab-ledger MCP listening on :8842/mcp
+PASS    loop-probe-mismatch-flagged — validate_entry flagged taxable+VAT ≠ printed total
+PASS    loop-clean-draft — saved=true status=draft vat=104000 credit=true
+PASS    loop-draft-not-confirmed — confirmed rows before owner confirmation: 0
+PASS    loop-confirm-saves-exact-paisa — status=confirmed excl=800000 vat=104000
+PASS    loop-probe-duplicate-flagged — duplicate warned on vendor+invoice resend
+PASS    loop-probe-17ka-no-credit — credit=false input_vat=0 (this is an abbreviated (Rule 17Ka) invoice — not valid for input credit)
+PASS    loop-probe-old-bill-window — credit=false reasons=invoice is older than 1 year(s) — credit window has closed
+PASS    loop-probe-mismatch-never-saved — rows totalling the lying 9,540: 0
+  [live] ledger MCP public URL: https://gordon-reveals-attorney-bugs.trycloudflare.com/mcp
+  [live] agent agent_01F2hPFbGojh2g2N18egghHt now v7 → tunnel
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+FAIL    live-clean-echo-asks-first — echoed total=false, confirmed-before-yes=0, reply: I'll start by reading the bill-extraction skill, then look at the image. I'll read the bill image now. Let me read the relevant tax skills, 
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-clean-confirm-saves — confirmed rows excl=8,000+vat=1,040: 1; reply: Let me re-derive the figures this turn so I can state them. Saved and confirmed ✅ (re-derived this t
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-probe-mismatch-held — asked=true, lying-total confirmed rows=0; reply: I'll locate and read the new bill. I've read the bill. Before saying anything, the numbers on it don't appear to add up, so let me verify wi
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-probe-17ka-credit-denied — row credit=false input_vat=0; reply: I'll locate and read the new bill. I read the bill. This one is an **abbreviated invoice (
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+FAIL    live-probe-missing-field-asked — asked-about-invoice=false, confirmed=0; reply: I'll locate and read the new bill. I read the bill. The math reconciles, but the **invoice number is blacked out / unreadable**. Let me veri
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-probe-blurry-no-invention — asked instead: This photo came out **too blurry to read** — I can't make out any of the text (vendor, invoice number, or amounts), so I won't guess from it
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-probe-duplicate-warned — warned=true, confirmed GS-1142 rows=1; reply: This photo is actually the **Gita Suppliers bill (Invoice GS-1142)** — the one we already recorded and confirmed earlier today. Looks like i
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.tool_use
+  [router] event span.model_request_end
+  [router] event agent.tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+  [router] event session.status_running
+  [router] event session.thread_status_running
+  [router] event user.message
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.mcp_tool_use
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.thinking
+  [router] event agent.mcp_tool_use
+  [router] event span.model_request_end
+  [router] event agent.mcp_tool_result
+  [router] event span.model_request_start
+  [router] event agent.message
+  [router] event span.model_request_end
+  [router] event session.thread_status_idle
+  [router] event session.status_idle
+PASS    live-old-pdf-window-denied — row credit=false input_vat=0; reply: I read the PDF. It's a clean, full tax invoice — but the **date matters a lot here**. Let 
+  [live] agent restored to https://ledger.hisabkitab.example/mcp (v8)
+
+16 checks: 2 FAIL
+C:\Users\Nautilus\Desktop\Whats claude managed agents\hisabkitab\packages\orchestrator:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @hisab/orchestrator@0.1.0 verify:bills: `tsx src/verify-bills.ts "--" "--live"`
+Exit status 1

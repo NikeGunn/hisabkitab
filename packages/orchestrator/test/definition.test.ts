@@ -17,7 +17,12 @@ describe('buildAgentConfig', () => {
       { type: 'url', name: LEDGER_MCP_NAME, url: 'https://ledger.example/mcp' },
     ]);
     expect(cfg.skills.map((s) => s.skill_id)).toEqual(['skill_a', 'skill_b', 'skill_c']);
-    expect(cfg.tools).toContainEqual({ type: 'mcp_toolset', mcp_server_name: LEDGER_MCP_NAME });
+    expect(cfg.tools).toContainEqual({
+      type: 'mcp_toolset',
+      mcp_server_name: LEDGER_MCP_NAME,
+      // always_allow: ledger tools are first-party; consent = draft->confirm_entry
+      default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
+    });
   });
 
   it('PROBE: rejects an http:// ledger URL (bearer tokens travel on it)', () => {

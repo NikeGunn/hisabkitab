@@ -53,6 +53,8 @@ export interface TurnOptions {
   deliver: (text: string) => void | Promise<void>;
   /** Hard cap on stream wait, ms (long Opus turns are normal; default 10 min). */
   timeoutMs?: number;
+  /** Observe raw stream event types (verification/diagnostics). */
+  onEvent?: (type: string) => void;
 }
 
 export interface TurnResult {
@@ -84,12 +86,55 @@ export async function runTurn(
   let evidence = newTurnEvidence();
   let awaitingRetry = false;
 
-  for await (const event of stream) {
-    if (Date.now() > deadline) {
+  // The deadline must fire even when the stream goes SILENT (hung MCP call,
+  // dropped SSE) — so race every iterator step against the remaining time
+  // instead of only checking when an event happens to arrive.
+  const iterator = stream[Symbol.asyncIterator]();
+  const TIMED_OUT = Symbol('timeout');
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
       result.status = 'timeout';
       break;
     }
+    let timer: NodeJS.Timeout | undefined;
+    const step = await Promise.race([
+      iterator.next(),
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), remaining);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    if (step === TIMED_OUT) {
+      result.status = 'timeout';
+      // unblock the session — a turn left running/awaiting would 400 every
+      // subsequent user.message ("waiting on responses to events …")
+      await client.beta.sessions.events
+        .send(sessionId, { events: [{ type: 'user.interrupt' }] })
+        .catch(() => undefined);
+      (stream as { controller?: AbortController }).controller?.abort();
+      break;
+    }
+    if (step.done) break;
+    const event = step.value;
+    opts.onEvent?.(event.type);
     switch (event.type) {
+      case 'agent.tool_use':
+      case 'agent.mcp_tool_use': {
+        // Safety net: all tools on this agent are first-party (ledger MCP is
+        // tenant-scoped; owner consent is modeled as draft→confirm_entry).
+        // If a call still arrives permission-gated, allow it — otherwise the
+        // session stalls forever waiting for a confirmation nobody sends.
+        const gated = (event as { evaluated_permission?: string }).evaluated_permission === 'ask';
+        if (gated) {
+          await client.beta.sessions.events.send(sessionId, {
+            events: [
+              { type: 'user.tool_confirmation', tool_use_id: event.id, result: 'allow' },
+            ] as never,
+          });
+        }
+        break;
+      }
+
       case 'agent.tool_result':
       case 'agent.mcp_tool_result':
         addToolResultEvidence(evidence, JSON.stringify(event.content ?? ''), {

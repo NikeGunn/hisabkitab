@@ -202,6 +202,28 @@ describe('validate_entry (no write)', () => {
     expect(flagged).toContain('vat.math');
     expect(flagged).toContain('vat.totals');
   });
+
+  it('echoes the validated figures back (Audit Gate evidence for pre-save echoes)', async () => {
+    const r = await session.callTool<{
+      overall: string;
+      validated_figures: { taxable_paisa: number; vat_paisa: number; total_paisa: number };
+    }>('validate_entry', {
+      entry_type: 'expense',
+      occurred_on: TODAY_ISO,
+      vendor_is_vat_registered: true,
+      invoice_type: 'rule17',
+      taxable_paisa: 800000,
+      vat_paisa: 104000,
+      total_paisa: 904000,
+      for_taxable_business_use: true,
+    });
+    expect(r.overall).toBe('pass');
+    expect(r.validated_figures).toEqual({
+      taxable_paisa: 800000,
+      vat_paisa: 104000,
+      total_paisa: 904000,
+    });
+  });
 });
 
 describe('vendors', () => {

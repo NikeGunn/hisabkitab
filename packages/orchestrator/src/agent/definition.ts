@@ -35,7 +35,15 @@ export function buildAgentConfig(input: AgentConfigInput) {
     tools: [
       // bash + file ops (build PDFs, parse files), web_search/web_fetch (confirm IRD deadlines)
       { type: 'agent_toolset_20260401' as const, default_config: { enabled: true } },
-      { type: 'mcp_toolset' as const, mcp_server_name: LEDGER_MCP_NAME },
+      {
+        type: 'mcp_toolset' as const,
+        mcp_server_name: LEDGER_MCP_NAME,
+        // These are OUR tenant-scoped tools; owner-level consent lives in the
+        // tool semantics (draft→confirm_entry), not in per-call confirmations.
+        // Without this the toolset defaults to always_ask and every ledger
+        // call stalls the session waiting for a user.tool_confirmation.
+        default_config: { enabled: true, permission_policy: { type: 'always_allow' as const } },
+      },
     ],
     mcp_servers: [
       // No auth here — per-tenant signed bearer tokens live in vaults, attached per session.
