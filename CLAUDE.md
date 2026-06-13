@@ -78,6 +78,43 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
   P15/P16) before charging; defer the rest until volume demands it. **Sequence beats completeness — do
   not build all of v2 up front.**
 
+## 5a. BUILD STATUS — what's done, what's pending (keep this current!)
+> To continue work: read this file, then **build the next ⬜ PENDING item below**. The user may also
+> just say a phase number/name. Always propose the plan + file list first (§6), build small, test, and
+> run the suite before calling it done. Update this checklist when a phase lands.
+
+**✅ DONE (committed; ~245 tests green, real-API verified on Sonnet):**
+- ✅ **Phase 0** — `shared`: Money/paisa, VAT/TDS, BS-date, **aging pure fns**, Validation Engine (+ probes).
+- ✅ **Phase 1** — Postgres + RLS + schema; Ledger MCP (record/validate/draft→confirm).
+- ✅ **Phase 2** — agent definition + 3 skills + system prompt; session client; Pre-delivery Audit Gate.
+- ✅ **Phase 3** — WhatsApp webhook (signed), media→Files, onboarding/pairing, Utility templates.
+- ✅ **Phase 4** — bill-extraction confirmation loop end-to-end (8 adversarial bills + real photo).
+- ✅ **Phase 5** — Payments MCP (Khalti live + eSewa/Fonepay "coming soon"); agent wired; 4th skill.
+- ✅ **Phase 6** — BullMQ monthly reminder scheduler + independent session self-verification.
+- ✅ **Phase 7** — hardening: credential-scrub guard, tenant data-deletion path, rate-limit + retry/backoff.
+- ✅ Extras: model is config (`HISAB_MODEL`, dev=Sonnet/prod=Opus); commit-guard hook (`.claude/`);
+  marketing **landing page** (`landing/`, Next.js); `pnpm dev` runs the whole stack.
+
+**⬜ PENDING — build in this order:**
+- ⬜ **Module C (v1.2) — reports & analytics.** NOT built (only the Phase-0 `aging` pure fn exists; no
+  AR/AP tools, no allocation, no reports service). Order:
+  - ⬜ **C-1** AR/AP schema + allocation logic in the Ledger MCP (+ tests; allocations in one locked tx).
+  - ⬜ **C-2** analytics + aging report tools (re-verify aging buckets sum to the grand total).
+  - ⬜ **C-3** Reports service: HTML→PDF via Playwright (deterministic from validated data),
+    reconcile-or-hold, WhatsApp document delivery.
+  - ⬜ **C-4** remaining reports (VAT return PDF, sales/purchase registers, statements).
+  - ⬜ **C-5** scope-guardrail polish for report requests.
+- ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
+  paid-customer subset first: ⬜ **P8** identity/RBAC → ⬜ **P9** idempotency/concurrency (harden) →
+  ⬜ **P10** billing → ⬜ **P11** cost controls → minimal ⬜ **P15** security + ⬜ **P16** infra/CI-CD.
+  Defer until volume: ⬜ P12 voice, ⬜ P13 accounting completeness, ⬜ P14 observability, ⬜ P17 growth,
+  ⬜ P18 support/admin, ⬜ P19 accountant channel.
+
+**🌐 EXTERNAL (not code — needed before a real pilot):** Meta business verification + WhatsApp number
++ webhook registration; Khalti **merchant onboarding** (sandbox `test-admin.khalti.com`; prod needs the
+MOU docs); a **Redis** instance (scheduler); public **https deploy** of the Ledger + Payments MCP
+servers. Details in the gitignored `manual.txt`.
+
 ## 6. How to work with me
 - Before each phase, **propose a short plan and the file list**, then wait for my OK. Don't build
   everything at once.

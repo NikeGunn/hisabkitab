@@ -12,9 +12,17 @@
     "verify": "pnpm --filter @hisab/shared verify",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev": "concurrently -n landing,ledger,payments,webhook -c magenta,cyan,yellow,green \"pnpm dev:landing\" \"pnpm dev:ledger\" \"pnpm dev:payments\" \"pnpm dev:webhook\"",
+    "dev:backend": "concurrently -n ledger,payments,webhook -c cyan,yellow,green \"pnpm dev:ledger\" \"pnpm dev:payments\" \"pnpm dev:webhook\"",
+    "dev:landing": "cd landing && pnpm dev",
+    "dev:ledger": "pnpm --filter @hisab/mcp-ledger start",
+    "dev:payments": "pnpm --filter @hisab/mcp-payments start",
+    "dev:webhook": "pnpm --filter @hisab/orchestrator start",
+    "khalti:stub": "pnpm --filter @hisab/mcp-payments khalti:stub"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "eslint": "^9.39.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",

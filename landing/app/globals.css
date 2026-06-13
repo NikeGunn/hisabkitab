@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    /* warm cream canvas + a faint top-glow, per the design's ambient layer */
+    background-image:
+      radial-gradient(1200px 600px at 80% -10%, rgba(253, 184, 19, 0.18), transparent 60%),
+      radial-gradient(900px 500px at 0% 0%, rgba(246, 139, 31, 0.1), transparent 55%);
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: rgba(246, 139, 31, 0.25);
+  }
+}
+
+@layer components {
+  .label {
+    @apply font-mono text-[12px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+  .display {
+    @apply font-serif font-medium leading-[1.04] tracking-tight text-ink;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-control bg-primary px-6 py-3
+      font-medium text-white shadow-card transition-all duration-200
+      hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-control border border-hairline
+      bg-surface px-6 py-3 font-medium text-ink transition-all duration-200
+      hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card;
+  }
+  .card {
+    @apply rounded-card border border-hairline bg-surface shadow-card;
+  }
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-pill border border-hairline bg-surface/80
+      px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted backdrop-blur;
+  }
+}
+
+/* respect reduced-motion: kill the ambient loops */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-marquee,
+  .animate-marquee-reverse,
+  .animate-shimmer {
+    animation: none !important;
+  }
+}
