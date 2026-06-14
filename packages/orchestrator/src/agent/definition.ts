@@ -24,6 +24,7 @@ export interface SkillRefs {
   nepalTds: string;
   billExtraction: string;
   nepalPayments: string;
+  accountsReports: string;
 }
 
 export interface AgentConfigInput {
@@ -78,6 +79,7 @@ export function buildAgentConfig(input: AgentConfigInput) {
       { type: 'custom' as const, skill_id: input.skillIds.nepalTds, version: 'latest' },
       { type: 'custom' as const, skill_id: input.skillIds.billExtraction, version: 'latest' },
       { type: 'custom' as const, skill_id: input.skillIds.nepalPayments, version: 'latest' },
+      { type: 'custom' as const, skill_id: input.skillIds.accountsReports, version: 'latest' },
     ],
     metadata: { project: 'hisabkitab', phase: '5' },
   };

@@ -17,7 +17,10 @@
     "verify:bills": "tsx src/verify-bills.ts",
     "verify:live": "tsx src/verify-live.ts",
     "verify:wa": "tsx src/verify-wa.ts",
-    "verify:scheduler": "tsx src/scheduler/verify-scheduler.ts"
+    "verify:scheduler": "tsx src/scheduler/verify-scheduler.ts",
+    "verify:reports": "tsx src/verify-reports.ts",
+    "verify:reports-live": "tsx --env-file-if-exists=../../.env src/verify-reports-live.ts",
+    "reports:sample": "tsx src/reports/sample.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
@@ -29,9 +32,11 @@
     "drizzle-orm": "0.45.2",
     "fastify": "^5.8.5",
     "ioredis": "^5.4.2",
+    "pdfmake": "^0.2.20",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/pdfmake": "^0.3.3",
     "postgres": "^3.4.9",
     "sharp": "^0.35.1",
     "tsx": "^4.20.0",

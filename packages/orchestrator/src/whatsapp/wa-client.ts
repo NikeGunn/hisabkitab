@@ -104,6 +104,47 @@ export class WaClient {
     });
   }
 
+  /**
+   * Upload bytes to the Cloud API media store, returning the media id.
+   * Used to deliver generated report PDFs (multipart, so NOT via `request`).
+   */
+  async uploadMedia(bytes: Buffer, mimeType: string, filename: string): Promise<string> {
+    return withRetry(
+      async () => {
+        const form = new FormData();
+        form.append('messaging_product', 'whatsapp');
+        form.append('type', mimeType);
+        form.append('file', new Blob([new Uint8Array(bytes)], { type: mimeType }), filename);
+        const res = await this.fetch(`${this.base}/${this.version}/${this.opts.phoneNumberId}/media`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${this.opts.accessToken}` },
+          body: form,
+        });
+        if (!res.ok) throw new WaError(`media upload → ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status);
+        return (await res.json() as { id: string }).id;
+      },
+      { attempts: this.opts.retryAttempts ?? 3 },
+    );
+  }
+
+  /**
+   * Send a document (PDF report) inside the 24h service window. Uploads the bytes
+   * first, then sends a document message with a one-line caption.
+   */
+  async sendDocument(to: string, bytes: Buffer, filename: string, caption: string, mimeType = 'application/pdf'): Promise<void> {
+    const mediaId = await this.uploadMedia(bytes, mimeType, filename);
+    await this.request(`/${this.opts.phoneNumberId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to.replace(/^\+/, ''),
+        type: 'document',
+        document: { id: mediaId, filename, caption },
+      }),
+    });
+  }
+
   /** Step 1 of media download: resolve the short-lived CDN URL. */
   async fetchMediaMeta(mediaId: string): Promise<WaMediaMeta> {
     const meta = (await this.request(`/${mediaId}`, { method: 'GET' })) as {

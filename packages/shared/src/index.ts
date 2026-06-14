@@ -4,6 +4,7 @@ export * from './vat/vat.js';
 export * from './tds/tds.js';
 export * from './bsdate/bsdate.js';
 export * from './aging/aging.js';
+export * from './allocation/allocation.js';
 export * from './validation/engine.js';
 export * from './verification/verdict.js';
 export { checks as verificationChecks } from './verification/checks.js';

@@ -12,6 +12,8 @@ import { buildServer } from './server.js';
 import { startScheduler, type SchedulerHandle } from './scheduler/queue.js';
 import { createLedgerSummaryProvider } from './scheduler/ledger-summary.js';
 import { TenantRateLimiter } from './resilience/rate-limit.js';
+import { dispatchReport } from './reports/dispatch.js';
+import { withTenant, schema } from '@hisab/db';
 
 const config = await loadConfig();
 const handle = createDb(config.DATABASE_URL);
@@ -37,6 +39,29 @@ const app = buildServer({
     environmentId: config.ENVIRONMENT_ID,
     ledgerMcpUrl: config.LEDGER_MCP_URL,
     signingSecret: config.TENANT_SIGNING_SECRET,
+    // Module C: render+reconcile+deliver PDF reports the agent requested this turn.
+    dispatchReport: (tenantId, toE164, req) =>
+      dispatchReport(
+        {
+          db: handle.db,
+          ledgerMcpUrl: config.LEDGER_MCP_URL,
+          signingSecret: config.TENANT_SIGNING_SECRET,
+          delivery: {
+            sendDocument: (to, bytes, filename, caption) => wa.sendDocument(to, bytes, filename, caption),
+            sendText: (to, body) => wa.sendText(to, body),
+          },
+          audit: {
+            log: (entry) =>
+              withTenant(handle.db, entry.tenantId, async (tx) => {
+                await tx.insert(schema.auditLog).values({ tenantId: entry.tenantId, actor: 'system', action: entry.action, detail: entry.detail });
+              }),
+          },
+          log: (msg) => console.log(`[reports] ${msg}`),
+        },
+        tenantId,
+        toE164,
+        req,
+      ),
     log: (msg) => console.log(msg),
   },
 });

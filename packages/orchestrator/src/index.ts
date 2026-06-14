@@ -38,7 +38,19 @@ export {
   type StartSessionOptions,
   type TurnOptions,
   type TurnResult,
+  type CapturedReportRequest,
 } from './session/client.js';
+export {
+  runReportJob,
+  type ReportDelivery,
+  type ReportAuditSink,
+  type ReportJobResult,
+  type ReportVerdict,
+} from './reports/report-job.js';
+export { buildReport, type LedgerReadClient, type ReportRequest, type TenantInfo } from './reports/report-data.js';
+export { PdfmakeRenderer, type PdfRenderer } from './reports/render.js';
+export { dispatchReport, type ReportDispatchDeps } from './reports/dispatch.js';
+export { type ReportModel, type ReportType } from './reports/model.js';
 export { getOrCreateTenantSession, type SessionStoreDeps } from './session/store.js';
 export { verifyWebhookSignature, handleVerifyHandshake } from './whatsapp/signature.js';
 export { parseInboundWebhook, type InboundMessage, type InboundMedia } from './whatsapp/inbound.js';

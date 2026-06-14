@@ -163,6 +163,106 @@ export const tenantSessions = pgTable('tenant_sessions', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// ----- Module C-1 (v1.2): Accounts Receivable / Payable -----
+
+/** Unifies customers & suppliers (PRD v1.2 §C2). `vendors` stays for expense PAN memory. */
+export const parties = pgTable(
+  'parties',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    name: text('name').notNull(),
+    panVatNo: text('pan_vat_no'),
+    isVatRegistered: boolean('is_vat_registered'),
+    kind: text('kind', { enum: ['customer', 'supplier', 'both'] })
+      .notNull()
+      .default('both'),
+    phone: text('phone'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('parties_tenant_id_name_key').on(t.tenantId, t.name)],
+);
+
+/** Credit sales the business issued — `balancePaisa` decremented by allocations. */
+export const arInvoices = pgTable('ar_invoices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  partyId: uuid('party_id')
+    .notNull()
+    .references(() => parties.id),
+  invoiceNo: text('invoice_no'),
+  issuedOn: date('issued_on').notNull(),
+  dueOn: date('due_on'),
+  taxablePaisa: bigint('taxable_paisa', { mode: 'bigint' }).notNull(),
+  vatPaisa: bigint('vat_paisa', { mode: 'bigint' }).notNull(),
+  totalPaisa: bigint('total_paisa', { mode: 'bigint' }).notNull(),
+  balancePaisa: bigint('balance_paisa', { mode: 'bigint' }).notNull(),
+  status: text('status', { enum: ['draft', 'confirmed'] })
+    .notNull()
+    .default('draft'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Credit purchases the business owes — symmetric to ar_invoices, with input-credit flag. */
+export const apBills = pgTable('ap_bills', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  partyId: uuid('party_id')
+    .notNull()
+    .references(() => parties.id),
+  billNo: text('bill_no'),
+  billedOn: date('billed_on').notNull(),
+  dueOn: date('due_on'),
+  taxablePaisa: bigint('taxable_paisa', { mode: 'bigint' }).notNull(),
+  vatPaisa: bigint('vat_paisa', { mode: 'bigint' }).notNull(),
+  totalPaisa: bigint('total_paisa', { mode: 'bigint' }).notNull(),
+  balancePaisa: bigint('balance_paisa', { mode: 'bigint' }).notNull(),
+  inputCreditEligible: boolean('input_credit_eligible').notNull().default(false),
+  status: text('status', { enum: ['draft', 'confirmed'] })
+    .notNull()
+    .default('draft'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Payments received (AR) / paid (AP), allocated to specific invoices/bills. */
+export const partyPayments = pgTable('party_payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  partyId: uuid('party_id')
+    .notNull()
+    .references(() => parties.id),
+  direction: text('direction', { enum: ['received', 'paid'] }).notNull(),
+  amountPaisa: bigint('amount_paisa', { mode: 'bigint' }).notNull(),
+  paidOn: date('paid_on').notNull(),
+  method: text('method', { enum: ['cash', 'khalti', 'esewa', 'bank'] }),
+  status: text('status', { enum: ['draft', 'confirmed'] })
+    .notNull()
+    .default('draft'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Immutable allocation lines tying a payment to invoice/bill balances. */
+export const paymentAllocations = pgTable('payment_allocations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  paymentId: uuid('payment_id')
+    .notNull()
+    .references(() => partyPayments.id),
+  targetType: text('target_type', { enum: ['ar_invoice', 'ap_bill'] }).notNull(),
+  targetId: uuid('target_id').notNull(),
+  amountPaisa: bigint('amount_paisa', { mode: 'bigint' }).notNull(),
+});
+
 // ----- Phase 5 (Payments): Khalti v2 live; eSewa/Fonepay coming soon -----
 
 /**

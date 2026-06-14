@@ -19,6 +19,28 @@ import type { GateLogger } from '../audit/audit-logger.js';
 
 const MAX_HOLDS_PER_TURN = 2;
 
+/**
+ * Pull a `report_request` marker out of a request_report tool result. The result is
+ * doubly-encoded (the MCP wraps JSON text in content blocks, then we stringify), so we
+ * find the inner object robustly rather than fully parsing the envelope.
+ */
+function captureReportRequest(rawToolResult: string): CapturedReportRequest | null {
+  if (!rawToolResult.includes('report_request')) return null;
+  try {
+    // The content array holds {type:'text', text:'<json>'}; recover that inner json.
+    const blocks = JSON.parse(rawToolResult) as Array<{ text?: string }> | { text?: string };
+    const texts = Array.isArray(blocks) ? blocks.map((b) => b.text ?? '') : [blocks.text ?? ''];
+    for (const t of texts) {
+      if (!t.includes('report_request')) continue;
+      const parsed = JSON.parse(t) as { accepted?: boolean; report_request?: CapturedReportRequest };
+      if (parsed.accepted && parsed.report_request) return parsed.report_request;
+    }
+  } catch {
+    // tolerant: a malformed/partial result simply yields no report dispatch.
+  }
+  return null;
+}
+
 export interface StartSessionOptions {
   agentId: string;
   /** Pin a version for reproducibility; omit for latest. */
@@ -57,11 +79,22 @@ export interface TurnOptions {
   onEvent?: (type: string) => void;
 }
 
+/** A report the agent asked to generate this turn (from the request_report tool result). */
+export interface CapturedReportRequest {
+  report_type: 'receivables' | 'payables' | 'statement' | 'sales_summary';
+  party?: string;
+  as_of?: string;
+  bs_year?: number;
+  bs_month?: number;
+}
+
 export interface TurnResult {
   delivered: string[];
   holds: number;
   status: 'idle' | 'terminated' | 'timeout';
   errors: string[];
+  /** report jobs the agent requested this turn (dispatched by the router after the turn). */
+  reportRequests: CapturedReportRequest[];
 }
 
 /**
@@ -75,7 +108,7 @@ export async function runTurn(
   userText: string,
   opts: TurnOptions,
 ): Promise<TurnResult> {
-  const result: TurnResult = { delivered: [], holds: 0, status: 'idle', errors: [] };
+  const result: TurnResult = { delivered: [], holds: 0, status: 'idle', errors: [], reportRequests: [] };
   const deadline = Date.now() + (opts.timeoutMs ?? 600_000);
 
   const stream = await client.beta.sessions.events.stream(sessionId);
@@ -136,11 +169,13 @@ export async function runTurn(
       }
 
       case 'agent.tool_result':
-      case 'agent.mcp_tool_result':
-        addToolResultEvidence(evidence, JSON.stringify(event.content ?? ''), {
-          isError: event.is_error ?? false,
-        });
+      case 'agent.mcp_tool_result': {
+        const raw = JSON.stringify(event.content ?? '');
+        addToolResultEvidence(evidence, raw, { isError: event.is_error ?? false });
+        const captured = captureReportRequest(raw);
+        if (captured) result.reportRequests.push(captured);
         break;
+      }
 
       case 'agent.message': {
         const text = event.content.map((b) => b.text).join('\n');

@@ -10,7 +10,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
-import { runTurn } from '../session/client.js';
+import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
 import {
   findTenantBySender,
@@ -50,6 +50,12 @@ export interface RouterDeps extends SessionStoreDeps {
   turnTimeoutMs?: number;
   /** Per-tenant inbound rate limiter (cost guard). Omitted = no limiting. */
   rateLimiter?: TenantRateLimiter;
+  /**
+   * Dispatch a PDF report the agent asked for this turn (Module C). Runs AFTER the turn
+   * so the agent's "preparing your PDF…" acknowledgement is delivered first, then the
+   * document arrives on the open 24h window. Omitted = reports disabled.
+   */
+  dispatchReport?: (tenantId: string, toE164: string, req: CapturedReportRequest) => Promise<void>;
 }
 
 export const UNSUPPORTED_REPLY =
@@ -152,6 +158,18 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       ...(deps.log ? { onEvent: (type: string) => deps.log?.(`event ${type}`) } : {}),
     });
     if (turn.status === 'timeout') deps.log?.(`turn TIMED OUT for ${msg.waMessageId}`);
+
+    // After the turn (so the "preparing…" ack lands first), render+deliver any reports
+    // the agent requested. A report failure never breaks the chat — it self-holds + asks.
+    if (deps.dispatchReport && turn.reportRequests.length > 0) {
+      for (const req of turn.reportRequests) {
+        try {
+          await deps.dispatchReport(tenant.tenantId, msg.fromE164, req);
+        } catch (err) {
+          deps.log?.(`report dispatch failed for ${msg.fromE164}: ${String(err)}`);
+        }
+      }
+    }
     return true;
   });
 }

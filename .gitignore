@@ -10,3 +10,6 @@ manual.txt
 .DS_Store
 packages/orchestrator/fixtures/bills/
 verify-bills-live.log
+
+# Module C report sample/verification artifacts (generated)
+packages/orchestrator/report-samples/

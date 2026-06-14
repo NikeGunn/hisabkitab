@@ -18,6 +18,7 @@ const skillIds = {
   nepalTds: 'skill_b',
   billExtraction: 'skill_c',
   nepalPayments: 'skill_d',
+  accountsReports: 'skill_e',
 };
 
 describe('model is config, not a literal (dev = cheap, prod = Opus)', () => {
@@ -45,14 +46,14 @@ describe('model is config, not a literal (dev = cheap, prod = Opus)', () => {
 });
 
 describe('buildAgentConfig', () => {
-  it('wires model, prompt, ledger MCP and the four skills', () => {
+  it('wires model, prompt, ledger MCP and the five skills', () => {
     const cfg = buildAgentConfig({ ledgerMcpUrl: 'https://ledger.example/mcp', skillIds });
     expect(cfg.model).toBe(HISAB_MODEL);
     expect(cfg.system).toBe(SYSTEM_PROMPT);
     expect(cfg.mcp_servers).toEqual([
       { type: 'url', name: LEDGER_MCP_NAME, url: 'https://ledger.example/mcp' },
     ]);
-    expect(cfg.skills.map((s) => s.skill_id)).toEqual(['skill_a', 'skill_b', 'skill_c', 'skill_d']);
+    expect(cfg.skills.map((s) => s.skill_id)).toEqual(['skill_a', 'skill_b', 'skill_c', 'skill_d', 'skill_e']);
     expect(cfg.tools).toContainEqual({
       type: 'mcp_toolset',
       mcp_server_name: LEDGER_MCP_NAME,

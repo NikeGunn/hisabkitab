@@ -83,7 +83,7 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
 > just say a phase number/name. Always propose the plan + file list first (§6), build small, test, and
 > run the suite before calling it done. Update this checklist when a phase lands.
 
-**✅ DONE (committed; ~245 tests green, real-API verified on Sonnet):**
+**✅ DONE (committed; 276 tests green, real-API verified on Sonnet incl. Module C live 8/8):**
 - ✅ **Phase 0** — `shared`: Money/paisa, VAT/TDS, BS-date, **aging pure fns**, Validation Engine (+ probes).
 - ✅ **Phase 1** — Postgres + RLS + schema; Ledger MCP (record/validate/draft→confirm).
 - ✅ **Phase 2** — agent definition + 3 skills + system prompt; session client; Pre-delivery Audit Gate.
@@ -95,15 +95,26 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
 - ✅ Extras: model is config (`HISAB_MODEL`, dev=Sonnet/prod=Opus); commit-guard hook (`.claude/`);
   marketing **landing page** (`landing/`, Next.js); `pnpm dev` runs the whole stack.
 
+**✅ Module C (v1.2) — reports & analytics — DONE (2026-06-14; +31 tests = 276 total; live-verified 8/8):**
+- ✅ **C-1** AR/AP schema (migration 0007: parties/ar_invoices/ap_bills/party_payments/payment_allocations
+  + RLS + grants, mirroring 0001/0003) + recording tools (record_credit_sale/purchase, record_party_payment,
+  confirm_arap_entry) with draft→confirm. Allocation logic is a pure `@hisab/shared/allocation` module
+  (auto oldest-first + manual; over-allocation rejected); balances decrement in ONE locked tx
+  (SELECT…FOR UPDATE) — exactly-once concurrency probe passes.
+- ✅ **C-2** analytics tools (get_receivables_summary/payables_summary/statement/sales_summary/top_parties),
+  aging via the Phase-0 pure fn + independent reconcile re-verify.
+- ✅ **C-3/C-4** Reports service in the orchestrator: deterministic **Tally-grade PDF via pdfmake@0.2**
+  (branded header, summary cards, zebra table + bold totals, ageing matrix, statutory footer) — chose
+  pdfmake over Playwright (no Chromium download; user-approved). reconcile-or-hold Audit Gate
+  (PASS|FAIL|BLOCKED), WhatsApp document delivery (WaClient.sendDocument/uploadMedia). All four report
+  types (receivables/payables/statement/sales_summary). Agent wired: `request_report` ledger tool →
+  captured in runTurn → dispatched after the turn (reports/dispatch.ts) over the real MCP.
+- ✅ **C-5** scope guardrail — already in the system prompt; live-verified (declined "who is the PM?").
+- New skill **accounts-reports** (5th skill); REPORTS paragraph in system prompt. Scripts:
+  `verify:reports` ($0, 4/4 over real MCP HTTP), `verify:reports-live` (real agent E2E, 8/8), `reports:sample`.
+  Generated PDFs in gitignored `packages/orchestrator/report-samples/`.
+
 **⬜ PENDING — build in this order:**
-- ⬜ **Module C (v1.2) — reports & analytics.** NOT built (only the Phase-0 `aging` pure fn exists; no
-  AR/AP tools, no allocation, no reports service). Order:
-  - ⬜ **C-1** AR/AP schema + allocation logic in the Ledger MCP (+ tests; allocations in one locked tx).
-  - ⬜ **C-2** analytics + aging report tools (re-verify aging buckets sum to the grand total).
-  - ⬜ **C-3** Reports service: HTML→PDF via Playwright (deterministic from validated data),
-    reconcile-or-hold, WhatsApp document delivery.
-  - ⬜ **C-4** remaining reports (VAT return PDF, sales/purchase registers, statements).
-  - ⬜ **C-5** scope-guardrail polish for report requests.
 - ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
   paid-customer subset first: ⬜ **P8** identity/RBAC → ⬜ **P9** idempotency/concurrency (harden) →
   ⬜ **P10** billing → ⬜ **P11** cost controls → minimal ⬜ **P15** security + ⬜ **P16** infra/CI-CD.

@@ -24,6 +24,7 @@ import {
   type TaxConfig,
   type ValidationReport,
 } from '@hisab/shared';
+import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
 
 const { sales, expenses, vendors, vatReturns, auditLog, validationEvents } = schema;
 
@@ -96,6 +97,7 @@ export const inputSchemas = {
     is_vat_registered: z.boolean().optional(),
   },
   get_vendor: { name: z.string().min(1).max(200) },
+  ...arapInputSchemas,
 } as const;
 
 // ---------------------------------------------------------------- shared helpers (DRY)
@@ -243,6 +245,7 @@ export function createToolHandlers(ctx: ToolContext) {
   const inTenantTx = <T>(fn: (tx: Tx) => Promise<T>) => withTenant(ctx.db, ctx.tenantId, fn);
 
   return {
+    ...createArapToolHandlers(ctx),
     async compute_vat(args: Args<'compute_vat'>) {
       const split = splitAmount(BigInt(args.amount_paisa), args.inclusive, true, ctx.cfg);
       return { excl_paisa: n(split.exclPaisa), vat_paisa: n(split.vatPaisa) };
@@ -626,4 +629,5 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
   mark_return_filed_by_user: 'Owner confirmed they filed the return themselves on the IRD portal.',
   upsert_vendor: 'Remember a vendor (PAN, VAT status) so the owner is not re-asked every time.',
   get_vendor: 'Look up a remembered vendor by name (case-insensitive).',
+  ...arapToolDescriptions,
 };
