@@ -15,7 +15,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { timingSafeEqual } from 'node:crypto';
 import { createDb } from '@hisab/db';
 import { buildLedgerServer } from './server.js';
-import { verifyTenantToken, AuthError } from './auth.js';
+import { verifyTenantToken, AuthError, type TenantSession } from './auth.js';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -57,24 +57,24 @@ export function startHttpServer(port: number): ReturnType<typeof createServer> {
     const auth = req.headers.authorization ?? '';
     if (!auth.startsWith('Bearer ')) return deny(res, 401, 'missing bearer token');
     const bearer = auth.slice(7);
-    let tenantId: string;
+    let session: TenantSession;
     if (safeEqual(bearer, serviceToken)) {
       // shape (b): service token + tenant header
       try {
-        tenantId = verifyTenantToken(String(req.headers['x-hisab-tenant'] ?? ''), signingSecret);
+        session = verifyTenantToken(String(req.headers['x-hisab-tenant'] ?? ''), signingSecret);
       } catch (err) {
         return deny(res, 401, err instanceof AuthError ? err.message : 'invalid tenant token');
       }
     } else {
       // shape (a): the bearer IS the signed tenant token (vault-injected)
       try {
-        tenantId = verifyTenantToken(bearer, signingSecret);
+        session = verifyTenantToken(bearer, signingSecret);
       } catch (err) {
         return deny(res, 401, err instanceof AuthError ? err.message : 'invalid bearer token');
       }
     }
     try {
-      const server = buildLedgerServer({ db }, tenantId);
+      const server = buildLedgerServer({ db }, session);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on('close', () => {
         void transport.close();

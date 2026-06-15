@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import { schema, withTenant, type Db, type Tx } from '@hisab/db';
-import { defaultTaxConfig, splitVatInclusive, type TaxConfig } from '@hisab/shared';
+import { defaultTaxConfig, splitVatInclusive, type TaxConfig, type Capability, type Role } from '@hisab/shared';
 import type { KhaltiClient, KhaltiLookupResponse } from './khalti.js';
 import { SUBSCRIPTION_PLANS, getPlan, rupees } from './plans.js';
 import { ensureTrial, loadSubscription, settleSubscriptionPayment } from './billing.js';
@@ -76,9 +76,31 @@ export const inputSchemas = {
   },
 } as const;
 
+/**
+ * RBAC map (PRD v2.0 §3): payment money actions are OWNER-ONLY (`move_money`);
+ * subscription/billing management is owner-only (`manage_billing`); read-only
+ * listings need only `generate_report`. Enforced in server.ts before the handler.
+ * `Record<keyof inputSchemas, …>` forces every new tool to declare a capability.
+ */
+export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
+  initiate_payment: 'move_money',
+  refund_payment: 'move_money',
+  esewa_initiate_payment: 'move_money',
+  fonepay_initiate_payment: 'move_money',
+  verify_payment: 'move_money',
+  initiate_subscription: 'manage_billing',
+  verify_subscription: 'manage_billing',
+  cancel_subscription: 'manage_billing',
+  start_trial: 'manage_billing',
+  list_collected_payments: 'generate_report',
+  list_subscription_plans: 'generate_report',
+  get_subscription_status: 'generate_report',
+} as const;
+
 export interface PaymentsToolContext {
   db: Db;
   tenantId: string;
+  role: Role;
   khalti: KhaltiClient;
   /** Public GET endpoint Khalti redirects the payer back to. */
   returnUrl: string;

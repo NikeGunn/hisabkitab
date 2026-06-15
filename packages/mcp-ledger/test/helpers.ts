@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createDb, type DbHandle } from '@hisab/db';
+import type { Role } from '@hisab/shared';
 import { buildLedgerServer } from '../src/server.js';
 import { ADMIN_URL, APP_URL } from './urls.js';
 
@@ -25,9 +26,10 @@ export interface TestSession {
   close(): Promise<void>;
 }
 
-/** Connect a real MCP client to a tenant-bound Ledger server over an in-memory pair. */
-export async function openSession(handle: DbHandle, tenantId: string): Promise<TestSession> {
-  const server = buildLedgerServer({ db: handle.db }, tenantId);
+/** Connect a real MCP client to a tenant-bound Ledger server over an in-memory pair.
+ *  `role` defaults to owner (full access), or pass a role to exercise RBAC gates. */
+export async function openSession(handle: DbHandle, tenantId: string, role: Role = 'owner'): Promise<TestSession> {
+  const server = buildLedgerServer({ db: handle.db }, { tenantId, role });
   const client = new Client({ name: 'contract-test', version: '0.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
