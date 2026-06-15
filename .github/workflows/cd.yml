@@ -91,7 +91,7 @@ jobs:
 
       - name: Deploy over SSH (compose pull + rolling up)
         if: steps.gate.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -116,7 +116,7 @@ jobs:
 
       - name: Post-deploy health check
         if: steps.gate.outputs.ready == 'true'
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
