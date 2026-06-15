@@ -21,11 +21,14 @@ import {
   validateSale,
   validateExpense,
   vatOnExclusive,
+  withIdempotency,
   type AgingRow,
   type AllocationTarget,
+  type IdempotentResult,
   type TaxConfig,
 } from '@hisab/shared';
 import type { ToolContext } from './tools.js';
+import { txIdempotencyStore } from './idempotency-store.js';
 
 const { parties, arInvoices, apBills, partyPayments, paymentAllocations } = schema;
 
@@ -35,6 +38,12 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
 const bsYear = z.number().int().min(2000).max(2200);
 const bsMonth = z.number().int().min(1).max(12);
 const uuid = z.string().uuid();
+const idempotencyKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe('optional exactly-once key: a retry with the same key returns the original result, never a duplicate entry');
 
 export const arapInputSchemas = {
   upsert_party: {
@@ -51,6 +60,7 @@ export const arapInputSchemas = {
     due_on: isoDate.optional().describe('expected receipt date; omit if none — never guess one'),
     amount_paisa: paisa,
     inclusive: z.boolean().default(true).describe('amount includes 13% VAT (default true)'),
+    idempotency_key: idempotencyKey,
   },
   record_credit_purchase: {
     party: z.string().min(1).max(200),
@@ -62,6 +72,7 @@ export const arapInputSchemas = {
     vendor_is_vat_registered: z.boolean().describe('ask the owner if unknown — do not guess'),
     invoice_type: z.enum(['rule17', 'rule17ka', 'other']).optional(),
     for_taxable_business_use: z.boolean().describe('required for input-credit eligibility'),
+    idempotency_key: idempotencyKey,
   },
   record_party_payment: {
     party: z.string().min(1).max(200),
@@ -73,6 +84,7 @@ export const arapInputSchemas = {
       .array(z.object({ target_id: uuid, amount_paisa: paisa }))
       .optional()
       .describe('explicit allocations; omit to auto-apply oldest-first across open invoices/bills'),
+    idempotency_key: idempotencyKey,
   },
   confirm_arap_entry: {
     entry_type: z.enum(['ar_invoice', 'ap_bill', 'party_payment']),
@@ -185,6 +197,10 @@ export function createArapToolHandlers(ctx: ToolContext) {
       return fn(tx);
     });
 
+  /** Entry-creating body in ONE tenant tx, deduped by `key` (P9, see tools.ts idemTx). */
+  const idemTx = <T extends IdempotentResult>(scope: string, key: string | undefined, body: (tx: Tx) => Promise<T>) =>
+    inTenantTx((tx) => withIdempotency(txIdempotencyStore(tx, tenantId), key, scope, () => body(tx)));
+
   return {
     async upsert_party(args: Args<'upsert_party'>) {
       return inTenantTx(async (tx) => {
@@ -217,7 +233,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
     async record_credit_sale(args: Args<'record_credit_sale'>) {
       const { exclPaisa, vatPaisa } = splitAmount(BigInt(args.amount_paisa), args.inclusive, true, cfg);
       const totalPaisa = exclPaisa + vatPaisa;
-      return inTenantTx(async (tx) => {
+      return idemTx('record_credit_sale', args.idempotency_key, async (tx) => {
         const report = validateSale(
           { occurredOn: toDate(args.issued_on), taxablePaisa: exclPaisa, vatPaisa, totalPaisa },
           { asOf: new Date(), existing: [], cfg },
@@ -264,7 +280,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
     async record_credit_purchase(args: Args<'record_credit_purchase'>) {
       const { exclPaisa, vatPaisa } = splitAmount(BigInt(args.amount_paisa), args.inclusive, args.vendor_is_vat_registered, cfg);
       const totalPaisa = exclPaisa + vatPaisa;
-      return inTenantTx(async (tx) => {
+      return idemTx('record_credit_purchase', args.idempotency_key, async (tx) => {
         const report = validateExpense(
           {
             vendorVatRegistered: args.vendor_is_vat_registered,
@@ -330,7 +346,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
       const amount = BigInt(args.amount_paisa);
       const targetTable = args.direction === 'received' ? arInvoices : apBills;
       const targetType = args.direction === 'received' ? ('ar_invoice' as const) : ('ap_bill' as const);
-      return inTenantTx(async (tx) => {
+      return idemTx('record_party_payment', args.idempotency_key, async (tx) => {
         const partyId = await resolveParty(tx, tenantId, args.party, args.direction === 'received' ? 'customer' : 'supplier');
         const openRows = await tx
           .select()

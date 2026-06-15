@@ -46,6 +46,16 @@ beforeAll(() => {
 
 afterAll(() => app.close());
 
+describe('GET /healthz + /livez (Docker/K8s probes)', () => {
+  it('both return 200 with no auth', async () => {
+    for (const url of ['/healthz', '/livez']) {
+      const res = await app.inject({ url });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true, service: 'orchestrator' });
+    }
+  });
+});
+
 describe('GET /webhook (handshake)', () => {
   it('echoes the challenge for the right verify token', async () => {
     const res = await app.inject({

@@ -6,7 +6,7 @@
  *   ADMIN_DATABASE_URL=postgres://postgres:...@localhost:5432/hisabkitab pnpm migrate
  */
 import { readdir, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import postgres from 'postgres';
 
@@ -37,7 +37,9 @@ export async function migrate(adminUrl: string): Promise<string[]> {
   }
 }
 
-const isDirectRun = process.argv[1] !== undefined && import.meta.url === new URL(`file:///${process.argv[1].replace(/\\/g, '/')}`).href;
+// pathToFileURL is correct on Windows and Linux (the old hand-built file:/// path
+// produced four slashes on Linux, so this guard never matched inside a container).
+const isDirectRun = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun) {
   const url = process.env['ADMIN_DATABASE_URL'];
   if (!url) {

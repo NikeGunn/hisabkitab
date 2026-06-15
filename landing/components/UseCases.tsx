@@ -3,10 +3,9 @@
 import { motion } from 'framer-motion';
 
 /**
- * "Is this for me?" — persona tiles that make the visitor self-identify, then
- * frame the relief. Psychology: name the pain they live with, then the calm after.
- * Each card leads with WHO, the gut-level pain, and the specific relief HisabKitab
- * gives — concrete, not generic SaaS copy.
+ * "Is this for me?": persona tiles that make the visitor self identify, then
+ * frame the relief. Name the pain they live with, then the calm after. Each card
+ * leads with WHO, the pain, and the specific relief, concrete not generic.
  */
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -15,28 +14,28 @@ const PERSONAS = [
     tag: 'Café & restaurant owners',
     emoji: '☕',
     pain: '“Bills pile up in a drawer. By the 25th I’m panicking about VAT.”',
-    relief: 'Snap each bill as it comes. By month-end your return is already prepared — you just review and file.',
+    relief: 'Snap each bill as it comes. By month end your return is already prepared, ready for you to review and file.',
     proof: 'Shrawan return ready in 0 late nights',
   },
   {
     tag: 'Retail & hardware shops',
     emoji: '🛠️',
     pain: '“I don’t know which bills I can actually claim VAT on.”',
-    relief: 'It flags abbreviated (17Ka) and expired bills automatically, and explains why — so you never over-claim.',
+    relief: 'It flags abbreviated (17Ka) and expired bills, and explains why, so you can avoid over claiming.',
     proof: 'Wrong input credits → caught, not filed',
   },
   {
     tag: 'Suppliers & wholesalers',
     emoji: '📦',
     pain: '“TDS and credit terms are a mess across dozens of parties.”',
-    relief: 'TDS on the VAT-exclusive base, AR/AP aging by party — who owes you and what you owe, always current.',
+    relief: 'TDS on the VAT exclusive base, with AR and AP aging by party, so you always know who owes you and what you owe.',
     proof: 'Every debtor, bucketed by age',
   },
   {
     tag: 'Solo founders & freelancers',
     emoji: '💻',
     pain: '“I can’t afford a full-time accountant yet.”',
-    relief: 'A careful accountant on WhatsApp for the price of a coffee — that shows its work and never guesses.',
+    relief: 'A careful bookkeeping assistant on WhatsApp for the price of a coffee, one that shows its work and asks when unsure.',
     proof: 'No app, no portal, no hire',
   },
   {
@@ -50,7 +49,7 @@ const PERSONAS = [
     tag: 'Accountants (their clients)',
     emoji: '📚',
     pain: '“Chasing clients for shoebox receipts all month.”',
-    relief: 'Clients capture as they go; you get clean, reconciled, audit-logged books to review — not a shoebox.',
+    relief: 'Clients capture as they go, so you get clean, reconciled, audit logged books to review instead of a shoebox.',
     proof: 'Month-end review, not data entry',
   },
 ];
@@ -63,7 +62,7 @@ export function UseCases() {
           <span className="label">Who it’s for</span>
           <h2 className="display mt-3 text-[34px] sm:text-[42px]">If you keep a VAT bill, this is for you</h2>
           <p className="mt-4 text-muted">
-            Built for small Nepali businesses that are too busy serving customers to babysit a ledger —
+            Built for small Nepali businesses that are too busy serving customers to babysit a ledger,
             and too careful to trust a black box. Find yourself below.
           </p>
         </div>
@@ -101,7 +100,7 @@ export function UseCases() {
           transition={{ duration: 0.6 }}
           className="mx-auto mt-12 max-w-xl text-center text-muted"
         >
-          Joining the pilot is free, and you approve every entry — so there’s nothing to lose and a
+          Joining the pilot is free, and you approve every entry, so there is nothing to lose and a
           month of evenings to gain.{' '}
           <a href="#start" className="font-semibold text-primary underline-offset-4 hover:underline">
             Start on WhatsApp →

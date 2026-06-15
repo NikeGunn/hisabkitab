@@ -1,0 +1,38 @@
+# Dev overlay: published ports, sensible dev defaults, friendly restart.
+#   docker compose -f compose.yaml -f compose.dev.yaml up --build
+#
+# Secrets are DEV throwaways so the stack runs with zero setup. Override any of
+# them by exporting the same name (or putting it in a .env file next to this one).
+# ANTHROPIC_API_KEY is the only one you must supply for real agent turns; the
+# stack still boots and serves health/webhook without it being valid.
+
+services:
+  postgres:
+    ports:
+      - '5432:5432'
+
+  redis:
+    ports:
+      - '6379:6379'
+
+  ledger:
+    environment:
+      LEDGER_MCP_TOKEN: ${LEDGER_MCP_TOKEN:-dev-ledger-token}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:-dev-signing-secret-please-change}
+    ports:
+      - '8801:8080'
+
+  payments:
+    environment:
+      PAYMENTS_MCP_TOKEN: ${PAYMENTS_MCP_TOKEN:-dev-payments-token}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:-dev-signing-secret-please-change}
+    ports:
+      - '8802:8080'
+
+  orchestrator:
+    environment:
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:-dev-signing-secret-please-change}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-dev-anthropic-key}
+      LEDGER_MCP_URL: http://ledger:8080/mcp
+    ports:
+      - '8810:8080'

@@ -31,18 +31,28 @@ export type OrchestratorConfig = z.infer<typeof envSchema> & {
   ENVIRONMENT_ID: string;
 };
 
-/** AGENT_ID/ENVIRONMENT_ID come from env or fall back to agent-ids.local.json (agent:setup). */
+/**
+ * AGENT_ID/ENVIRONMENT_ID come from env, else from agent-ids.local.json (written
+ * by `agent:setup`). In a container that file is absent: a missing file is NOT
+ * fatal here (the server still boots and serves /healthz + the webhook handshake);
+ * it only matters once a real agent turn runs. Treat empty strings as absent.
+ */
 export async function loadConfig(env = process.env): Promise<OrchestratorConfig> {
   const parsed = envSchema.parse(env);
-  let agentId = parsed.AGENT_ID;
-  let environmentId = parsed.ENVIRONMENT_ID;
+  let agentId = parsed.AGENT_ID || undefined;
+  let environmentId = parsed.ENVIRONMENT_ID || undefined;
   if (!agentId || !environmentId) {
-    const ids = JSON.parse(await readFile(IDS_FILE, 'utf8')) as {
-      agentId: string;
-      environmentId: string;
-    };
-    agentId = agentId ?? ids.agentId;
-    environmentId = environmentId ?? ids.environmentId;
+    try {
+      const ids = JSON.parse(await readFile(IDS_FILE, 'utf8')) as {
+        agentId?: string;
+        environmentId?: string;
+      };
+      agentId = agentId ?? ids.agentId;
+      environmentId = environmentId ?? ids.environmentId;
+    } catch {
+      // No env vars and no ids file (e.g. fresh container). Boot anyway with
+      // empty ids; run `agent:setup` or set AGENT_ID/ENVIRONMENT_ID to enable turns.
+    }
   }
-  return { ...parsed, AGENT_ID: agentId, ENVIRONMENT_ID: environmentId };
+  return { ...parsed, AGENT_ID: agentId ?? '', ENVIRONMENT_ID: environmentId ?? '' };
 }

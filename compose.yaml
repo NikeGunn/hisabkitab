@@ -1,0 +1,150 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# HisabKitab base Compose. Shared topology for BOTH dev and prod; the overlays
+# (compose.dev.yaml / compose.prod.yaml) add the env-specific bits.
+#
+#   Dev :  docker compose -f compose.yaml -f compose.dev.yaml up --build
+#   Prod:  docker compose -f compose.yaml -f compose.prod.yaml up -d
+#
+# Services:
+#   postgres   Postgres 16 + RLS roles (created by infra/postgres/init).
+#   redis      BullMQ reminder scheduler backend.
+#   migrate    one-shot: applies packages/db/migrations on the admin connection.
+#   ledger     tenant-scoped Ledger MCP   (:8080 /mcp + /healthz)
+#   payments   tenant-scoped Payments MCP (:8080 /mcp + /payments/khalti/return)
+#   orchestrator  Fastify webhook + scheduler (:8080 /webhook + /healthz)
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: hisabkitab
+
+x-app-build: &app-build
+  context: .
+  dockerfile: Dockerfile
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-hisabkitab}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-hisabkitab}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--save', '60', '1', '--loglevel', 'warning']
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # One-shot migration runner. Exits 0 when migrations are applied; the app
+  # services wait for it to complete successfully before starting.
+  migrate:
+    build:
+      <<: *app-build
+      args:
+        SERVICE: mcp-ledger # any service image has @hisab/db + tsx
+    command: ['sh', '-c', 'pnpm --filter @hisab/db exec tsx src/migrate.ts']
+    environment:
+      ADMIN_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  ledger:
+    build:
+      <<: *app-build
+      args:
+        SERVICE: mcp-ledger
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://hisab_app:${HISAB_APP_PASSWORD:-hisab_app_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      LEDGER_MCP_TOKEN: ${LEDGER_MCP_TOKEN:?set LEDGER_MCP_TOKEN}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  payments:
+    build:
+      <<: *app-build
+      args:
+        SERVICE: mcp-payments
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://hisab_app:${HISAB_APP_PASSWORD:-hisab_app_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      CALLBACK_DATABASE_URL: postgres://hisab_orch:${HISAB_ORCH_PASSWORD:-hisab_orch_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      PAYMENTS_MCP_TOKEN: ${PAYMENTS_MCP_TOKEN:?set PAYMENTS_MCP_TOKEN}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
+      KHALTI_SECRET_KEY: ${KHALTI_SECRET_KEY:-dev-khalti-key}
+      KHALTI_ORIGIN: ${KHALTI_ORIGIN:-https://dev.khalti.com}
+      PAYMENTS_PUBLIC_BASE_URL: ${PAYMENTS_PUBLIC_BASE_URL:-http://localhost:8802}
+      WEBSITE_URL: ${WEBSITE_URL:-https://hisabkitab.pro}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  orchestrator:
+    build:
+      <<: *app-build
+      args:
+        SERVICE: orchestrator
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://hisab_orch:${HISAB_ORCH_PASSWORD:-hisab_orch_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      REDIS_URL: redis://redis:6379
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}
+      LEDGER_MCP_URL: ${LEDGER_MCP_URL:-http://ledger:8080/mcp}
+      WA_PHONE_NUMBER_ID: ${WA_PHONE_NUMBER_ID:-dev-phone-id}
+      WA_ACCESS_TOKEN: ${WA_ACCESS_TOKEN:-dev-wa-token}
+      WA_WEBHOOK_VERIFY_TOKEN: ${WA_WEBHOOK_VERIFY_TOKEN:-dev-verify-token}
+      WA_APP_SECRET: ${WA_APP_SECRET:-dev-app-secret-123}
+      AGENT_ID: ${AGENT_ID:-}
+      ENVIRONMENT_ID: ${ENVIRONMENT_ID:-}
+      SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      ledger:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

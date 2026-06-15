@@ -1,0 +1,139 @@
+name: CI
+
+# Runs on every PR and every push to main. Works identically whether the repo is
+# public or private (no external services, GHCR auth uses the built-in token).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ── quality gate: typecheck + lint + the full vitest suite against real PG+Redis ──
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      # The vitest global-setups read these; they DROP+migrate the test DB themselves.
+      TEST_ADMIN_DATABASE_URL: postgres://postgres:postgres@localhost:5432/hisabkitab_test
+      TEST_DATABASE_URL: postgres://hisab_app:hisab_app_dev@localhost:5432/hisabkitab_test
+      TEST_ORCH_DATABASE_URL: postgres://hisab_orch:hisab_orch_dev@localhost:5432/hisabkitab_test
+      REDIS_URL: redis://localhost:6379
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+
+      - run: pnpm install --frozen-lockfile
+
+      # Create the test DB + the two least-privilege RLS roles the suite expects.
+      - name: Provision test database + roles
+        run: |
+          export PGPASSWORD=postgres
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE DATABASE hisabkitab_test;
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='hisab_app') THEN
+              CREATE ROLE hisab_app LOGIN PASSWORD 'hisab_app_dev' NOSUPERUSER NOBYPASSRLS;
+            END IF;
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='hisab_orch') THEN
+              CREATE ROLE hisab_orch LOGIN PASSWORD 'hisab_orch_dev' NOSUPERUSER NOBYPASSRLS;
+            END IF;
+          END $$;
+          GRANT CONNECT ON DATABASE hisabkitab_test TO hisab_app, hisab_orch;
+          SQL
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test (sequential, shared test DB)
+        run: pnpm test
+
+  # ── build all three service images (no push); proves the Dockerfile is green ──
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [orchestrator, mcp-ledger, mcp-payments]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          build-args: SERVICE=${{ matrix.service }}
+          tags: hisab-${{ matrix.service }}:ci
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # Smoke: the image must boot and answer /healthz (catches isDirectRun-style bugs).
+      - name: Smoke test ${{ matrix.service }} boots and serves /healthz
+        if: matrix.service != 'orchestrator'
+        run: |
+          docker run -d --name smoke -p 8080:8080 \
+            -e LEDGER_MCP_TOKEN=ci -e PAYMENTS_MCP_TOKEN=ci \
+            -e TENANT_SIGNING_SECRET=ci-secret-123 \
+            -e DATABASE_URL=postgres://x:y@localhost:5432/z \
+            -e CALLBACK_DATABASE_URL=postgres://x:y@localhost:5432/z \
+            -e KHALTI_SECRET_KEY=ci hisab-${{ matrix.service }}:ci
+          for i in $(seq 1 25); do
+            if curl -fsS http://127.0.0.1:8080/healthz; then echo " OK"; exit 0; fi
+            sleep 1
+          done
+          echo "healthz never came up"; docker logs smoke; exit 1
+
+  # ── security: filesystem + dependency vulnerability scan ──
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+      - name: Upload results to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+        continue-on-error: true # code scanning may be off on private repos without GHAS

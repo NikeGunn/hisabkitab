@@ -17,8 +17,9 @@ export function Nav() {
         </a>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
           <a href="#how" className="transition-colors hover:text-ink">How it works</a>
-          <a href="#who" className="transition-colors hover:text-ink">Who it’s for</a>
+          <a href="#who" className="transition-colors hover:text-ink">Who it&apos;s for</a>
           <a href="#features" className="transition-colors hover:text-ink">Features</a>
+          <a href="/pay" className="transition-colors hover:text-ink">Pricing</a>
           <a href="#trust" className="transition-colors hover:text-ink">Trust</a>
         </div>
         <a href="#start" className="btn-primary !px-4 !py-2 text-sm">Start free</a>

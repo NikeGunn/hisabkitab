@@ -11,6 +11,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -262,6 +263,28 @@ export const paymentAllocations = pgTable('payment_allocations', {
   targetId: uuid('target_id').notNull(),
   amountPaisa: bigint('amount_paisa', { mode: 'bigint' }).notNull(),
 });
+
+// ----- P9 (v2.0 §6): idempotent write keys for entry-creating tools -----
+
+/**
+ * Tool-layer exactly-once: a repeated entry-creating tool call with the same
+ * client-supplied `key` returns the stored `result` and never inserts a second
+ * row. Written by the RLS app role inside the entry's OWN tenant tx (key + entry
+ * commit together). Tenant-scoped + RLS; append-only for the app.
+ */
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    scope: text('scope').notNull(),
+    key: text('key').notNull(),
+    result: jsonb('result').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.scope, t.key] })],
+);
 
 // ----- Phase 5 (Payments): Khalti v2 live; eSewa/Fonepay coming soon -----
 

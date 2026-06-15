@@ -58,6 +58,27 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
   inclusive-math rounding, aging buckets, and allocation logic — these are the highest-risk code.
 - `.env.example` only; never commit real keys.
 
+## 4a. Running the app with Docker (preferred — one command)
+The whole backend runs in Docker Compose. **Do not run services by hand** for an end-to-end check; use Compose.
+- **Dev (build + run everything, ports published):**
+  `docker compose -f compose.yaml -f compose.dev.yaml up --build`  (or `pnpm up`)
+  Brings up Postgres 16 (+ RLS roles via `infra/postgres/init`), Redis, a one-shot `migrate` job
+  (applies `packages/db/migrations`), then ledger (:8801), payments (:8802), orchestrator (:8810).
+  Each service serves `GET /healthz` (and `/livez`); Compose gates start-up on those healthchecks.
+- **Stop:** `pnpm down`  ·  **detached:** `pnpm up:detached`.
+- **Prod (single VM):** `docker compose -f compose.yaml -f compose.prod.yaml up -d` — pulls SHA-tagged
+  images from GHCR (`ghcr.io/<owner>/hisab-<service>`), localhost-only ports behind a TLS reverse proxy,
+  resource limits. The CD workflow does this over SSH.
+- **One Dockerfile, parameterized:** `docker build --build-arg SERVICE=mcp-ledger .` (or `orchestrator`/
+  `mcp-payments`). Multi-stage, non-root `hisab` user, tini init, runs via `tsx` (precompile-to-JS +
+  distroless is a documented future optimization in `docs/DEPLOY.md`).
+- **Browse the DB in the browser:** `pnpm db:studio` → open https://local.drizzle.studio (Drizzle Studio;
+  inspect only — hand-written SQL migrations remain the source of truth, not drizzle-kit push).
+- **Gotcha (fixed, keep it):** service entrypoints use `pathToFileURL(process.argv[1])` for the
+  is-direct-run check. The old hand-built `file:///${path}` produced four slashes on Linux, so the server
+  silently never started in a container (exit 0, no logs). Never reintroduce that pattern.
+- Full deploy runbook + secrets list: `docs/DEPLOY.md`.
+
 ## 5. Build order (follow phases; details in the PRDs)
 - **Phase 0** (v1.1): monorepo + `shared` (Money/paisa, VAT/TDS pure fns, BS-date) + **Validation Engine**,
   all with exhaustive unit tests. ← start here.
@@ -114,10 +135,48 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
   `verify:reports` ($0, 4/4 over real MCP HTTP), `verify:reports-live` (real agent E2E, 8/8), `reports:sample`.
   Generated PDFs in gitignored `packages/orchestrator/report-samples/`.
 
+**✅ P9 (v2.0 §6) — idempotency & concurrency — DONE (2026-06-15; +13 tests = 289 total):**
+- v1 already had: inbound WhatsApp dedupe (`wa_events` PK), per-tenant serialization (`SerialQueues`),
+  exactly-once allocation (`confirmPayment` SELECT…FOR UPDATE), Khalti callback dedupe (`pidx` UNIQUE +
+  `sale_id` latch). The gap was the §6 **idempotent write key on entry-creating tools** — now built.
+- Migration **0008**: `idempotency_keys` (PK **(tenant_id, scope, key)** — composite, NOT the PRD's global
+  `key`, so one tenant's literal key can't collide with another's) + RLS + `hisab_app` grant.
+- Pure DRY core `withIdempotency` + `IdempotencyStore` in `@hisab/shared` (load→produce-once→save, replay
+  flag); drizzle-backed `txIdempotencyStore` (ON CONFLICT DO NOTHING, never aborts the tx). Optional
+  `idempotency_key` wired into all 5 entry-creating tools (record_sale/expense/credit_sale/credit_purchase/
+  party_payment) — backward-compatible (no key = old behaviour). A retry returns the original result, never
+  a 2nd row. 6 shared unit + 7 ledger contract tests incl. probes (race, tenant-scoping). Root `pnpm test`
+  made sequential (`--workspace-concurrency=1`) so the shared-test-DB reset no longer races.
+
+**✅ P16 (v2.0 §10) — Docker + CI/CD + landing-live — DONE (2026-06-15; 292 tests, +3 health):**
+- **Dockerized all 3 services** via ONE parameterized multi-stage `Dockerfile` (`--build-arg SERVICE=`),
+  non-root `hisab` user, tini, runs through `tsx`. `/healthz`+`/livez` added to ledger & payments (raw http)
+  and orchestrator (Fastify); 3 health tests. **Root-caused + fixed a cross-platform bug**: `isDirectRun`
+  used `file:///${argv1}` (4 slashes on Linux) so ledger/payments/**migrate** silently never started in a
+  container — switched all to `pathToFileURL`. `loadConfig` now boots without `agent-ids.local.json`.
+  `@types/node` made an explicit dep in all 5 packages (was only hoisted; container typecheck failed).
+- **Docker Compose dev + prod** (`compose.yaml` + `compose.dev.yaml`/`compose.prod.yaml`): Postgres
+  (+ RLS roles via `infra/postgres/init/00-roles.sql`) + Redis + one-shot `migrate` + 3 services, healthcheck
+  gated. Verified live: full stack healthy, 8 migrations applied incl. 0008, `idempotency_keys` RLS on.
+  Root scripts `pnpm up` / `down` / `up:detached`. **Drizzle Studio**: `pnpm db:studio` → local.drizzle.studio.
+- **CI** (`.github/workflows/ci.yml`): typecheck + lint + full vitest (PG+Redis service containers + roles),
+  build all 3 images (matrix) + boot/healthz smoke, Trivy scan. Public AND private safe.
+- **CD** (`.github/workflows/cd.yml`): build+push SHA-tagged images to GHCR (provenance+SBOM), then SSH
+  deploy to the single prod VM via `compose.prod.yaml` (compose pull + up, healthcheck-gated zero-downtime).
+  **Deploy job is DORMANT until `DEPLOY_HOST`/`DEPLOY_SSH_KEY` secrets exist** — "coming soon" today, goes
+  live the moment those are set (target: Tencent Cloud VM). K8s/ArgoCD/Terraform deferred (single VM is simpler).
+- **Landing live** on **hisabkitab.pro** via GitHub Pages (`.github/workflows/landing-pages.yml`, static
+  export + CNAME + .nojekyll). Content de-risked: removed "Claude Managed Agents" + invented testimonials +
+  over-claims ("never guesses"/"zero mistakes"), removed ALL em-dashes (anti-AI-look). **SEO**: JSON-LD
+  (Org/WebSite/SoftwareApplication/FAQ), robots+sitemap+manifest (force-static), OG/Twitter, canonical, OG
+  image. New **/pay** Khalti dev-preview page (catchy, disabled button, cannot charge → $0).
+- DNS (Namecheap): 4× A `185.199.108-111.153` + CNAME `www→nikegunn.github.io` (GitHub Pages) — verified
+  resolving. GitHub user: **NikeGunn**. Deploy runbook: `docs/DEPLOY.md`.
+
 **⬜ PENDING — build in this order:**
 - ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
-  paid-customer subset first: ⬜ **P8** identity/RBAC → ⬜ **P9** idempotency/concurrency (harden) →
-  ⬜ **P10** billing → ⬜ **P11** cost controls → minimal ⬜ **P15** security + ⬜ **P16** infra/CI-CD.
+  paid-customer subset: ⬜ **P8** identity/RBAC → ✅ **P9** idempotency → ⬜ **P10** billing →
+  ⬜ **P11** cost controls → minimal ⬜ **P15** security → ✅ **P16** infra/CI-CD (DONE).
   Defer until volume: ⬜ P12 voice, ⬜ P13 accounting completeness, ⬜ P14 observability, ⬜ P17 growth,
   ⬜ P18 support/admin, ⬜ P19 accountant channel.
 

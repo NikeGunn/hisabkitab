@@ -3,15 +3,15 @@
 import { motion } from 'framer-motion';
 
 /**
- * How the smart agent works — the four-step loop, the heart of the product.
+ * How it works: the four step loop at the heart of the product.
  * Each step animates in on scroll with a connecting line drawn between them.
  */
 const ease = [0.22, 1, 0.36, 1] as const;
 
 const STEPS = [
   { n: '01', icon: '📸', title: 'You send a bill', body: 'A photo, PDF, or a quick line of text on WhatsApp. Voice notes coming soon.' },
-  { n: '02', icon: '🧠', title: 'The agent reads it', body: 'It extracts vendor, taxable amount, and VAT — computing 13% to the exact paisa, never a float.' },
-  { n: '03', icon: '🔎', title: 'It shows its work', body: 'Every field echoed back. Anything unclear is flagged — it asks rather than guesses.' },
+  { n: '02', icon: '🧠', title: 'It reads the bill', body: 'It extracts the vendor, taxable amount, and VAT, computing 13% in whole paisa using integer math, never a float.' },
+  { n: '03', icon: '🔎', title: 'It shows its work', body: 'Every field is echoed back for you to check. Anything unclear is flagged so you can correct it.' },
   { n: '04', icon: '✅', title: 'You approve, it saves', body: 'Only on your ✅ does a draft become a confirmed entry. Nothing is ever filed for you.' },
 ];
 
@@ -23,7 +23,7 @@ export function HowItWorks() {
           <span className="label">How it works</span>
           <h2 className="display mt-3 text-[34px] sm:text-[42px]">A careful loop, every single time</h2>
           <p className="mt-4 text-muted">
-            The agent is built to one promise: <b className="text-ink">it shows its work, flags what it&apos;s
+            Built around one principle: <b className="text-ink">it shows its work, flags what it is
             unsure of, and never saves without your confirmation.</b>
           </p>
         </div>
@@ -57,9 +57,9 @@ export function HowItWorks() {
           className="mt-8 grid gap-px overflow-hidden rounded-card border border-hairline bg-hairline sm:grid-cols-3"
         >
           {[
-            ['Never guesses', 'Low-confidence → it asks for a clearer photo or the missing field.'],
-            ['Never auto-files', 'It prepares the numbers; you file on the IRD portal yourself.'],
-            ['Never takes secrets', 'Passwords, OTPs and logins are refused — WhatsApp isn’t for secrets.'],
+            ['Asks when unsure', 'Low confidence on a field means it asks for a clearer photo or the missing detail.'],
+            ['Never auto-files', 'It prepares the numbers. You file on the IRD portal yourself.'],
+            ['Never takes secrets', 'Passwords, OTPs, and logins are refused. WhatsApp is not for secrets.'],
           ].map(([t, b]) => (
             <div key={t} className="bg-surface p-6">
               <p className="font-serif font-semibold text-ink">{t}</p>

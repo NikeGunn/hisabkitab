@@ -1,0 +1,63 @@
+# Prod overlay: run pre-built images from GHCR (not a local build), resource
+# limits, and strict env (no dev fallbacks). This is what the single Tencent VM
+# runs. The CD pipeline pulls the SHA-tagged images and restarts with this file.
+#
+#   export IMAGE_TAG=<git-sha>            # set by CD; defaults to 'latest'
+#   docker compose -f compose.yaml -f compose.prod.yaml pull
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+#
+# All secrets MUST come from the environment / a .env file on the host. The base
+# file's `${VAR:?}` guards fail fast if any required secret is missing.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: '10m', max-file: '3' }
+
+services:
+  postgres:
+    logging: *logging
+    deploy:
+      resources:
+        limits: { cpus: '1.0', memory: 1g }
+    # No published port in prod: only the app network reaches Postgres.
+
+  redis:
+    logging: *logging
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 256m }
+
+  migrate:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-mcp-ledger:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+
+  ledger:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-mcp-ledger:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+    ports:
+      - '127.0.0.1:8801:8080' # bind localhost only; a reverse proxy terminates TLS
+    deploy:
+      resources:
+        limits: { cpus: '0.75', memory: 512m }
+
+  payments:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-mcp-payments:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+    ports:
+      - '127.0.0.1:8802:8080'
+    deploy:
+      resources:
+        limits: { cpus: '0.75', memory: 512m }
+
+  orchestrator:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-orchestrator:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+    ports:
+      - '127.0.0.1:8810:8080'
+    deploy:
+      resources:
+        limits: { cpus: '1.0', memory: 768m }

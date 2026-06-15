@@ -58,6 +58,14 @@ const salesCountFor = async (gatewayRef: string): Promise<number> => {
 
 const hitCallback = (query: string) => fetch(`${base}/payments/khalti/return?${query}`);
 
+describe('GET /healthz', () => {
+  it('is a 200, no auth required (Docker/K8s probe)', async () => {
+    const res = await fetch(`${base}/healthz`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, service: 'mcp-payments' });
+  });
+});
+
 describe('GET /payments/khalti/return', () => {
   it('PROBE: a FORGED "status=Completed" with an unpaid pidx records NOTHING', async () => {
     const init = await session.callTool<{ pidx: string }>('initiate_payment', {

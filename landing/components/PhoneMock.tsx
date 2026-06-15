@@ -5,10 +5,10 @@ import { useRef } from 'react';
 
 /**
  * The hero focal object: a phone running a live HisabKitab WhatsApp thread.
- * The conversation plays the real product loop — photo → extraction → owner
- * confirms → a CONFIRMED entry with exact paisa — staggered in like a real chat.
- * Per the design's motion notes: masked reveal, staggered entrance, restrained
- * easing, ambient float behind.
+ * The conversation plays the real product loop: photo, extraction, owner
+ * confirms, then a confirmed entry in whole paisa, staggered in like a real chat.
+ * Motion notes: masked reveal, staggered entrance, restrained easing, ambient
+ * float behind.
  */
 
 type Msg =
@@ -122,7 +122,7 @@ export function PhoneMock() {
                     <Bubble key={i} side="in" delay={delay}>
                       <div className="flex items-center gap-2">
                         <span className="grid h-5 w-5 place-items-center rounded-full bg-primary/15 text-primary">✓</span>
-                        <p className="font-medium">Saved — entry #1042 confirmed.</p>
+                        <p className="font-medium">Saved. Entry #1042 confirmed.</p>
                       </div>
                       <p className="mt-1 text-[12px] text-muted">Input VAT Rs 1,040 added to this month’s return.</p>
                       <div className="text-right"><Time t={m.time} /></div>

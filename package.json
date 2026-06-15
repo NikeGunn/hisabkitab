@@ -3,11 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@10.14.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "typecheck": "pnpm -r typecheck",
     "verify": "pnpm --filter @hisab/shared verify",
     "lint": "eslint .",
@@ -19,7 +20,11 @@
     "dev:ledger": "pnpm --filter @hisab/mcp-ledger start",
     "dev:payments": "pnpm --filter @hisab/mcp-payments start",
     "dev:webhook": "pnpm --filter @hisab/orchestrator start",
-    "khalti:stub": "pnpm --filter @hisab/mcp-payments khalti:stub"
+    "khalti:stub": "pnpm --filter @hisab/mcp-payments khalti:stub",
+    "db:studio": "pnpm --filter @hisab/db studio",
+    "up": "docker compose -f compose.yaml -f compose.dev.yaml up --build",
+    "up:detached": "docker compose -f compose.yaml -f compose.dev.yaml up -d --build",
+    "down": "docker compose -f compose.yaml -f compose.dev.yaml down"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

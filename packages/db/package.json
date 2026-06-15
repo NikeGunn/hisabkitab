@@ -9,13 +9,17 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "studio": "drizzle-kit studio"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "@types/node": "^20.19.0",
+    "dotenv": "^16.4.7",
+    "drizzle-kit": "^0.30.5",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"
   }

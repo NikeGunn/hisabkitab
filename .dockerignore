@@ -1,0 +1,24 @@
+# Build context hygiene — keep images small & secrets out.
+**/node_modules
+**/.git
+**/.github
+**/dist
+**/.next
+**/report-samples
+**/coverage
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/*.local.json
+manual.txt
+verify-bills-live.log
+landing
+infra
+docs
+**/*.md
+**/test
+**/*.test.ts
+**/vitest.config.ts
+.vscode
+.idea

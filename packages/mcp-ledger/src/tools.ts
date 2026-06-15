@@ -18,13 +18,16 @@ import {
   vatFilingDeadline,
   vatOnExclusive,
   netVatPosition,
+  withIdempotency,
   type CheckOutcome,
   type ExistingEntryRef,
   type ExpenseCandidate,
+  type IdempotentResult,
   type TaxConfig,
   type ValidationReport,
 } from '@hisab/shared';
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
+import { txIdempotencyStore } from './idempotency-store.js';
 
 const { sales, expenses, vendors, vatReturns, auditLog, validationEvents } = schema;
 
@@ -41,6 +44,18 @@ const bsYear = z.number().int().min(2000).max(2200);
 const bsMonth = z.number().int().min(1).max(12);
 const uuid = z.string().uuid();
 
+/**
+ * Optional client-supplied exactly-once key (P9, PRD v2.0 §6). When the same call
+ * is retried with the same key, the ORIGINAL result is returned and no second row
+ * is written. Shared by every entry-creating tool.
+ */
+const idempotencyKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .optional()
+  .describe('optional exactly-once key: a retry with the same key returns the original result, never a duplicate entry');
+
 export const inputSchemas = {
   compute_vat: {
     amount_paisa: paisa,
@@ -52,6 +67,7 @@ export const inputSchemas = {
     amount_paisa: paisa,
     inclusive: z.boolean().default(true).describe('amount includes 13% VAT (default true)'),
     payment_method: z.enum(['cash', 'esewa', 'khalti', 'bank']).optional(),
+    idempotency_key: idempotencyKey,
   },
   record_expense: {
     occurred_on: isoDate,
@@ -66,6 +82,7 @@ export const inputSchemas = {
     for_taxable_business_use: z.boolean().describe('required for input-credit eligibility'),
     receipt_file_id: z.string().max(200).optional(),
     extraction: z.record(z.string(), z.unknown()).optional().describe('per-field {value, confidence}'),
+    idempotency_key: idempotencyKey,
   },
   validate_entry: {
     entry_type: z.enum(['sale', 'expense']),
@@ -244,6 +261,14 @@ type Args<K extends keyof typeof inputSchemas> = z.infer<z.ZodObject<(typeof inp
 export function createToolHandlers(ctx: ToolContext) {
   const inTenantTx = <T>(fn: (tx: Tx) => Promise<T>) => withTenant(ctx.db, ctx.tenantId, fn);
 
+  /**
+   * Run an entry-creating tool body in ONE tenant tx, deduped by `key` (P9). The
+   * body + the idempotency-key row commit together; a retry with the same key
+   * returns the original result and writes nothing. `scope` is the tool name.
+   */
+  const idemTx = <T extends IdempotentResult>(scope: string, key: string | undefined, body: (tx: Tx) => Promise<T>) =>
+    inTenantTx((tx) => withIdempotency(txIdempotencyStore(tx, ctx.tenantId), key, scope, () => body(tx)));
+
   return {
     ...createArapToolHandlers(ctx),
     async compute_vat(args: Args<'compute_vat'>) {
@@ -254,7 +279,7 @@ export function createToolHandlers(ctx: ToolContext) {
     async record_sale(args: Args<'record_sale'>) {
       const amount = BigInt(args.amount_paisa);
       const { exclPaisa, vatPaisa } = splitAmount(amount, args.inclusive, true, ctx.cfg);
-      return inTenantTx(async (tx) => {
+      return idemTx('record_sale', args.idempotency_key, async (tx) => {
         const existing = await findDuplicateCandidates(tx, ctx, sales, args.occurred_on, exclPaisa + vatPaisa);
         const report = validateSale(
           {
@@ -317,7 +342,7 @@ export function createToolHandlers(ctx: ToolContext) {
       );
       const tdsComputed = tds.kind === 'computed' ? tds : null;
 
-      return inTenantTx(async (tx) => {
+      return idemTx('record_expense', args.idempotency_key, async (tx) => {
         const existing = await findDuplicateCandidates(tx, ctx, expenses, args.occurred_on, totalPaisa, {
           name: args.vendor_name,
           invoiceNo: args.invoice_no,

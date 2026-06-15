@@ -22,7 +22,6 @@ import { createServer, type Server } from 'node:http';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
-import postgres from 'postgres';
 import { eq } from 'drizzle-orm';
 import { createDb, migrate, schema } from '@hisab/db';
 import { startHttpServer } from '@hisab/mcp-ledger';

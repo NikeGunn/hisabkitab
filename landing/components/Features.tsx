@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 
-/** Bento grid (per design.md) — the agent's capabilities, varied tile sizes. */
+/** Bento grid of product capabilities, with varied tile sizes. */
 const ease = [0.22, 1, 0.36, 1] as const;
 
 function Tile({ className = '', children, delay = 0 }: { className?: string; children: React.ReactNode; delay?: number }) {
@@ -46,16 +46,16 @@ export function Features() {
             </div>
           </Tile>
 
-          <Tile delay={0.05}><Icon>📄</Icon><h3 className="mt-3 font-serif font-semibold">Bill extraction</h3><p className="mt-1 text-sm text-muted">Reads messy photos &amp; PDFs — and asks when unsure.</p></Tile>
-          <Tile delay={0.1}><Icon>💳</Icon><h3 className="mt-3 font-serif font-semibold">Khalti payments</h3><p className="mt-1 text-sm text-muted">Collect &amp; verify; the sale records itself, exactly once.</p></Tile>
+          <Tile delay={0.05}><Icon>📄</Icon><h3 className="mt-3 font-serif font-semibold">Bill extraction</h3><p className="mt-1 text-sm text-muted">Reads messy photos and PDFs, and asks when unsure.</p></Tile>
+          <Tile delay={0.1}><Icon>💳</Icon><h3 className="mt-3 font-serif font-semibold">Khalti payments</h3><p className="mt-1 text-sm text-muted">Collect and verify, and the sale records itself, exactly once.</p></Tile>
 
           <Tile delay={0.15} className="col-span-2 flex items-center gap-5">
             <Icon big>🔔</Icon>
-            <div><h3 className="font-serif font-semibold">Monthly VAT reminders</h3><p className="mt-1 text-sm text-muted">Around the 20th BS, it prepares the return, self-verifies the numbers, and nudges you — you review and file.</p></div>
+            <div><h3 className="font-serif font-semibold">Monthly VAT reminders</h3><p className="mt-1 text-sm text-muted">Around the 20th BS, it prepares the return, self verifies the numbers, and nudges you to review and file.</p></div>
           </Tile>
 
-          <Tile delay={0.2}><Icon>📊</Icon><h3 className="mt-3 font-serif font-semibold">AR / AP &amp; aging</h3><p className="mt-1 text-sm text-muted">Who owes you, what you owe — bucketed by age.</p></Tile>
-          <Tile delay={0.25}><Icon>📑</Icon><h3 className="mt-3 font-serif font-semibold">PDF reports</h3><p className="mt-1 text-sm text-muted">Rendered from validated data — reconcile-or-hold.</p></Tile>
+          <Tile delay={0.2}><Icon>📊</Icon><h3 className="mt-3 font-serif font-semibold">AR / AP and aging</h3><p className="mt-1 text-sm text-muted">Who owes you and what you owe, bucketed by age.</p></Tile>
+          <Tile delay={0.25}><Icon>📑</Icon><h3 className="mt-3 font-serif font-semibold">PDF reports</h3><p className="mt-1 text-sm text-muted">Rendered from validated data, with reconcile or hold.</p></Tile>
         </div>
       </div>
     </section>

@@ -34,9 +34,9 @@ export function Hero() {
           </motion.h1>
 
           <motion.p variants={rise} className="mt-6 max-w-md text-lg leading-relaxed text-muted">
-            Snap a bill. The agent reads it, computes VAT to the exact paisa, and shows its work —
-            then waits for your <b className="text-ink">✅</b> before saving. It flags anything it&apos;s
-            unsure of and <b className="text-ink">never guesses</b>.
+            Snap a bill. It reads the vendor, the taxable amount, and the 13% VAT in paisa, then shows
+            its work and waits for your <b className="text-ink">✅</b> before saving. When something is
+            unclear, it <b className="text-ink">asks instead of assuming</b>.
           </motion.p>
 
           <motion.div variants={rise} className="mt-8 flex flex-wrap items-center gap-3">

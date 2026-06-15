@@ -1,9 +1,8 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Palette + scale anchored in nexus-global-transfers-5-DESIGN.md (Meng To):
- * warm orange/cream, surface white, deliberate spacing, card/control/pill radii.
- * Typography blends the design's mono labels with an anthropic.com-style serif
+ * Palette and scale: warm orange and cream, white surface, deliberate spacing,
+ * card/control/pill radii. Typography blends mono labels with an editorial serif
  * display (see globals.css for the font stacks).
  */
 const config: Config = {
@@ -28,7 +27,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // anthropic.com-style serif for display moments
+        // editorial serif for display moments
         serif: ['var(--font-serif)', 'Georgia', 'Times New Roman', 'serif'],
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],

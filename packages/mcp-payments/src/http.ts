@@ -12,6 +12,7 @@
  *                                    like the WhatsApp webhook).
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { timingSafeEqual } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { eq } from 'drizzle-orm';
@@ -61,6 +62,12 @@ export interface PaymentsHttpDeps {
 export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<typeof createServer> {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
+
+    // ---- liveness/readiness probe (Docker/K8s, no auth, no DB call) ----------
+    if (req.method === 'GET' && (url.pathname === '/healthz' || url.pathname === '/livez')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, service: 'mcp-payments' }));
+    }
 
     // ---- payer redirect from Khalti (GET, unauthenticated) -------------------
     if (req.method === 'GET' && url.pathname === '/payments/khalti/return') {
@@ -119,9 +126,9 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
   });
 }
 
+// `pathToFileURL` is correct on both Windows and Linux (see ledger http.ts).
 const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file:///${process.argv[1].replace(/\\/g, '/')}`).href;
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun) {
   const port = Number(process.env['PORT'] ?? 8802);
   const publicBase = process.env['PAYMENTS_PUBLIC_BASE_URL'] ?? `http://localhost:${port}`;

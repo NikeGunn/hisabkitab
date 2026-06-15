@@ -1,0 +1,128 @@
+name: CD
+
+# On push to main: build + push the three service images to GHCR (always), then
+# deploy them to the single production VM over SSH using compose.prod.yaml.
+#
+# DESIGN: the deploy step is DORMANT until you add the server secrets. With no
+# DEPLOY_HOST / DEPLOY_SSH_KEY set, the build+push still runs and the deploy job
+# is skipped cleanly (it is "coming soon"). The day you buy the Tencent VM, add:
+#   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY  (repo secrets)
+# and the very next push goes live, zero further changes.
+#
+# Works on a public OR private repo: GHCR auth uses the built-in GITHUB_TOKEN.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'landing/**' # the landing has its own Pages workflow
+      - '**/*.md'
+  workflow_dispatch:
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false # never interrupt an in-flight production deploy
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ── build + push SHA-tagged images to GHCR (the source of truth for a deploy) ──
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [orchestrator, mcp-ledger, mcp-payments]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/hisab-${{ matrix.service }}
+          tags: |
+            type=sha,format=long
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: SERVICE=${{ matrix.service }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ── deploy to the production VM over SSH (skipped until secrets exist) ──
+  deploy:
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check for deploy secrets
+        id: gate
+        run: |
+          if [ -n "${{ secrets.DEPLOY_HOST }}" ] && [ -n "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::No DEPLOY_HOST/DEPLOY_SSH_KEY yet. Images are in GHCR; add the secrets to go live."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+
+      - name: Deploy over SSH (compose pull + rolling up)
+        if: steps.gate.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          envs: GITHUB_SHA
+          script: |
+            set -euo pipefail
+            cd /opt/hisabkitab
+            # Pull the just-built images for THIS commit and roll the stack with
+            # zero downtime (compose recreates only changed services, honoring the
+            # healthchecks before old containers are removed).
+            export IMAGE_TAG="sha-${GITHUB_SHA}"
+            export GHCR_OWNER="${{ github.repository_owner }}"
+            echo "${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            git pull --ff-only origin main || true
+            docker compose -f compose.yaml -f compose.prod.yaml pull
+            docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
+            docker image prune -f
+            echo "Deployed sha-${GITHUB_SHA}"
+
+      - name: Post-deploy health check
+        if: steps.gate.outputs.ready == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            for port in 8801 8802 8810; do
+              curl -fsS "http://127.0.0.1:${port}/healthz" && echo " :${port} healthy"
+            done

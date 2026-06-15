@@ -26,7 +26,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     done(null, body),
   );
 
-  app.get('/healthz', () => ({ ok: true }));
+  // Liveness/readiness probe (Docker/K8s). No auth, no DB call.
+  const health = () => ({ ok: true, service: 'orchestrator' });
+  app.get('/healthz', health);
+  app.get('/livez', health);
 
   app.get('/webhook', (req, reply) => {
     const challenge = handleVerifyHandshake(req.query as Record<string, unknown>, opts.verifyToken);

@@ -4,8 +4,8 @@ import { motion, useInView, animate, useMotionValue, useTransform } from 'framer
 import { useEffect, useRef } from 'react';
 
 /**
- * A tablet showing the agent's WORK product — the live ledger/return dashboard the
- * agent maintains as it confirms entries. It sits behind/beside the phone so the
+ * A tablet showing the work product: the live ledger and return dashboard that is
+ * maintained as entries are confirmed. It sits behind/beside the phone so the
  * right side reads as "the financial agent, working": chat on the phone, the books
  * it keeps on the tablet. Numbers count up; the bar chart grows; all on scroll.
  */
@@ -45,7 +45,7 @@ export function TabletMock() {
           <div className="flex items-center justify-between border-b border-hairline px-5 py-3">
             <div className="flex items-center gap-2">
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 font-serif text-primary">हि</span>
-              <p className="font-serif text-sm font-semibold">This month — Shrawan 2082</p>
+              <p className="font-serif text-sm font-semibold">This month, Shrawan 2082</p>
             </div>
             <span className="pill !text-[10px]">Live</span>
           </div>

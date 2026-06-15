@@ -1,6 +1,6 @@
 /**
- * Footer per design.md — multi-column navigation (Platform / Company / Resources
- * / Connect) + legal pathways. Static (server component, no client JS).
+ * Footer: multi column navigation (Platform / Company / Resources / Connect)
+ * plus legal pathways. Static (server component, no client JS).
  */
 const COLUMNS: { title: string; links: string[] }[] = [
   { title: 'Platform', links: ['Bill extraction', 'VAT & TDS', 'Payments', 'Reports', 'Reminders'] },
@@ -20,8 +20,8 @@ export function Footer() {
               <span className="font-serif text-xl font-semibold">HisabKitab</span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
-              Hisab-kitab is the everyday Nepali phrase for keeping the books. That is exactly — and
-              only — what this agent does.
+              Hisab-kitab is the everyday Nepali phrase for keeping the books. That is exactly, and
+              only, what this product does.
             </p>
             <p className="mt-5 font-mono text-[11px] uppercase tracking-widest text-muted">
               Nothing saved without your ✅

@@ -79,4 +79,10 @@ describe('ledger MCP http auth', () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it('GET /healthz is a 200, no auth required (Docker/K8s probe)', async () => {
+    const res = await fetch(`http://127.0.0.1:${PORT}/healthz`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, service: 'mcp-ledger' });
+  });
 });

@@ -10,6 +10,7 @@
  *       — service-token shape for first-party callers/tests.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { pathToFileURL } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { timingSafeEqual } from 'node:crypto';
 import { createDb } from '@hisab/db';
@@ -46,6 +47,12 @@ export function startHttpServer(port: number): ReturnType<typeof createServer> {
   const { db } = createDb(requireEnv('DATABASE_URL'));
 
   const httpServer = createServer(async (req, res) => {
+    // Liveness/readiness probe (Docker/K8s). No auth, no DB call — a liveness
+    // check must not flap on a transient DB blip; the LB gates real traffic.
+    if (req.method === 'GET' && (req.url === '/healthz' || req.url === '/livez')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ ok: true, service: 'mcp-ledger' }));
+    }
     if (req.url !== '/mcp' || req.method !== 'POST') return deny(res, 404, 'not found');
     const auth = req.headers.authorization ?? '';
     if (!auth.startsWith('Bearer ')) return deny(res, 401, 'missing bearer token');
@@ -84,7 +91,8 @@ export function startHttpServer(port: number): ReturnType<typeof createServer> {
   return httpServer;
 }
 
+// `pathToFileURL` is correct on both Windows and Linux (the old hand-built
+// `file:///${path}` produced four slashes on Linux → never matched in a container).
 const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file:///${process.argv[1].replace(/\\/g, '/')}`).href;
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun) startHttpServer(Number(process.env['PORT'] ?? 8801));

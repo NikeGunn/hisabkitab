@@ -1,51 +1,50 @@
 'use client';
 
 /**
- * Two infinite marquees scrolling in OPPOSITE directions (left→right and
- * right→left), pausing on hover. Pure CSS keyframes (animate-marquee /
- * animate-marquee-reverse) — no JS on the scroll hot path. The track is
- * duplicated so the -50% translate loops seamlessly.
+ * Two infinite marquees scrolling in OPPOSITE directions, pausing on hover. Pure
+ * CSS keyframes (animate-marquee / animate-marquee-reverse), no JS on the scroll
+ * hot path. The track is duplicated so the -50% translate loops seamlessly.
+ *
+ * These are scenario cards (what the product does in a real moment), NOT attributed
+ * customer quotes. The product is in pilot, so we do not invent testimonials.
  */
-type Quote = { name: string; role: string; town: string; quote: string };
+type Scenario = { icon: string; title: string; body: string };
 
-const ROW_A: Quote[] = [
-  { name: 'Sita Karki', role: 'Owner, Karki Café', town: 'Lalitpur', quote: 'I just send a photo of the bill. It does the VAT and waits for my OK. My accountant only checks at month-end now.' },
-  { name: 'Ram Thapa', role: 'Thapa Suppliers', town: 'Bhaktapur', quote: 'It caught an abbreviated bill I’d have wrongly claimed. It said “not valid for input credit” and explained why.' },
-  { name: 'Anjana Shrestha', role: 'Newa Kitchen', town: 'Kathmandu', quote: 'Nothing gets saved unless I say yes. That’s exactly how I want my books handled.' },
-  { name: 'Bikash Gurung', role: 'Gurung Hardware', town: 'Pokhara', quote: 'The monthly reminder shows my net payable on one screen. I file on the IRD portal myself in two minutes.' },
+const ROW_A: Scenario[] = [
+  { icon: '📸', title: 'Send a photo', body: 'You snap a supplier bill. It reads the VAT and waits for your OK. Your accountant only reviews at month end.' },
+  { icon: '🛡️', title: 'Catches 17Ka bills', body: 'An abbreviated bill that is not valid for input credit is flagged, with the reason explained in plain language.' },
+  { icon: '✅', title: 'Nothing without your yes', body: 'Every entry stays a draft until you confirm it. You stay in control of what goes on the books.' },
+  { icon: '🔔', title: 'Monthly VAT reminder', body: 'Around the 20th BS it prepares the return and shows the net payable on one screen, ready for you to file.' },
 ];
 
-const ROW_B: Quote[] = [
-  { name: 'Pratima Rai', role: 'Rai Boutique', town: 'Dharan', quote: 'It writes in Romanized Nepali back to me. Feels like texting a careful accountant, not a robot.' },
-  { name: 'Suresh Adhikari', role: 'Adhikari Traders', town: 'Butwal', quote: 'When a photo was blurry it asked for a clearer one instead of guessing a number. That trust matters.' },
-  { name: 'Maya Tamang', role: 'Tamang Tea House', town: 'Kathmandu', quote: 'Khalti payments get recorded automatically once verified. No double entry, no mistakes.' },
-  { name: 'Deepak Joshi', role: 'Joshi Electronics', town: 'Biratnagar', quote: 'Exact paisa, every time. I checked against my old ledger — it reconciled to the rupee.' },
+const ROW_B: Scenario[] = [
+  { icon: '🗣️', title: 'Replies in your language', body: 'It answers in Romanized Nepali, Devanagari, or English, matching how you wrote to it.' },
+  { icon: '🔎', title: 'Asks when unsure', body: 'If a photo is blurry it asks for a clearer one instead of recording a number it is not sure about.' },
+  { icon: '💳', title: 'Khalti, once verified', body: 'A Khalti payment is recorded only after a server side check confirms it, so there is no double entry.' },
+  { icon: '🧮', title: 'Integer paisa math', body: 'VAT is computed in whole paisa with integer math, so the figures reconcile cleanly to the rupee.' },
 ];
 
-function Card({ q }: { q: Quote }) {
+function Card({ q }: { q: Scenario }) {
   return (
     <figure className="card mx-3 w-[340px] shrink-0 p-6">
       <figcaption className="mb-3 flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent font-serif text-white">
-          {q.name[0]}
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-lg text-white">
+          {q.icon}
         </span>
-        <div>
-          <p className="text-sm font-semibold text-ink">{q.name}</p>
-          <p className="font-mono text-[11px] uppercase tracking-wide text-muted">{q.role} · {q.town}</p>
-        </div>
+        <p className="font-serif text-sm font-semibold text-ink">{q.title}</p>
       </figcaption>
-      <blockquote className="text-[15px] leading-relaxed text-muted">“{q.quote}”</blockquote>
+      <p className="text-[15px] leading-relaxed text-muted">{q.body}</p>
     </figure>
   );
 }
 
-function Marquee({ items, reverse }: { items: Quote[]; reverse?: boolean }) {
+function Marquee({ items, reverse }: { items: Scenario[]; reverse?: boolean }) {
   const track = [...items, ...items]; // duplicate for a seamless -50% loop
   return (
     <div className="group relative flex overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
       <div className={`flex shrink-0 ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'} group-hover:[animation-play-state:paused]`}>
         {track.map((q, i) => (
-          <Card key={`${q.name}-${i}`} q={q} />
+          <Card key={`${q.title}-${i}`} q={q} />
         ))}
       </div>
     </div>
@@ -56,10 +55,10 @@ export function Testimonials() {
   return (
     <section className="py-24">
       <div className="mx-auto mb-12 max-w-content px-6 text-center">
-        <span className="label">Loved by shopkeepers</span>
+        <span className="label">Built for shopkeepers</span>
         <h2 className="display mt-3 text-[34px] sm:text-[42px]">Small businesses, big peace of mind</h2>
         <p className="mx-auto mt-4 max-w-xl text-muted">
-          Owners across Nepal keep their books on WhatsApp — and approve every single entry.
+          Here is what HisabKitab does in the moments that matter on a normal working day.
         </p>
       </div>
       <div className="space-y-5">
