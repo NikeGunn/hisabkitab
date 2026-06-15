@@ -3,6 +3,7 @@ export * from './config/tax.js';
 export * from './vat/vat.js';
 export * from './tds/tds.js';
 export * from './bsdate/bsdate.js';
+export * from './bsdate/deadline-check.js';
 export * from './aging/aging.js';
 export * from './allocation/allocation.js';
 export * from './idempotency/idempotency.js';

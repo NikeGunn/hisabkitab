@@ -205,6 +205,17 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   the Docker stack (0009 migrates, subscriptions/billing_payments RLS on). Still DEV-safe until deploy +
   `PAYMENTS_LIVE=1` + real Khalti merchant key.
 
+**✅ Web-verification governance (v1.1 §5 / v2.0 §9) — DONE (2026-06-15; +9 tests):**
+- The agent already ships the built-in toolset (`bash`/files/`web_search`/`web_fetch`); this GOVERNS it
+  for zero-fabrication. Web is read-only + single-purpose (confirm the IRD deadline/rate ONLY; scope
+  guardrail forbids general browsing). **Web confirms, never overwrites**: a web value can never become a
+  saved entry or a sent figure on its own — the deterministic engine is the only source of truth.
+- Pure `checkFilingDeadline` in `@hisab/shared` (PASS=web-matched / SKIP=not checked / BLOCKED=disagree or
+  unreadable → HOLD, never adopt the web value) + 5 probes. New **`verify_filing_deadline`** ledger tool
+  (read-only, `generate_report` cap): returns the COMPUTED deadline + verdict + guidance, audit-logs source
+  + verdict; 4 contract probes incl. "bogus web date BLOCKS and is never adopted". System prompt WEB CHECKS
+  paragraph + definition test locks it in. Egress allowlist deferred to scale-time (documented in v2.0 §9).
+
 **✅ P8 (v2.0 §3) — identity, multi-user & RBAC — DONE (2026-06-15; 402 tests, +70):**
 - **Migration 0010**: `users` (global WhatsApp identity) + `memberships` (user↔tenant role + invite
   lifecycle invited|active|revoked). Partial-unique `(user,tenant) WHERE status<>'revoked'` (revoked
