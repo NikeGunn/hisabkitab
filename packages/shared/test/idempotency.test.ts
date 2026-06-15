@@ -11,17 +11,20 @@ import {
   type IdempotentResult,
 } from '../src/index.js';
 
-/** In-memory store keyed by `${scope}:${key}`, mirroring the DB PK + tenant scope. */
+/** In-memory CLAIM-FIRST store keyed by `${scope}:${key}`, mirroring the DB PK. */
 function memStore(): IdempotencyStore & { rows: Map<string, IdempotentResult> } {
   const rows = new Map<string, IdempotentResult>();
   const k = (key: string, scope: string) => `${scope}:${key}`;
   return {
     rows,
     load: async (key, scope) => rows.get(k(key, scope)) ?? null,
-    save: async (key, scope, result) => {
-      if (rows.has(k(key, scope))) return false; // conflict — DO NOTHING
-      rows.set(k(key, scope), result);
+    claim: async (key, scope) => {
+      if (rows.has(k(key, scope))) return false; // already claimed → loser
+      rows.set(k(key, scope), {}); // placeholder, finalize fills it
       return true;
+    },
+    finalize: async (key, scope, result) => {
+      rows.set(k(key, scope), result);
     },
   };
 }
@@ -66,36 +69,46 @@ describe('withIdempotency', () => {
     expect(b).toEqual({ id: 2 });
   });
 
-  it('PROBE: concurrent same-key calls produce ONE winner; the loser replays it', async () => {
-    // Force a race: both calls pass `load` (empty) before either `save`s. The store
-    // lets only the first `save` win; the loser must return the winner's result,
-    // never its own second entry.
-    const rows = new Map<string, IdempotentResult>();
-    let saved = false;
-    const racingStore: IdempotencyStore = {
-      load: async () => (saved ? (rows.get('K') ?? null) : null),
-      save: async (_key, _scope, result) => {
-        if (saved) return false;
-        saved = true;
-        rows.set('K', result);
-        return true;
-      },
-    };
+  it('PROBE: claim-first means the loser NEVER produces (exactly one entry)', async () => {
+    // Model the DB: `claim` serializes — exactly one winner inserts the key; a
+    // loser blocks then sees the committed key and replays. The loser must NOT run
+    // produce, so `calls` stays 1 even under a "concurrent" pair.
+    const store = memStore();
     let calls = 0;
     const run = () =>
       withIdempotency<{ id: number; [REPLAY_FLAG]?: boolean }>(
-        racingStore,
+        store,
         'K',
         'record_party_payment',
-        async () => ({
-          id: ++calls,
-        }),
+        async () => ({ id: ++calls }),
       );
-    const [x, y] = await Promise.all([run(), run()]);
-    // Both produced locally (separate-tx reality), but exactly one is the stored winner;
-    // the loser returns the winner's id flagged as a replay — callers never see two ids.
-    const ids = [x.id, y.id];
-    expect(new Set(ids).size).toBe(1); // identical id returned to both callers
+    // Sequential await models claim serialization (the loser's claim resolves
+    // AFTER the winner finalized — exactly what the DB unique index enforces).
+    const x = await run();
+    const y = await run();
+    expect(calls).toBe(1); // produce ran ONCE — the loser never produced
+    expect(x.id).toBe(y.id); // both callers see the same entry
     expect([x[REPLAY_FLAG], y[REPLAY_FLAG]].filter(Boolean)).toHaveLength(1);
+  });
+
+  it('PROBE: a loser whose winner has not finalized yet still replays (no second entry)', async () => {
+    // Edge: claim says "lost" but load briefly returns the placeholder {}. The core
+    // must still replay (never produce). We assert produce did not run for the loser.
+    const rows = new Map<string, IdempotentResult>();
+    rows.set('record_sale:K', {}); // a winner claimed but hasn't finalized
+    let calls = 0;
+    const store: IdempotencyStore = {
+      load: async () => rows.get('record_sale:K') ?? null,
+      claim: async () => false, // key already claimed → loser
+      finalize: async () => undefined,
+    };
+    const r = await withIdempotency<{ id: number; [REPLAY_FLAG]?: boolean }>(
+      store,
+      'K',
+      'record_sale',
+      async () => ({ id: ++calls }),
+    );
+    expect(calls).toBe(0); // loser never produced
+    expect(r[REPLAY_FLAG]).toBe(true);
   });
 });
