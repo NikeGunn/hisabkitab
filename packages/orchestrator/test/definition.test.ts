@@ -117,6 +117,9 @@ describe('system prompt (frozen, rule-bearing)', () => {
       'NEVER file with the government',
       'passwords, OTPs',
       'One session = one business',
+      // web-verification governance (PRD v1.1 §5): web confirms, never overwrites
+      'verify_filing_deadline',
+      'NEVER saved into an entry',
     ]) {
       expect(SYSTEM_PROMPT).toContain(must);
     }

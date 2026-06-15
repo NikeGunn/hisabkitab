@@ -16,6 +16,7 @@ import {
   validateExpense,
   validateSale,
   vatFilingDeadline,
+  checkFilingDeadline,
   vatOnExclusive,
   netVatPosition,
   withIdempotency,
@@ -103,6 +104,21 @@ export const inputSchemas = {
     entry_id: uuid,
   },
   generate_return_summary: { bs_year: bsYear, bs_month: bsMonth },
+  verify_filing_deadline: {
+    bs_year: bsYear,
+    bs_month: bsMonth,
+    // What the agent read from the IRD site via web_fetch (OPTIONAL). The tool
+    // never trusts this to set the deadline — it only confirms or HOLDS on it.
+    observed_deadline_ad: isoDate
+      .optional()
+      .describe('the deadline date you READ on the IRD site (YYYY-MM-DD); omit if you did not web_fetch it'),
+    source_url: z
+      .string()
+      .url()
+      .max(300)
+      .optional()
+      .describe('the IRD page you read it from; required if observed_deadline_ad is given'),
+  },
   list_transactions: {
     bs_year: bsYear,
     bs_month: bsMonth,
@@ -135,6 +151,7 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   list_transactions: 'generate_report',
   get_vendor: 'generate_report',
   generate_return_summary: 'generate_report',
+  verify_filing_deadline: 'generate_report',
   get_receivables_summary: 'generate_report',
   get_payables_summary: 'generate_report',
   get_statement: 'generate_report',
@@ -579,6 +596,43 @@ export function createToolHandlers(ctx: ToolContext) {
       });
     },
 
+    async verify_filing_deadline(args: Args<'verify_filing_deadline'>) {
+      // The deterministic computation is ALWAYS authoritative (PRD v1.1 §5.1).
+      const computed = toIso(vatFilingDeadline(args.bs_year, args.bs_month).ad);
+      // A web observation may only CONFIRM it or force a HOLD — never overwrite it.
+      const web =
+        args.observed_deadline_ad && args.source_url
+          ? { observedAdIso: args.observed_deadline_ad, sourceUrl: args.source_url }
+          : undefined;
+      const result = checkFilingDeadline(computed, web);
+      return inTenantTx(async (tx) => {
+        await logWrite(tx, ctx, 'verify_filing_deadline', {
+          bs_year: args.bs_year,
+          bs_month: args.bs_month,
+          computed_deadline_ad: computed,
+          observed_deadline_ad: args.observed_deadline_ad ?? null,
+          source_url: args.source_url ?? null,
+          verdict: result.verdict,
+        });
+        return {
+          bs_year: args.bs_year,
+          bs_month: args.bs_month,
+          // the caller ALWAYS uses this computed value; the verdict only says
+          // whether it was web-confirmed, conflicting, or unchecked.
+          filing_deadline_ad: computed,
+          verdict: result.verdict,
+          detail: result.detail,
+          ...(result.source ? { source: result.source } : {}),
+          guidance:
+            result.verdict === 'BLOCKED'
+              ? 'HOLD: do not state a deadline; ask the owner/accountant to confirm. Never adopt the web value.'
+              : result.verdict === 'PASS'
+                ? 'Web-confirmed: safe to state this deadline, citing the source.'
+                : 'Not web-checked: you may state the computed deadline but say it was not confirmed online.',
+        };
+      });
+    },
+
     async list_transactions(args: Args<'list_transactions'>) {
       const { fromIso, toIso: toIsoDate } = monthRange(args.bs_year, args.bs_month);
       return inTenantTx(async (tx) => {
@@ -690,6 +744,12 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
   confirm_entry: 'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ).',
   generate_return_summary:
     'Compute the VAT return for a BS month from CONFIRMED entries only (does NOT file). Net payable = max(output−input, 0); excess input carries forward.',
+  verify_filing_deadline:
+    'Get the authoritative computed VAT filing deadline for a BS month, and (if you web_fetched the ' +
+    'IRD calendar) reconcile it with what you read. Pass observed_deadline_ad + source_url to confirm. ' +
+    'Verdict PASS = web-confirmed; SKIP = not checked online; BLOCKED = the web date DISAGREES or was ' +
+    'unreadable → HOLD and ask, NEVER state or adopt the web value. The returned filing_deadline_ad is ' +
+    'always the computed value, never the web one.',
   list_transactions: 'List sales/expenses for a BS month (draft + confirmed unless filtered).',
   mark_return_filed_by_user: 'Owner confirmed they filed the return themselves on the IRD portal.',
   upsert_vendor: 'Remember a vendor (PAN, VAT status) so the owner is not re-asked every time.',

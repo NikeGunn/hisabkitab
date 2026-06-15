@@ -22,3 +22,21 @@ updates:
       # one PR for routine minor/patch bumps; majors stay separate for review.
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # MAJOR bumps of toolchain/runtime deps need a deliberate migration PR, not an
+      # automated bump — they break the strict build / lint / pinned runtime.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript-eslint"
+        update-types: ["version-update:semver-major"]
+      # @types/node MUST track the Node major we actually run (Node 20).
+      - dependency-name: "@types/node"
+        versions: [">=21"]
+      # pdfmake 0.2 API is hand-tuned in the reports renderer; drizzle-kit 0.3x and
+      # these 0.x "minors" are effectively breaking — bump them deliberately.
+      - dependency-name: "pdfmake"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: "drizzle-kit"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
