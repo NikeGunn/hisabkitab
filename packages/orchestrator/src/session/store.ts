@@ -7,6 +7,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { eq } from 'drizzle-orm';
 import { schema, type Db } from '@hisab/db';
+import type { Role } from '@hisab/shared';
 import { ensureTenantVault, type TenantVaultOptions } from '../vault/tenant-vault.js';
 import { startTenantSession } from './client.js';
 
@@ -19,14 +20,23 @@ export interface SessionStoreDeps {
   signingSecret: string;
 }
 
+/** Who is acting this turn — the bearer is rotated to carry this role (PRD §3). */
+export interface ActingCaller {
+  role: Role;
+  userId?: string;
+}
+
 export async function getOrCreateTenantSession(
   deps: SessionStoreDeps,
   tenantId: string,
+  caller: ActingCaller = { role: 'owner' },
 ): Promise<{ sessionId: string; vaultId: string }> {
   const vaultOpts: TenantVaultOptions = {
     tenantId,
     ledgerMcpUrl: deps.ledgerMcpUrl,
     signingSecret: deps.signingSecret,
+    role: caller.role,
+    ...(caller.userId !== undefined ? { userId: caller.userId } : {}),
   };
 
   const rows = await deps.db

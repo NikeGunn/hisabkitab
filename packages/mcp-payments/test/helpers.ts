@@ -2,6 +2,7 @@ import postgres from 'postgres';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createDb, type DbHandle } from '@hisab/db';
+import type { Role } from '@hisab/shared';
 import { buildPaymentsServer } from '../src/server.js';
 import { KhaltiClient } from '../src/khalti.js';
 import type { KhaltiStub } from '../src/khalti-stub.js';
@@ -34,11 +35,12 @@ export async function openSession(
   handle: DbHandle,
   tenantId: string,
   stub: KhaltiStub,
-  opts: { live?: boolean } = {},
+  opts: { live?: boolean; role?: Role } = {},
 ): Promise<TestSession> {
   const server = buildPaymentsServer({
     db: handle.db,
     tenantId,
+    role: opts.role ?? 'owner',
     khalti: new KhaltiClient({ secretKey: STUB_SECRET, origin: stub.origin }),
     returnUrl: 'http://127.0.0.1:9/payments/khalti/return', // unused in tool tests
     websiteUrl: 'https://hisabkitab.example',

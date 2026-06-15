@@ -14,8 +14,13 @@ const OPTS = {
 };
 
 describe('mintLedgerBearer', () => {
-  it('round-trips through the MCP verifier and scopes to the tenant', () => {
-    expect(verifyTenantToken(mintLedgerBearer(OPTS), 'test-secret')).toBe(TENANT);
+  it('round-trips through the MCP verifier and scopes to the tenant (default owner)', () => {
+    expect(verifyTenantToken(mintLedgerBearer(OPTS), 'test-secret')).toEqual({ tenantId: TENANT, role: 'owner' });
+  });
+
+  it('carries the acting role into the bearer (RBAC, PRD §3)', () => {
+    const bearer = mintLedgerBearer({ ...OPTS, role: 'staff' });
+    expect(verifyTenantToken(bearer, 'test-secret')).toMatchObject({ tenantId: TENANT, role: 'staff' });
   });
 
   it('PROBE: a token signed with another secret is rejected', () => {

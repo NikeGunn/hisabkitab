@@ -13,11 +13,17 @@ import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
 import {
-  findTenantBySender,
   handleUnknownSender,
   ONBOARDING_PROMPT,
   pairedWelcome,
 } from '../onboarding/pairing.js';
+import {
+  resolveMembership,
+  parseInviteCommand,
+  isAcceptCommand,
+  inviteMember,
+  acceptInvite,
+} from '../identity/membership.js';
 import { attachInboundMedia } from './media.js';
 import { scanForCredentials, CREDENTIAL_REFUSAL } from '../security/credential-guard.js';
 import { TenantRateLimiter, RATE_LIMITED_REPLY } from '../resilience/rate-limit.js';
@@ -65,6 +71,38 @@ export const UNSUPPORTED_REPLY =
 export const MEDIA_FAILURE_REPLY =
   'Sorry — I could not download that file. Could you try sending it again?';
 
+/** Reply to an owner's invite command (PRD v2.0 §3). */
+function inviteReply(res: ReturnType<typeof inviteMember> extends Promise<infer R> ? R : never): string {
+  switch (res.kind) {
+    case 'invited':
+      return (
+        `Invite sent to ${res.inviteE164} as ${res.role}. 🙌 Ask them to message me ` +
+        `"JOIN" from that number to accept. They'll get ${res.role} access only.`
+      );
+    case 'already_member':
+      return `That number is already on your team (as ${res.role}). Nothing to do.`;
+    case 'not_owner':
+      return 'Only the business owner can add team members. Please ask the owner to do this.';
+    case 'bad_role':
+      return 'You can add someone as accountant, staff, or viewer. For example: "add 98XXXXXXXX as accountant".';
+    case 'bad_number':
+      return "I couldn't read that phone number. Try the full number, e.g. \"add 9779812345678 as staff\".";
+  }
+}
+
+/** Welcome a newly joined member, stating their (limited) access. */
+function memberWelcome(businessName: string, role: string): string {
+  const access: Record<string, string> = {
+    accountant: 'record and confirm entries, prepare VAT, and pull reports',
+    staff: 'record draft entries (the owner or accountant confirms them)',
+    viewer: 'view reports and summaries',
+  };
+  return (
+    `You've joined ${businessName} as ${role}. 🎉 You can ${access[role] ?? 'use HisabKitab'}. ` +
+    `Money actions and team changes stay with the owner.`
+  );
+}
+
 /** True when the message was processed; false when deduped as a retry. */
 export async function processInbound(deps: RouterDeps, msg: InboundMessage): Promise<boolean> {
   // Exactly-once: Meta retries webhooks; the wa_events PK is the gate.
@@ -79,9 +117,18 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
   }
 
   return deps.queues.run(msg.fromE164, async () => {
-    const tenant = await findTenantBySender(deps.db, msg.fromE164);
+    const member = await resolveMembership(deps.db, msg.fromE164);
 
-    if (!tenant) {
+    if (!member) {
+      // An invited number accepting its seat is the first thing we check — only
+      // THIS verified sender can accept its own invite (no self-escalation).
+      if (isAcceptCommand(msg.text)) {
+        const accepted = await acceptInvite(deps.db, msg.fromE164);
+        if (accepted.kind === 'accepted') {
+          await deps.wa.sendText(msg.fromE164, memberWelcome(accepted.businessName, accepted.role));
+          return true;
+        }
+      }
       const outcome = await handleUnknownSender(deps.db, msg.fromE164, msg.text);
       if (outcome.kind === 'paired') {
         await deps.wa.sendText(msg.fromE164, pairedWelcome(outcome.businessName));
@@ -93,6 +140,18 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       } else {
         await deps.wa.sendText(msg.fromE164, ONBOARDING_PROMPT);
       }
+      return true;
+    }
+
+    const tenant = { tenantId: member.tenantId, businessName: member.businessName };
+
+    // Owner-only invite command, handled BEFORE the agent turn so the model never
+    // sees it as a normal request and a non-owner can never grant a seat. Authority
+    // comes from `member.role` (the verified session), not the message text.
+    const invite = parseInviteCommand(msg.text);
+    if (invite) {
+      const res = await inviteMember(deps.db, member, invite.e164, invite.role);
+      await deps.wa.sendText(msg.fromE164, inviteReply(res));
       return true;
     }
 
@@ -128,7 +187,10 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       return true;
     }
 
-    const { sessionId } = await getOrCreateTenantSession(deps, tenant.tenantId);
+    const { sessionId } = await getOrCreateTenantSession(deps, tenant.tenantId, {
+      role: member.role,
+      userId: member.userId,
+    });
 
     let turnText = msg.text ?? '';
     if (msg.media) {

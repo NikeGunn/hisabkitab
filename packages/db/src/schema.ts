@@ -3,11 +3,13 @@
  * truth — it carries the RLS policies and grants drizzle cannot express).
  * Money columns are bigint paisa (mode: 'bigint').
  */
+import { sql } from 'drizzle-orm';
 import {
   bigint,
   bigserial,
   boolean,
   date,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -38,6 +40,45 @@ export const pairingCodes = pgTable('pairing_codes', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
 });
+
+// ----- P8: identity & RBAC (mirrors 0010_identity_rbac.sql) -----
+
+/** A verified WhatsApp identity. Global (a number can belong to many tenants). */
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  whatsappE164: text('whatsapp_e164').unique().notNull(),
+  displayName: text('display_name'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Links a user to a tenant with a role + invite lifecycle. */
+export const memberships = pgTable(
+  'memberships',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    role: text('role', { enum: ['owner', 'accountant', 'staff', 'viewer'] }).notNull(),
+    status: text('status', { enum: ['invited', 'active', 'revoked'] })
+      .notNull()
+      .default('invited'),
+    invitedBy: uuid('invited_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // one live membership per (user, tenant); revoked rows don't block re-invite
+    uniqueIndex('memberships_live_uq')
+      .on(t.userId, t.tenantId)
+      .where(sql`status <> 'revoked'`),
+    index('memberships_tenant_status_idx').on(t.tenantId, t.status),
+    index('memberships_user_idx').on(t.userId),
+  ],
+);
 
 export const vendors = pgTable(
   'vendors',
