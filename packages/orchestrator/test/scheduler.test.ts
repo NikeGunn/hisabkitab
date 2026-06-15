@@ -46,7 +46,7 @@ const monthFrom = localIso(bsMonthRange(bsYear, bsMonth).from);
  *  the ledger handler wraps the write in withTenant. */
 function ledgerProvider(): ReturnSummaryProvider {
   return async (tenantId, y, m) => {
-    const ctx: ToolContext = { db: app.db, tenantId, cfg: defaultTaxConfig };
+    const ctx: ToolContext = { db: app.db, tenantId, role: 'owner', cfg: defaultTaxConfig };
     const handlers = createToolHandlers(ctx);
     const r = (await handlers.generate_return_summary({ bs_year: y, bs_month: m })) as {
       net_payable_paisa: number;
@@ -108,6 +108,8 @@ beforeEach(async () => {
     'tenant_sessions',
     'pairing_codes',
     'vendors',
+    'memberships',
+    'users',
     'tenants',
   ]) {
     await adminSql.unsafe(`DELETE FROM ${table}`);

@@ -8,6 +8,7 @@ export * from './allocation/allocation.js';
 export * from './idempotency/idempotency.js';
 export * from './billing/billing.js';
 export * from './billing/features.js';
+export * from './rbac/roles.js';
 export * from './validation/engine.js';
 export * from './verification/verdict.js';
 export { checks as verificationChecks } from './verification/checks.js';

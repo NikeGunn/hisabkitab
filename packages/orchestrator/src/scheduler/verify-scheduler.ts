@@ -62,7 +62,8 @@ async function main(): Promise<void> {
   const sendTemplate: TemplateSender = async (to, template, params) => void sent.push({ to, template, params });
 
   const truthfulProvider: ReturnSummaryProvider = async (id, y, m) => {
-    const ctx: ToolContext = { db: app.db, tenantId: id, cfg: defaultTaxConfig };
+    // trusted system actor (autonomous scheduler) runs with owner authority
+    const ctx: ToolContext = { db: app.db, tenantId: id, role: 'owner', cfg: defaultTaxConfig };
     const r = (await createToolHandlers(ctx).generate_return_summary({ bs_year: y, bs_month: m })) as {
       net_payable_paisa: number;
       is_nil: boolean;

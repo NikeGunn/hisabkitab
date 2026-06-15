@@ -32,12 +32,16 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
   await adminSql`INSERT INTO payments (tenant_id, provider, pidx, purchase_order_id, purchase_order_name, amount_paisa) VALUES (${id}, 'khalti', ${'pidx-' + id.slice(0, 8)}, 'po', 'momo', 904000)`;
   await adminSql`INSERT INTO reminder_log (tenant_id, bs_year, bs_month, kind, verdict) VALUES (${id}, 2082, 1, 'return_prepared', 'PASS')`;
   await adminSql`INSERT INTO tenant_sessions (tenant_id, session_id, vault_id) VALUES (${id}, ${'sesn_' + id.slice(0, 8)}, ${'vault_' + id.slice(0, 8)})`;
+  // P8: an owner user + membership for this tenant.
+  const [u] = await adminSql`INSERT INTO users (whatsapp_e164) VALUES (${e164}) RETURNING id`;
+  await adminSql`INSERT INTO memberships (user_id, tenant_id, role, status) VALUES (${u!['id']}, ${id}, 'owner', 'active')`;
   return id;
 }
 
 const TENANT_TABLES = [
   'sales', 'expenses', 'vendors', 'vat_returns', 'validation_events',
   'audit_log', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
+  'memberships',
 ];
 
 async function rowCount(table: string, tenantId: string): Promise<number> {
@@ -71,7 +75,8 @@ afterAll(async () => {
   await adminSql.end({ timeout: 5 });
 });
 beforeEach(async () => {
-  for (const t of ['deletion_log', ...TENANT_TABLES, 'tenants']) {
+  // memberships (in TENANT_TABLES) before users before tenants (FK order).
+  for (const t of ['deletion_log', ...TENANT_TABLES, 'users', 'tenants']) {
     await adminSql.unsafe(`DELETE FROM ${t}`);
   }
 });
@@ -93,7 +98,12 @@ describe('deleteTenantData', () => {
     // session deleted via the API
     expect(deleted).toContain(`sesn_${id.slice(0, 8)}`);
     expect(report.sessionsDeleted).toHaveLength(1);
-    expect(report.totalRows).toBeGreaterThanOrEqual(11); // 10 tables + tenant
+    expect(report.totalRows).toBeGreaterThanOrEqual(11); // tenant tables + tenant
+    // the now-orphaned owner user is purged too (no other memberships)
+    expect(report.rowsByTable['memberships']).toBe(1);
+    expect(report.rowsByTable['users']).toBe(1);
+    const usersGone = await adminSql`SELECT count(*)::int AS n FROM users WHERE whatsapp_e164 = '+9779800000001'`;
+    expect(usersGone[0]!['n']).toBe(0);
 
     // proof exists, OUTSIDE the tenant, data-free
     const proof = await adminSql`SELECT tenant_id, reason, rows_deleted, sessions_deleted, detail FROM deletion_log WHERE tenant_id = ${id}`;

@@ -73,5 +73,16 @@ export {
   PAIRING_TTL_MINUTES,
   type PairingOutcome,
 } from './onboarding/pairing.js';
+export {
+  resolveMembership,
+  inviteMember,
+  acceptInvite,
+  parseInviteCommand,
+  isAcceptCommand,
+  INVITABLE_ROLES,
+  type ResolvedMembership,
+  type InviteResult,
+  type AcceptOutcome,
+} from './identity/membership.js';
 export { buildServer, type ServerOptions } from './server.js';
 export { loadConfig, type OrchestratorConfig } from './config.js';

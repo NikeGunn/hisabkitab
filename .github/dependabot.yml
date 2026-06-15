@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned versions current (security + Node20→24 deprecations).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: ["type: chore", "type: security"]
+    commit-message:
+      prefix: "ci"
+
+  # npm/pnpm dependencies across the monorepo root.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: ["type: chore"]
+    commit-message:
+      prefix: "deps"
+    groups:
+      # one PR for routine minor/patch bumps; majors stay separate for review.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
