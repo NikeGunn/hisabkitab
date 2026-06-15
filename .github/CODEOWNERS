@@ -1,0 +1,14 @@
+# Code owners for HisabKitab. The owner is auto-requested for review on PRs.
+# Solo-founder default: everything is owned by @NikeGunn.
+*       @NikeGunn
+
+# Highest-risk surfaces — money/tax/auth — call them out explicitly so a future
+# team can't change them without the owner's review.
+/packages/shared/src/money/        @NikeGunn
+/packages/shared/src/vat/          @NikeGunn
+/packages/shared/src/tds/          @NikeGunn
+/packages/shared/src/billing/      @NikeGunn
+/packages/shared/src/rbac/         @NikeGunn
+/packages/mcp-ledger/src/auth.ts   @NikeGunn
+/packages/db/migrations/           @NikeGunn
+/.github/workflows/                @NikeGunn

@@ -1,0 +1,36 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. **Never paste secrets** (passwords, OTPs, Khalti/IRD logins, tokens).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: area
+    attributes:
+      label: Area
+      placeholder: "ledger / payments / orchestrator / shared / landing / ci"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / context
+      description: Relevant output. Redact tenant data and secrets.
+      render: shell
