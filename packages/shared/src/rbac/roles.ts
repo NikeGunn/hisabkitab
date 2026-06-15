@@ -56,17 +56,23 @@ const ROLE_MASK: Record<Role, number> = {
   viewer: mask('generate_report'),
 };
 
-/** True if `role` is a real role. Unknown strings are denied everything. */
+/**
+ * True if `role` is a real role. Uses `Object.hasOwn` (NOT the `in` operator) so
+ * inherited keys like `constructor`/`toString`/`__proto__` are never mistaken for
+ * roles — important because this guards token minting/verification.
+ */
 export function isRole(role: string): role is Role {
-  return role in ROLE_MASK;
+  return Object.hasOwn(ROLE_MASK, role);
 }
 
 /**
- * Can `role` perform `cap`? Deny-by-default: an unknown role (e.g. a fabricated
- * token claim) has mask 0 and is refused every capability.
+ * Can `role` perform `cap`? Deny-by-default: only a real own-key role gets its
+ * mask; anything else (a fabricated/inherited-key claim) is refused every
+ * capability. Goes through `isRole` so prototype keys can never leak a mask.
  */
 export function can(role: string, cap: Capability): boolean {
-  return ((ROLE_MASK[role as Role] ?? 0) & BIT[cap]) !== 0;
+  if (!isRole(role)) return false;
+  return (ROLE_MASK[role] & BIT[cap]) !== 0;
 }
 
 export class RoleError extends Error {

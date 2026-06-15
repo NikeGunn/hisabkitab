@@ -73,6 +73,14 @@ describe('PROBES — deny by default', () => {
     expect(isRole('superadmin')).toBe(false);
   });
 
+  it('PROBE: prototype keys (constructor/toString/__proto__) are NOT roles', () => {
+    // the `in` operator would wrongly return true for these — isRole must not.
+    for (const key of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      expect(isRole(key)).toBe(false);
+      for (const cap of CAPABILITIES) expect(can(key, cap)).toBe(false);
+    }
+  });
+
   it('PROBE: staff cannot confirm an entry (no save without owner/accountant)', () => {
     expect(can('staff', 'confirm_entry')).toBe(false);
     expect(() => assertCan('staff', 'confirm_entry')).toThrow(RoleError);

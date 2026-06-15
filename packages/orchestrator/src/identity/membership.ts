@@ -63,9 +63,12 @@ export const INVITABLE_ROLES: readonly Role[] = ['accountant', 'staff', 'viewer'
  * number has no active membership. Single indexed join (users.whatsapp_e164 →
  * memberships → tenants); no per-row work.
  *
- * NOTE: a tenant can have several active members; one phone maps to at most one
- * active membership per tenant (partial-unique index), and today one phone maps to
- * one active tenant, so `limit(1)` is exact. Multi-tenant switching is §4 (later).
+ * Today one phone maps to one active tenant. But the schema deliberately allows a
+ * WhatsApp identity to be active on MANY tenants (accountant channel, §4). To make
+ * sure we never write to an *arbitrary* business in that case, the default tenant
+ * is DETERMINISTIC: the oldest active membership (then tenant id as a tiebreak)
+ * always wins — never DB row order. Explicit "switch business" (§4) will later let
+ * a multi-tenant user pick another; until then this stable default is the only one.
  */
 export async function resolveMembership(db: Db, fromE164: string): Promise<ResolvedMembership | null> {
   const rows = await db
@@ -79,6 +82,7 @@ export async function resolveMembership(db: Db, fromE164: string): Promise<Resol
     .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.status, 'active')))
     .innerJoin(tenants, and(eq(tenants.id, memberships.tenantId), eq(tenants.status, 'active')))
     .where(eq(users.whatsappE164, fromE164))
+    .orderBy(memberships.createdAt, memberships.tenantId)
     .limit(1);
   const row = rows[0];
   return row ? { ...row, role: row.role as Role } : null;

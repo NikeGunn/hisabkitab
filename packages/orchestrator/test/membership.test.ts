@@ -83,6 +83,30 @@ describe('resolveMembership', () => {
   it('returns null for an unknown number (no membership = no access)', async () => {
     expect(await resolveMembership(orch.db, '+9779999999999')).toBeNull();
   });
+
+  it('PROBE: a user active on TWO tenants resolves DETERMINISTICALLY (oldest membership), never arbitrarily', async () => {
+    // give OWNER's user a second, newer active membership on another tenant.
+    const [t2] = await admin.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Second Biz', panOrVatNo: '600009002', status: 'active' })
+      .returning({ id: schema.tenants.id });
+    const t2Id = (t2 as { id: string }).id;
+    const u = (await resolveMembership(orch.db, OWNER))!;
+    await admin.db.insert(schema.memberships).values({
+      userId: u.userId,
+      tenantId: t2Id,
+      role: 'viewer',
+      status: 'active',
+      createdAt: new Date(Date.now() + 60_000), // strictly newer
+    });
+    // the ORIGINAL (older) tenant must still win, every time.
+    for (let i = 0; i < 3; i += 1) {
+      expect((await resolveMembership(orch.db, OWNER))!.tenantId).toBe(tenantId);
+    }
+    // cleanup the extra rows
+    await admin.db.delete(schema.memberships).where(eq(schema.memberships.tenantId, t2Id));
+    await admin.db.delete(schema.tenants).where(eq(schema.tenants.id, t2Id));
+  });
 });
 
 describe('invite + accept flow', () => {
