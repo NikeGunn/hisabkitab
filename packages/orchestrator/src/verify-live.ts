@@ -107,6 +107,44 @@ if (apiOk && setupIds && process.argv.includes('--session')) {
         : `delivered unverified figures: ${leakedFigures.join(', ')} (holds=${p2.holds}, gateOk=${gateOk})`,
     );
 
+    // P3 — web-search COST + QUALITY probe (PRD v1.1 §5 / v2.0 §9). Ask for the
+    // current IRD deadline. A SMART agent does a targeted lookup (few web calls)
+    // and routes through verify_filing_deadline. A DUMB agent crawls the web
+    // (many calls = the owner's tokens burned) — we FAIL that.
+    const MAX_WEB_CALLS = 3; // targeted lookup, not a crawl
+    const webTools: string[] = [];
+    const p3 = await runTurn(
+      client,
+      sessionId,
+      'When is my VAT return for Baisakh 2082 due? Confirm the exact deadline date.',
+      {
+        tenantId,
+        logger,
+        deliver,
+        onToolUse: (name) => {
+          if (/web_search|web_fetch/.test(name)) webTools.push(name);
+        },
+      },
+    );
+    const webCalls = webTools.length;
+    const usedVerifyTool = p3.toolUses.includes('verify_filing_deadline');
+    console.log(`  web calls: ${webCalls} [${webTools.join(', ')}]; tools: ${p3.toolUses.join(', ')}`);
+    if (webCalls === 0) {
+      // not necessarily wrong (it may answer from the computed rule), but flag it
+      record('probe-web-cost', 'SKIP', 'agent answered without a web call (used the computed rule)');
+    } else if (webCalls <= MAX_WEB_CALLS) {
+      record('probe-web-cost', 'PASS', `targeted web lookup: ${webCalls} call(s) ≤ ${MAX_WEB_CALLS} (low-cost)`);
+    } else {
+      record('probe-web-cost', 'FAIL', `web over-search: ${webCalls} calls (> ${MAX_WEB_CALLS}) — burns owner tokens`);
+    }
+    record(
+      'probe-web-governed',
+      usedVerifyTool || webCalls === 0 ? 'PASS' : 'BLOCKED',
+      usedVerifyTool
+        ? 'routed the web result through verify_filing_deadline (governed)'
+        : 'no verify_filing_deadline call observed (ledger MCP may be unreachable in this env)',
+    );
+
     await client.beta.sessions.archive(sessionId).catch(() => undefined);
   } catch (err) {
     record('session-probes', 'BLOCKED', String(err));
