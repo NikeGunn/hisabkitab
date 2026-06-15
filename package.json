@@ -27,7 +27,7 @@
     "down": "docker compose -f compose.yaml -f compose.dev.yaml down"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.3",
     "eslint": "^9.39.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
