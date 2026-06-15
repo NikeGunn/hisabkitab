@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import { and, eq, gte, lte, sql, inArray } from 'drizzle-orm';
-import { schema, type Tx } from '@hisab/db';
+import { appendAudit, schema, type Tx } from '@hisab/db';
 import {
   bsMonthRange,
   buildAgingReport,
@@ -164,8 +164,8 @@ async function resolveParty(
   return row!.id;
 }
 
-async function appendAudit(tx: Tx, tenantId: string, action: string, detail: Record<string, unknown>): Promise<void> {
-  await tx.insert(schema.auditLog).values({ tenantId, actor: 'agent', action, detail });
+async function auditAgent(tx: Tx, tenantId: string, action: string, detail: Record<string, unknown>): Promise<void> {
+  await appendAudit(tx, tenantId, { actor: 'agent', action, detail });
 }
 
 async function appendValidationFails(
@@ -224,7 +224,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
             },
           })
           .returning();
-        await appendAudit(tx, tenantId, 'upsert_party', { name: args.name });
+        await auditAgent(tx, tenantId, 'upsert_party', { name: args.name });
         const p = row!;
         return { party_id: p.id, name: p.name, kind: p.kind, pan_vat_no: p.panVatNo, is_vat_registered: p.isVatRegistered };
       });
@@ -239,7 +239,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           { asOf: new Date(), existing: [], cfg },
         );
         if (report.overall === 'fail') {
-          await appendAudit(tx, tenantId, 'record_credit_sale.rejected', { args });
+          await auditAgent(tx, tenantId, 'record_credit_sale.rejected', { args });
           await appendValidationFails(tx, tenantId, 'ar_invoice', null, report);
           return { saved: false as const, reason: 'validation failed — never saved', validation: report.results };
         }
@@ -259,7 +259,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: arInvoices.id });
         const invoiceId = row!.id;
-        await appendAudit(tx, tenantId, 'record_credit_sale.draft', { invoice_id: invoiceId, party: args.party, total_paisa: n(totalPaisa) });
+        await auditAgent(tx, tenantId, 'record_credit_sale.draft', { invoice_id: invoiceId, party: args.party, total_paisa: n(totalPaisa) });
         await appendValidationFails(tx, tenantId, 'ar_invoice', invoiceId, report);
         return {
           saved: true as const,
@@ -296,7 +296,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           { asOf: new Date(), existing: [], cfg },
         );
         if (report.overall === 'fail') {
-          await appendAudit(tx, tenantId, 'record_credit_purchase.rejected', { args });
+          await auditAgent(tx, tenantId, 'record_credit_purchase.rejected', { args });
           await appendValidationFails(tx, tenantId, 'ap_bill', null, report);
           return { saved: false as const, reason: 'validation failed — never saved', validation: report.results };
         }
@@ -317,7 +317,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: apBills.id });
         const billId = row!.id;
-        await appendAudit(tx, tenantId, 'record_credit_purchase.draft', { bill_id: billId, party: args.party, total_paisa: n(totalPaisa) });
+        await auditAgent(tx, tenantId, 'record_credit_purchase.draft', { bill_id: billId, party: args.party, total_paisa: n(totalPaisa) });
         await appendValidationFails(tx, tenantId, 'ap_bill', billId, report);
         return {
           saved: true as const,
@@ -372,7 +372,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
               ? planManualAllocation(amount, args.allocate.map((a) => ({ targetId: a.target_id, amountPaisa: BigInt(a.amount_paisa) })), targets)
               : planAutoAllocation(amount, targets);
         } catch (err) {
-          await appendAudit(tx, tenantId, 'record_party_payment.rejected', { party: args.party, reason: err instanceof Error ? err.message : String(err) });
+          await auditAgent(tx, tenantId, 'record_party_payment.rejected', { party: args.party, reason: err instanceof Error ? err.message : String(err) });
           return { saved: false as const, reason: err instanceof Error ? err.message : String(err) };
         }
 
@@ -392,7 +392,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
         await tx.insert(paymentAllocations).values(
           plan.lines.map((l) => ({ tenantId, paymentId, targetType, targetId: l.targetId, amountPaisa: l.amountPaisa })),
         );
-        await appendAudit(tx, tenantId, 'record_party_payment.draft', { payment_id: paymentId, party: args.party, amount_paisa: n(amount), lines: plan.lines.length });
+        await auditAgent(tx, tenantId, 'record_party_payment.draft', { payment_id: paymentId, party: args.party, amount_paisa: n(amount), lines: plan.lines.length });
         return {
           saved: true as const,
           payment_id: paymentId,
@@ -417,7 +417,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           .where(and(eq(table.id, args.entry_id), eq(table.status, 'draft')))
           .returning({ id: table.id });
         if (updated.length === 0) return { ok: false as const, reason: 'entry not found in this business, or already confirmed' };
-        await tx.insert(schema.auditLog).values({ tenantId, actor: 'owner', action: 'confirm_arap_entry', detail: { entry_type: args.entry_type, entry_id: args.entry_id } });
+        await appendAudit(tx, tenantId, { actor: 'owner', action: 'confirm_arap_entry', detail: { entry_type: args.entry_type, entry_id: args.entry_id } });
         return { ok: true as const, entry_id: args.entry_id, status: 'confirmed' as const };
       });
     },
@@ -494,7 +494,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
       if (args.report_type === 'sales_summary' && (args.bs_year === undefined || args.bs_month === undefined)) {
         return { accepted: false as const, reason: 'a sales summary needs the BS year and month' };
       }
-      await inTenantTx((tx) => appendAudit(tx, tenantId, 'request_report', { ...args }));
+      await inTenantTx((tx) => auditAgent(tx, tenantId, 'request_report', { ...args }));
       return {
         accepted: true as const,
         // The orchestrator scans tool results for this marker to dispatch the report job.
@@ -569,7 +569,7 @@ async function confirmPayment(tx: Tx, tenantId: string, paymentId: string) {
   }
 
   await tx.update(partyPayments).set({ status: 'confirmed' }).where(eq(partyPayments.id, paymentId));
-  await tx.insert(schema.auditLog).values({ tenantId, actor: 'owner', action: 'confirm_party_payment', detail: { payment_id: paymentId, allocations: allocs.length } });
+  await appendAudit(tx, tenantId, { actor: 'owner', action: 'confirm_party_payment', detail: { payment_id: paymentId, allocations: allocs.length } });
   return { ok: true as const, entry_id: paymentId, status: 'confirmed' as const, allocations_applied: allocs.length };
 }
 

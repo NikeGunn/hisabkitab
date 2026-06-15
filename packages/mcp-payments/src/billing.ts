@@ -10,15 +10,15 @@
  * Period math + lifecycle transitions are the pure @hisab/shared/billing module.
  */
 import { and, eq } from 'drizzle-orm';
-import { schema, type Tx } from '@hisab/db';
+import { appendAudit, schema, type Tx } from '@hisab/db';
 import { renew, startTrial, type SubscriptionState } from '@hisab/shared';
 import type { KhaltiClient } from './khalti.js';
 import { getPlan, rupees } from './plans.js';
 
-const { subscriptions, billingPayments, auditLog } = schema;
+const { subscriptions, billingPayments } = schema;
 
 const auditB = (tx: Tx, tenantId: string, action: string, detail: Record<string, unknown>) =>
-  tx.insert(auditLog).values({ tenantId, actor: 'system', action, detail });
+  appendAudit(tx, tenantId, { actor: 'system', action, detail });
 
 const todayIso = (now = new Date()): string => now.toISOString().slice(0, 10);
 

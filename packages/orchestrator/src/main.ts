@@ -13,7 +13,7 @@ import { startScheduler, type SchedulerHandle } from './scheduler/queue.js';
 import { createLedgerSummaryProvider } from './scheduler/ledger-summary.js';
 import { TenantRateLimiter } from './resilience/rate-limit.js';
 import { dispatchReport } from './reports/dispatch.js';
-import { withTenant, schema } from '@hisab/db';
+import { withTenant, appendAudit } from '@hisab/db';
 
 const config = await loadConfig();
 const handle = createDb(config.DATABASE_URL);
@@ -53,7 +53,7 @@ const app = buildServer({
           audit: {
             log: (entry) =>
               withTenant(handle.db, entry.tenantId, async (tx) => {
-                await tx.insert(schema.auditLog).values({ tenantId: entry.tenantId, actor: 'system', action: entry.action, detail: entry.detail });
+                await appendAudit(tx, entry.tenantId, { actor: 'system', action: entry.action, detail: entry.detail });
               }),
           },
           log: (msg) => console.log(`[reports] ${msg}`),

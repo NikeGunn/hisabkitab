@@ -162,16 +162,24 @@ export const vatReturns = pgTable(
   (t) => [uniqueIndex('vat_returns_tenant_id_bs_year_bs_month_key').on(t.tenantId, t.bsYear, t.bsMonth)],
 );
 
-export const auditLog = pgTable('audit_log', {
-  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
-  tenantId: uuid('tenant_id')
-    .notNull()
-    .references(() => tenants.id),
-  actor: text('actor', { enum: ['agent', 'owner', 'system'] }).notNull(),
-  action: text('action').notNull(),
-  detail: jsonb('detail'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const auditLog = pgTable(
+  'audit_log',
+  {
+    id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    actor: text('actor', { enum: ['agent', 'owner', 'system'] }).notNull(),
+    action: text('action').notNull(),
+    detail: jsonb('detail'),
+    // Tamper-evident hash-chain (mirrors 0012). prev_hash/row_hash are set by the
+    // chained-insert helper; nullable so pre-chain rows stay valid.
+    prevHash: text('prev_hash'),
+    rowHash: text('row_hash'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('audit_log_tenant_id_idx').on(t.tenantId, t.id)],
+);
 
 export const validationEvents = pgTable('validation_events', {
   id: bigserial('id', { mode: 'bigint' }).primaryKey(),

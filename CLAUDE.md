@@ -205,6 +205,23 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   the Docker stack (0009 migrates, subscriptions/billing_payments RLS on). Still DEV-safe until deploy +
   `PAYMENTS_LIVE=1` + real Khalti merchant key.
 
+**✅ Audit-log hash-chain (v2.0 §9) — DONE (2026-06-16; 424 tests, +13):** tamper-evident SINGLE
+SOURCE OF TRUTH so the agent/owner record can't be silently rewritten. Each `audit_log` row carries
+`prev_hash` + `row_hash` = SHA-256(prev_hash + canonical(row)), chained per tenant from a genesis hash.
+- Pure core in `@hisab/shared/audit` (`hashAuditRow`, deterministic `canonicalize`, `verifyAuditChain`)
+  + 7 probes (edit/delete/insert/reorder/genesis-tamper all caught). Migration **0012** adds the 2 columns
+  + `(tenant_id,id)` index (nullable → pre-chain rows stay valid).
+- `appendAudit(tx, tenantId, {actor,action,detail})` in `@hisab/db` is now the ONE way to write an audit
+  row (per-tenant `pg_advisory_xact_lock` so concurrent appends can't fork the chain). ALL ~15 audit
+  write-sites (ledger/arap/payments/billing/orchestrator gate+pairing+membership+router+main) route
+  through it. New **`verify_audit_chain`** ledger tool (read-only) → PASS|FAIL with the broken index;
+  3 DB-level tamper-detection contract probes (edit + delete caught live). `@hisab/db` now depends on
+  `@hisab/shared` (no cycle — shared is pure).
+
+**✅ Idempotency race fix (v2.0 §6) — DONE (2026-06-15):** claim-first ordering (reserve the key BEFORE
+producing) so two truly-concurrent same-key calls serialize on the unique index — only the winner produces.
+Migration **0011** grants UPDATE on idempotency_keys (finalize). Was an intermittent CI flake; now 8/8 stress runs green.
+
 **✅ Web-verification governance (v1.1 §5 / v2.0 §9) — DONE (2026-06-15; +9 tests):**
 - The agent already ships the built-in toolset (`bash`/files/`web_search`/`web_fetch`); this GOVERNS it
   for zero-fabrication. Web is read-only + single-purpose (confirm the IRD deadline/rate ONLY; scope

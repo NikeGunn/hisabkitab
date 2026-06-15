@@ -8,7 +8,7 @@
  * this asynchronously.
  */
 import type Anthropic from '@anthropic-ai/sdk';
-import { schema, type Db } from '@hisab/db';
+import { appendAudit, schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
@@ -177,12 +177,13 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     const cred = scanForCredentials(msg.text);
     if (cred.blocked) {
       deps.log?.(`credential blocked for ${msg.fromE164} [${cred.kinds.join(',')}]: ${cred.redactedPreview}`);
-      await deps.db.insert(schema.auditLog).values({
-        tenantId: tenant.tenantId,
-        actor: 'system',
-        action: 'credential_blocked',
-        detail: { kinds: cred.kinds, preview: cred.redactedPreview },
-      });
+      await deps.db.transaction((tx) =>
+        appendAudit(tx, tenant.tenantId, {
+          actor: 'system',
+          action: 'credential_blocked',
+          detail: { kinds: cred.kinds, preview: cred.redactedPreview },
+        }),
+      );
       await deps.wa.sendText(msg.fromE164, CREDENTIAL_REFUSAL);
       return true;
     }

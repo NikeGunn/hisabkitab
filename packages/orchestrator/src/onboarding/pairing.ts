@@ -5,7 +5,7 @@
  */
 import { randomInt } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import { schema, type Db } from '@hisab/db';
+import { appendAudit, schema, type Db } from '@hisab/db';
 
 export const PAIRING_TTL_MINUTES = 15;
 
@@ -94,12 +94,7 @@ export async function handleUnknownSender(
       .values({ userId: ownerId, tenantId: found.tenantId, role: 'owner', status: 'active' })
       .onConflictDoNothing();
 
-    await tx.insert(schema.auditLog).values({
-      tenantId: found.tenantId,
-      actor: 'system',
-      action: 'whatsapp_paired',
-      detail: { fromE164 },
-    });
+    await appendAudit(tx, found.tenantId, { actor: 'system', action: 'whatsapp_paired', detail: { fromE164 } });
     return { kind: 'paired' as const, tenantId: found.tenantId, businessName: found.businessName };
   });
 }

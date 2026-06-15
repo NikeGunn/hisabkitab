@@ -13,14 +13,14 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
-import { schema, withTenant, type Db, type Tx } from '@hisab/db';
+import { appendAudit, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import { defaultTaxConfig, splitVatInclusive, type TaxConfig, type Capability, type Role } from '@hisab/shared';
 import type { KhaltiClient, KhaltiLookupResponse } from './khalti.js';
 import { SUBSCRIPTION_PLANS, getPlan, rupees } from './plans.js';
 import { ensureTrial, loadSubscription, settleSubscriptionPayment } from './billing.js';
 import { projectStatus, hasAccess, type SubscriptionState } from '@hisab/shared';
 
-const { payments, sales, auditLog, billingPayments, subscriptions: subscriptionsTable } = schema;
+const { payments, sales, billingPayments, subscriptions: subscriptionsTable } = schema;
 
 const paisa = z
   .number()
@@ -120,7 +120,7 @@ const COMING_SOON = (provider: string) =>
   `${provider} is coming soon — for now I can create a Khalti payment link instead.` as const;
 
 const audit = (tx: Tx, tenantId: string, action: string, detail: Record<string, unknown>) =>
-  tx.insert(auditLog).values({ tenantId, actor: 'agent', action, detail });
+  appendAudit(tx, tenantId, { actor: 'agent', action, detail });
 
 /** Map a Khalti lookup status onto our payment row status (no-op for in-flight states). */
 const rowStatusFor = (s: KhaltiLookupResponse['status']) =>

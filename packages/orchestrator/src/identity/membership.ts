@@ -17,10 +17,10 @@
  *     last-owner removal). Re-inviting is idempotent, not an escalation.
  */
 import { and, eq, sql } from 'drizzle-orm';
-import { schema, type Db } from '@hisab/db';
+import { appendAudit, schema, type Db } from '@hisab/db';
 import type { Role } from '@hisab/shared';
 
-const { users, memberships, tenants, auditLog } = schema;
+const { users, memberships, tenants } = schema;
 
 /**
  * Parse an owner's invite command, e.g.:
@@ -154,12 +154,9 @@ export async function inviteMember(
     });
   }
 
-  await db.insert(auditLog).values({
-    tenantId: inviter.tenantId,
-    actor: 'owner',
-    action: 'member_invited',
-    detail: { invitee_e164: e164, role },
-  });
+  await db.transaction((tx) =>
+    appendAudit(tx, inviter.tenantId, { actor: 'owner', action: 'member_invited', detail: { invitee_e164: e164, role } }),
+  );
   return { kind: 'invited', role, inviteE164: e164 };
 }
 
@@ -193,11 +190,8 @@ export async function acceptInvite(db: Db, fromE164: string): Promise<AcceptOutc
     .update(memberships)
     .set({ status: 'active', updatedAt: new Date() })
     .where(eq(memberships.id, row.membershipId));
-  await db.insert(auditLog).values({
-    tenantId: row.tenantId,
-    actor: 'system',
-    action: 'member_joined',
-    detail: { e164, role: row.role },
-  });
+  await db.transaction((tx) =>
+    appendAudit(tx, row.tenantId, { actor: 'system', action: 'member_joined', detail: { e164, role: row.role } }),
+  );
   return { kind: 'accepted', tenantId: row.tenantId, businessName: row.businessName, role: row.role as Role };
 }

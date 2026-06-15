@@ -3,7 +3,7 @@
  * the literal "traced on audit before delivering to the user" requirement
  * (PRD v1.1 §4.3). Memory implementation for tests / dry runs.
  */
-import { createDb, withTenant, schema, type DbHandle } from '@hisab/db';
+import { appendAudit, createDb, withTenant, type DbHandle } from '@hisab/db';
 import type { GateDecision } from './gate.js';
 
 export interface GateLogEntry {
@@ -33,8 +33,7 @@ export class DbGateLogger implements GateLogger {
   }
   async log(entry: GateLogEntry): Promise<void> {
     await withTenant(this.handle.db, entry.tenantId, async (tx) => {
-      await tx.insert(schema.auditLog).values({
-        tenantId: entry.tenantId,
+      await appendAudit(tx, entry.tenantId, {
         actor: 'system',
         action: entry.decision.action === 'deliver' ? 'audit_gate_pass' : 'audit_gate_hold',
         detail: {

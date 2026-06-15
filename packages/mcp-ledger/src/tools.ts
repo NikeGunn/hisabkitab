@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
-import { schema, withTenant, type Db, type Tx } from '@hisab/db';
+import { appendAudit, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import {
   bsMonthRange,
   computeTds,
@@ -17,6 +17,8 @@ import {
   validateSale,
   vatFilingDeadline,
   checkFilingDeadline,
+  verifyAuditChain,
+  type ChainedAuditRow,
   vatOnExclusive,
   netVatPosition,
   withIdempotency,
@@ -32,7 +34,7 @@ import {
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
 
-const { sales, expenses, vendors, vatReturns, auditLog, validationEvents } = schema;
+const { sales, expenses, vendors, vatReturns, validationEvents, auditLog } = schema;
 
 // ---------------------------------------------------------------- zod building blocks
 
@@ -119,6 +121,7 @@ export const inputSchemas = {
       .optional()
       .describe('the IRD page you read it from; required if observed_deadline_ad is given'),
   },
+  verify_audit_chain: {},
   list_transactions: {
     bs_year: bsYear,
     bs_month: bsMonth,
@@ -152,6 +155,7 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   get_vendor: 'generate_report',
   generate_return_summary: 'generate_report',
   verify_filing_deadline: 'generate_report',
+  verify_audit_chain: 'generate_report',
   get_receivables_summary: 'generate_report',
   get_payables_summary: 'generate_report',
   get_statement: 'generate_report',
@@ -207,7 +211,7 @@ async function logWrite(
   detail: Record<string, unknown>,
   validation?: { report: ValidationReport; entryType: string; entryId: string | null },
 ): Promise<void> {
-  await tx.insert(auditLog).values({ tenantId: ctx.tenantId, actor: 'agent', action, detail });
+  await appendAudit(tx, ctx.tenantId, { actor: 'agent', action, detail });
   if (validation) {
     const events = validation.report.results
       .filter((r) => r.result !== 'pass')
@@ -527,8 +531,7 @@ export function createToolHandlers(ctx: ToolContext) {
             reason: 'entry not found in this business, or already confirmed',
           };
         }
-        await tx.insert(auditLog).values({
-          tenantId: ctx.tenantId,
+        await appendAudit(tx, ctx.tenantId, {
           actor: 'owner',
           action: 'confirm_entry',
           detail: { entry_type: args.entry_type, entry_id: args.entry_id },
@@ -633,6 +636,46 @@ export function createToolHandlers(ctx: ToolContext) {
       });
     },
 
+    async verify_audit_chain(_args: Args<'verify_audit_chain'>) {
+      // Read-only integrity check of this tenant's audit-log hash-chain (PRD §9).
+      // No audit write here (it would verify its own row); the chain is the
+      // single source of truth and this proves it was not tampered with.
+      return inTenantTx(async (tx) => {
+        const rows = await tx
+          .select({
+            tenantId: auditLog.tenantId,
+            actor: auditLog.actor,
+            action: auditLog.action,
+            detail: auditLog.detail,
+            createdAt: auditLog.createdAt,
+            prevHash: auditLog.prevHash,
+            rowHash: auditLog.rowHash,
+          })
+          .from(auditLog)
+          .where(sql`${auditLog.tenantId} = ${ctx.tenantId} and ${auditLog.rowHash} is not null`)
+          .orderBy(auditLog.id);
+        const chain: ChainedAuditRow[] = rows.map((r) => ({
+          tenantId: r.tenantId,
+          actor: r.actor,
+          action: r.action,
+          detail: r.detail ?? null,
+          createdAtMs: r.createdAt.getTime(),
+          prevHash: r.prevHash as string,
+          rowHash: r.rowHash as string,
+        }));
+        const v = verifyAuditChain(chain);
+        return {
+          verdict: v.verdict,
+          rows: v.rows,
+          ...(v.verdict === 'FAIL' ? { broken_at_index: v.brokenAtIndex, reason: v.reason } : {}),
+          note:
+            v.verdict === 'PASS'
+              ? 'The audit log is intact — no row was altered, inserted, deleted, or reordered.'
+              : 'TAMPER DETECTED: the audit log chain is broken. Treat the records as untrusted and escalate.',
+        };
+      });
+    },
+
     async list_transactions(args: Args<'list_transactions'>) {
       const { fromIso, toIso: toIsoDate } = monthRange(args.bs_year, args.bs_month);
       return inTenantTx(async (tx) => {
@@ -686,8 +729,7 @@ export function createToolHandlers(ctx: ToolContext) {
         if (updated.length === 0) {
           return { ok: false as const, reason: 'return not found in this business, or already marked filed' };
         }
-        await tx.insert(auditLog).values({
-          tenantId: ctx.tenantId,
+        await appendAudit(tx, ctx.tenantId, {
           actor: 'owner',
           action: 'mark_return_filed_by_user',
           detail: { return_id: args.return_id },
@@ -750,6 +792,9 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
     'Verdict PASS = web-confirmed; SKIP = not checked online; BLOCKED = the web date DISAGREES or was ' +
     'unreadable → HOLD and ask, NEVER state or adopt the web value. The returned filing_deadline_ad is ' +
     'always the computed value, never the web one.',
+  verify_audit_chain:
+    'Verify this business\'s tamper-evident audit-log hash-chain. PASS = the record is intact (no row ' +
+    'altered/inserted/deleted/reordered); FAIL = tamper detected (records untrusted — escalate). Read-only.',
   list_transactions: 'List sales/expenses for a BS month (draft + confirmed unless filtered).',
   mark_return_filed_by_user: 'Owner confirmed they filed the return themselves on the IRD portal.',
   upsert_vendor: 'Remember a vendor (PAN, VAT status) so the owner is not re-asked every time.',
