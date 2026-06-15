@@ -17,7 +17,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { eq } from 'drizzle-orm';
 import { createDb, schema, type Db } from '@hisab/db';
-import { verifyTenantToken, AuthError } from '@hisab/mcp-ledger';
+import { verifyTenantToken, AuthError, type TenantSession } from '@hisab/mcp-ledger';
 import { buildPaymentsServer } from './server.js';
 import { settlePayment } from './tools.js';
 import { settleSubscriptionPayment } from './billing.js';
@@ -113,9 +113,9 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
     const auth = req.headers.authorization ?? '';
     if (!auth.startsWith('Bearer ')) return deny(res, 401, 'missing bearer token');
     const bearer = auth.slice(7);
-    let tenantId: string;
+    let session: TenantSession;
     try {
-      tenantId = safeEqual(bearer, deps.serviceToken)
+      session = safeEqual(bearer, deps.serviceToken)
         ? verifyTenantToken(String(req.headers['x-hisab-tenant'] ?? ''), deps.signingSecret)
         : verifyTenantToken(bearer, deps.signingSecret);
     } catch (err) {
@@ -124,7 +124,8 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
     try {
       const server = buildPaymentsServer({
         db: deps.appDb,
-        tenantId,
+        tenantId: session.tenantId,
+        role: session.role,
         khalti: deps.khalti,
         returnUrl: deps.returnUrl,
         websiteUrl: deps.websiteUrl,

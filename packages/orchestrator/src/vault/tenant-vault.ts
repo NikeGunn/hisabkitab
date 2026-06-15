@@ -7,6 +7,7 @@
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import { createTenantToken } from '@hisab/mcp-ledger';
+import type { Role } from '@hisab/shared';
 
 export interface TenantVaultOptions {
   tenantId: string;
@@ -15,13 +16,25 @@ export interface TenantVaultOptions {
   signingSecret: string;
   /** Token lifetime; default 24h (a WhatsApp conversation day). */
   ttlSeconds?: number;
+  /**
+   * The acting caller's role for this session (PRD v2.0 §3). The MCP servers gate
+   * every tool by this role, so the bearer is rotated per turn to carry the
+   * resolved role. Defaults to owner for back-compat (pre-P8 single-user tenants).
+   */
+  role?: Role;
+  /** The acting user's id, for audit attribution; optional. */
+  userId?: string;
 }
 
 export const tenantVaultName = (tenantId: string): string => `hisab-tenant-${tenantId}`;
 
-/** Mint the signed bearer the vault injects as `Authorization: Bearer …`. */
+/** Mint the signed, role-scoped bearer the vault injects as `Authorization: Bearer …`. */
 export function mintLedgerBearer(opts: TenantVaultOptions): string {
-  return createTenantToken(opts.tenantId, opts.signingSecret, opts.ttlSeconds ?? 86_400);
+  return createTenantToken(opts.tenantId, opts.signingSecret, {
+    ttlSeconds: opts.ttlSeconds ?? 86_400,
+    ...(opts.role !== undefined ? { role: opts.role } : {}),
+    ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
+  });
 }
 
 /**

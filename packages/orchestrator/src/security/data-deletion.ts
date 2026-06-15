@@ -16,7 +16,7 @@
  * This does NOT touch the government or any portal; it only removes OUR copy.
  */
 import type Anthropic from '@anthropic-ai/sdk';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { schema, type Db } from '@hisab/db';
 
 const {
@@ -30,6 +30,8 @@ const {
   auditLog,
   pairingCodes,
   tenantSessions,
+  memberships,
+  users,
   tenants,
   deletionLog,
 } = schema;
@@ -72,6 +74,27 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
     await n('audit_log', (await tx.delete(auditLog).where(eq(auditLog.tenantId, tenantId)).returning({ id: auditLog.id })).length);
     await n('pairing_codes', (await tx.delete(pairingCodes).where(eq(pairingCodes.tenantId, tenantId)).returning({ code: pairingCodes.code })).length);
     await n('tenant_sessions', (await tx.delete(tenantSessions).where(eq(tenantSessions.tenantId, tenantId)).returning({ tenantId: tenantSessions.tenantId })).length);
+
+    // P8: drop this tenant's memberships, capturing the affected users…
+    const removed = await tx.delete(memberships).where(eq(memberships.tenantId, tenantId)).returning({ userId: memberships.userId });
+    await n('memberships', removed.length);
+    // …then delete ONLY users who now have no membership anywhere (a shared
+    // accountant who still serves other businesses keeps their identity).
+    const userIds = [...new Set(removed.map((r) => r.userId))];
+    let orphanedUsers = 0;
+    if (userIds.length > 0) {
+      const orphans = await tx
+        .delete(users)
+        .where(
+          sql`${inArray(users.id, userIds)} AND NOT EXISTS (
+            SELECT 1 FROM ${memberships} m WHERE m.user_id = ${users.id}
+          )`,
+        )
+        .returning({ id: users.id });
+      orphanedUsers = orphans.length;
+    }
+    await n('users', orphanedUsers);
+
     await n('tenants', (await tx.delete(tenants).where(eq(tenants.id, tenantId)).returning({ id: tenants.id })).length);
   });
 

@@ -205,9 +205,35 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   the Docker stack (0009 migrates, subscriptions/billing_payments RLS on). Still DEV-safe until deploy +
   `PAYMENTS_LIVE=1` + real Khalti merchant key.
 
+**✅ P8 (v2.0 §3) — identity, multi-user & RBAC — DONE (2026-06-15; 402 tests, +70):**
+- **Migration 0010**: `users` (global WhatsApp identity) + `memberships` (user↔tenant role + invite
+  lifecycle invited|active|revoked). Partial-unique `(user,tenant) WHERE status<>'revoked'` (revoked
+  doesn't block re-invite) + `(tenant,status)` / `(user)` indexes. RLS: memberships tenant-scoped for
+  hisab_app (read-only seat lookups) + orch_all for hisab_orch; users is global (orch-only). hisab_orch
+  gets DELETE (it runs the GDPR purge). **Set-based backfill**: one owner user+membership per existing
+  active tenant, so all current sessions resolve as owner unchanged.
+- **Pure RBAC core in `@hisab/shared/rbac`** (single source of truth, fully unit-tested + probes): the
+  PRD §3 capability matrix packed as per-role **bitmasks** → `can(role,cap)` is one O(1) bitwise-AND;
+  `assertCan`/`RoleError`; deny-by-default (unknown role ⇒ mask 0 ⇒ refused everything).
+- **Role travels in the signed session token** (`auth.ts`): `createTenantToken(tenantId, secret,
+  {role,userId,ttl})`; `verifyTenantToken` → `{tenantId, role, userId}`, **default owner** for pre-P8
+  tokens (back-compat). A forged/tampered role breaks the HMAC; a present-but-unknown role is rejected,
+  never silently downgraded. The vault bearer is rotated per turn to carry the resolved role.
+- **Server-side enforcement** (deny-by-default, NEVER the prompt): one `TOOL_CAPABILITY` map per service
+  (`Record<keyof inputSchemas, Capability>` so TS forces every new tool to declare one); the registration
+  wrapper calls `assertCan(role, cap)` BEFORE the handler. Money/refund + billing are owner-only — the role
+  gate fires before the `owner_approved` consent gate, so a lower role can never charge. Contract tests over
+  real MCP HTTP prove staff can't confirm, viewer can't record, accountant can't move money, owner passes.
+- **WhatsApp invite flow** (FAANG-grade, no misuse): identity is the VERIFIED webhook sender (never message
+  text); `inviteMember` is owner-only (checked server-side); the invitee gets ONLY the offered role and must
+  text "JOIN" from **its own** number to accept (no self-escalation); owners can grant accountant/staff/
+  viewer (never owner); re-invite is idempotent; every change audit-logged. Pairing now also creates the
+  owner user+membership; `deleteTenantData` purges memberships + orphaned-only users (a shared accountant
+  serving other tenants keeps their identity). Tests incl. probes for each.
+
 **⬜ PENDING — build in this order:**
 - ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
-  paid-customer subset: ⬜ **P8** identity/RBAC → ✅ **P9** idempotency → ✅ **P10** billing (DONE) →
+  paid-customer subset: ✅ **P8** identity/RBAC (DONE) → ✅ **P9** idempotency → ✅ **P10** billing (DONE) →
   ⬜ **P11** cost controls → minimal ⬜ **P15** security → ✅ **P16** infra/CI-CD (DONE).
   Defer until volume: ⬜ P12 voice, ⬜ P13 accounting completeness, ⬜ P14 observability, ⬜ P17 growth,
   ⬜ P18 support/admin, ⬜ P19 accountant channel.

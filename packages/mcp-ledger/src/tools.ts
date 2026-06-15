@@ -25,6 +25,8 @@ import {
   type IdempotentResult,
   type TaxConfig,
   type ValidationReport,
+  type Capability,
+  type Role,
 } from '@hisab/shared';
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
@@ -117,11 +119,49 @@ export const inputSchemas = {
   ...arapInputSchemas,
 } as const;
 
+/**
+ * The single RBAC map: every ledger tool → the capability its caller must hold
+ * (PRD v2.0 §3, enforced in server.ts BEFORE the handler runs — deny-by-default).
+ * `Record<keyof inputSchemas, …>` makes TypeScript reject any new tool that forgets
+ * to declare a capability, so the gate can never be silently bypassed.
+ *
+ * Reads/calculators map to `generate_report` (owner/accountant/viewer may pull
+ * figures); writes split into record (draft) / confirm (save) / VAT prep.
+ */
+export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
+  // read-only calculators & lookups
+  compute_vat: 'generate_report',
+  validate_entry: 'generate_report',
+  list_transactions: 'generate_report',
+  get_vendor: 'generate_report',
+  generate_return_summary: 'generate_report',
+  get_receivables_summary: 'generate_report',
+  get_payables_summary: 'generate_report',
+  get_statement: 'generate_report',
+  get_sales_summary: 'generate_report',
+  get_top_parties: 'generate_report',
+  request_report: 'generate_report',
+  // drafts (record)
+  record_sale: 'record_entry',
+  record_expense: 'record_entry',
+  upsert_vendor: 'record_entry',
+  upsert_party: 'record_entry',
+  record_credit_sale: 'record_entry',
+  record_credit_purchase: 'record_entry',
+  record_party_payment: 'record_entry',
+  // confirm (save)
+  confirm_entry: 'confirm_entry',
+  confirm_arap_entry: 'confirm_entry',
+  // VAT return
+  mark_return_filed_by_user: 'prepare_vat',
+};
+
 // ---------------------------------------------------------------- shared helpers (DRY)
 
 export interface ToolContext {
   db: Db;
   tenantId: string;
+  role: Role;
   cfg: TaxConfig;
 }
 

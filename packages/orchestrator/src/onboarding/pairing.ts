@@ -76,6 +76,24 @@ export async function handleUnknownSender(
       .update(schema.tenants)
       .set({ whatsappE164: fromE164, status: 'active' })
       .where(eq(schema.tenants.id, found.tenantId));
+
+    // P8: the paired number is this business's OWNER. Create the identity + an
+    // active owner membership so resolveMembership returns owner from now on.
+    // Both upserts are idempotent (re-pairing the same number is a no-op).
+    const [u] = await tx
+      .insert(schema.users)
+      .values({ whatsappE164: fromE164 })
+      .onConflictDoNothing()
+      .returning({ id: schema.users.id });
+    const ownerId =
+      u?.id ??
+      (await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.whatsappE164, fromE164)))[0]!
+        .id;
+    await tx
+      .insert(schema.memberships)
+      .values({ userId: ownerId, tenantId: found.tenantId, role: 'owner', status: 'active' })
+      .onConflictDoNothing();
+
     await tx.insert(schema.auditLog).values({
       tenantId: found.tenantId,
       actor: 'system',
