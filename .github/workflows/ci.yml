@@ -142,7 +142,7 @@ jobs:
           output: trivy.sarif
       - name: Upload results to code scanning
         if: always() && hashFiles('trivy.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy.sarif
         continue-on-error: true # code scanning may be off on private repos without GHAS
