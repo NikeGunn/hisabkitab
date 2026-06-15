@@ -21,6 +21,6 @@
     "dotenv": "^16.4.7",
     "drizzle-kit": "^0.30.5",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
