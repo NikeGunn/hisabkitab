@@ -38,7 +38,7 @@ jobs:
       matrix:
         service: [orchestrator, mcp-ledger, mcp-payments]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
@@ -86,7 +86,7 @@ jobs:
             echo "::notice title=Deploy skipped::No DEPLOY_HOST/DEPLOY_SSH_KEY yet. Images are in GHCR; add the secrets to go live."
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: steps.gate.outputs.ready == 'true'
 
       - name: Deploy over SSH (compose pull + rolling up)
