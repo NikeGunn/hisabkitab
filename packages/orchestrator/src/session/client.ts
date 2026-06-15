@@ -77,6 +77,8 @@ export interface TurnOptions {
   timeoutMs?: number;
   /** Observe raw stream event types (verification/diagnostics). */
   onEvent?: (type: string) => void;
+  /** Observe each tool the agent invoked this turn, by name (cost/quality probes). */
+  onToolUse?: (name: string) => void;
 }
 
 /** A report the agent asked to generate this turn (from the request_report tool result). */
@@ -95,6 +97,8 @@ export interface TurnResult {
   errors: string[];
   /** report jobs the agent requested this turn (dispatched by the router after the turn). */
   reportRequests: CapturedReportRequest[];
+  /** names of every tool the agent invoked this turn, in order (cost/quality probes). */
+  toolUses: string[];
 }
 
 /**
@@ -108,7 +112,7 @@ export async function runTurn(
   userText: string,
   opts: TurnOptions,
 ): Promise<TurnResult> {
-  const result: TurnResult = { delivered: [], holds: 0, status: 'idle', errors: [], reportRequests: [] };
+  const result: TurnResult = { delivered: [], holds: 0, status: 'idle', errors: [], reportRequests: [], toolUses: [] };
   const deadline = Date.now() + (opts.timeoutMs ?? 600_000);
 
   const stream = await client.beta.sessions.events.stream(sessionId);
@@ -153,6 +157,11 @@ export async function runTurn(
     switch (event.type) {
       case 'agent.tool_use':
       case 'agent.mcp_tool_use': {
+        const toolName = (event as { name?: string }).name;
+        if (toolName) {
+          result.toolUses.push(toolName);
+          opts.onToolUse?.(toolName);
+        }
         // Safety net: all tools on this agent are first-party (ledger MCP is
         // tenant-scoped; owner consent is modeled as draft→confirm_entry).
         // If a call still arrives permission-gated, allow it — otherwise the
