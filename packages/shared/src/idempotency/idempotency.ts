@@ -11,19 +11,18 @@
  * `IdempotencyStore`. The ledger package supplies a drizzle-backed store bound to
  * the current tx; tests can supply an in-memory one. No key supplied → no dedupe.
  *
- * Guarantee & layering. The dominant real case is the SEQUENTIAL retry — a network
- * blip or session replay re-issues the same call moments later. Here `load` finds
- * the key and returns the stored result with ZERO second insert. That is the §6
- * promise ("a repeat with the same key returns the original result"). One tenant's
- * tool calls are also already SERIALIZED by the orchestrator's per-tenant queue, so
- * they never truly overlap. The key adds dedupe ACROSS turns/sessions/process
- * restarts, which the in-memory queue cannot.
- *
- * `save` is conflict-aware (Postgres `INSERT … ON CONFLICT DO NOTHING RETURNING`),
- * never throwing — a unique-violation would otherwise abort the whole tx and take
- * the real entry insert with it. If a rare cross-transaction race still loses the
- * `save`, we re-`load` and return the winner's result rather than the local one;
- * the global PK on `idempotency_keys` is the hard backstop.
+ * CLAIM-FIRST ordering (the exactly-once guarantee under true concurrency). We
+ * reserve the key BEFORE running the producer:
+ *   - `claim` does `INSERT … ON CONFLICT DO NOTHING` on the (tenant, scope, key)
+ *     row. Exactly one concurrent transaction wins the insert; the others block on
+ *     the unique index until the winner commits, then observe the committed key.
+ *   - Only the WINNER runs `produce` (the real entry insert) and `finalize`s the
+ *     stored result. A LOSER never produces, so it can never write a second entry —
+ *     it loads and replays the winner's result.
+ * This closes the window where two racing calls both insert before either latched
+ * the key. The dominant real case is still the sequential retry (load hits on the
+ * second call); claim-first also makes the truly-concurrent case exactly-once at
+ * the DB level, not just under the orchestrator's per-tenant queue.
  */
 
 /** A result a tool returns. Stored verbatim and replayed on a repeat key. */
@@ -33,12 +32,15 @@ export interface IdempotencyStore {
   /** Return the stored result for `key` in this scope, or null if unseen. */
   load(key: string, scope: string): Promise<IdempotentResult | null>;
   /**
-   * Persist `result` under `key` if absent. Returns `true` when THIS call inserted
-   * the row (the winner), `false` when the key already existed (a concurrent/earlier
-   * call won). MUST be conflict-aware — never raise on an existing key — so the
-   * surrounding transaction is not aborted.
+   * Reserve `key` BEFORE the entry is produced. Returns `true` when THIS call
+   * inserted the placeholder row (the winner → it must produce + finalize), or
+   * `false` when the key already existed (a concurrent/earlier call won → replay).
+   * MUST be conflict-aware (never raise) so the surrounding transaction survives,
+   * and MUST block a concurrent claimer until the winner commits (DB unique index).
    */
-  save(key: string, scope: string, result: IdempotentResult): Promise<boolean>;
+  claim(key: string, scope: string): Promise<boolean>;
+  /** Persist the producer's `result` under the (already-claimed) `key`. */
+  finalize(key: string, scope: string, result: IdempotentResult): Promise<void>;
 }
 
 /** Marks a returned result as a replay of an earlier identical call (no new write). */
@@ -58,18 +60,22 @@ export async function withIdempotency<T extends IdempotentResult>(
 ): Promise<T> {
   if (!key) return produce();
 
+  // Fast path: an already-finalized key (the common sequential retry) replays
+  // without touching the producer at all.
   const seen = await store.load(key, scope);
-  if (seen) return asReplay<T>(seen);
+  if (seen && Object.keys(seen).length > 0) return asReplay<T>(seen);
+
+  // Reserve the key. Only the winner produces; a loser blocked here until the
+  // winner committed, so its load now returns the finalized result.
+  const won = await store.claim(key, scope);
+  if (!won) {
+    const winner = await store.load(key, scope);
+    return asReplay<T>(winner ?? {});
+  }
 
   const result = await produce();
-  const won = await store.save(key, scope, result);
-  if (won) return result;
-
-  // Lost the race: a concurrent call with this key committed first. Return its
-  // stored result, never a second entry. (`load` after a DO-NOTHING is safe — no
-  // error was raised, so the transaction is intact.)
-  const winner = await store.load(key, scope);
-  return asReplay<T>(winner ?? result);
+  await store.finalize(key, scope, result);
+  return result;
 }
 
 /** Annotate a stored result as a replay (additive runtime flag, same shape as T). */
