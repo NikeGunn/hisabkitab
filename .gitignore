@@ -14,16 +14,6 @@ verify-bills-live.log
 # Module C report sample/verification artifacts (generated)
 packages/orchestrator/report-samples/
 
-# Private docs — manuals + their generator (not for GitHub)
-docs/CUSTOMER-MANUAL.md
-docs/CUSTOMER-MANUAL.pdf
-docs/CEO-MANUAL.md
-docs/CEO-MANUAL.pdf
-docs/build-manuals-pdf.mjs
-
-# Private product specs / PRDs (not for GitHub)
-docs/nepali-smb-finance-agent-PRD.md
-docs/nepali-smb-finance-agent-PRD-v1.1.md
-docs/nepali-smb-finance-agent-PRD-v1.2-reports-module.md
-docs/nepali-smb-finance-agent-PRD-v2.0-production-growth.md
-docs/PRODUCT.md
+# Private docs — ALL of docs/ stays local, never published to GitHub.
+# (manuals, PRDs, product specs, deploy + incident runbooks, legal drafts).
+docs/
