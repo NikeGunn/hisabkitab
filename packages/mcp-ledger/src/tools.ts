@@ -18,6 +18,8 @@ import {
   vatFilingDeadline,
   checkFilingDeadline,
   verifyAuditChain,
+  projectBudget,
+  planName,
   type ChainedAuditRow,
   vatOnExclusive,
   netVatPosition,
@@ -34,7 +36,7 @@ import {
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
 
-const { sales, expenses, vendors, vatReturns, validationEvents, auditLog } = schema;
+const { sales, expenses, vendors, vatReturns, validationEvents, auditLog, usageCounters, subscriptions } = schema;
 
 // ---------------------------------------------------------------- zod building blocks
 
@@ -122,6 +124,13 @@ export const inputSchemas = {
       .describe('the IRD page you read it from; required if observed_deadline_ad is given'),
   },
   verify_audit_chain: {},
+  get_cost_summary: {
+    period: z
+      .string()
+      .regex(/^\d{4}-\d{2}$/, 'expected YYYY-MM')
+      .optional()
+      .describe('billing month YYYY-MM; omit for the current month'),
+  },
   list_transactions: {
     bs_year: bsYear,
     bs_month: bsMonth,
@@ -156,6 +165,7 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   generate_return_summary: 'generate_report',
   verify_filing_deadline: 'generate_report',
   verify_audit_chain: 'generate_report',
+  get_cost_summary: 'generate_report',
   get_receivables_summary: 'generate_report',
   get_payables_summary: 'generate_report',
   get_statement: 'generate_report',
@@ -676,6 +686,49 @@ export function createToolHandlers(ctx: ToolContext) {
       });
     },
 
+    async get_cost_summary(args: Args<'get_cost_summary'>) {
+      // Read-only (PRD v2.0 §7): this tenant's usage this period vs its plan budget.
+      const now = new Date();
+      const period = args.period ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+      return inTenantTx(async (tx) => {
+        const [usage] = await tx
+          .select({
+            turns: usageCounters.turns,
+            inputTokens: usageCounters.inputTokens,
+            outputTokens: usageCounters.outputTokens,
+            costPaisa: usageCounters.costPaisa,
+          })
+          .from(usageCounters)
+          .where(and(eq(usageCounters.tenantId, ctx.tenantId), eq(usageCounters.period, period)));
+        const [sub] = await tx
+          .select({ planCode: subscriptions.planCode })
+          .from(subscriptions)
+          .where(eq(subscriptions.tenantId, ctx.tenantId));
+        const plan = sub?.planCode ?? 'starter';
+        const costPaisa = usage ? n(usage.costPaisa) : 0;
+        const proj = projectBudget(plan, { costPaisa, turns: usage ? n(usage.turns) : 0 });
+        return {
+          period,
+          plan,
+          plan_name: planName(plan),
+          turns: usage ? n(usage.turns) : 0,
+          input_tokens: usage ? n(usage.inputTokens) : 0,
+          output_tokens: usage ? n(usage.outputTokens) : 0,
+          spent_npr: (proj.spentPaisa / 100).toFixed(2),
+          budget_npr: (proj.capPaisa / 100).toFixed(2),
+          remaining_npr: (proj.remainingPaisa / 100).toFixed(2),
+          fraction_used: Math.min(1, proj.fractionUsed),
+          verdict: proj.verdict,
+          note:
+            proj.verdict === 'THROTTLE'
+              ? 'This month\'s usage limit is reached. It resets next month, or upgrade the plan to continue now.'
+              : proj.verdict === 'WARN'
+                ? 'Close to this month\'s usage limit.'
+                : 'Within this month\'s usage limit.',
+        };
+      });
+    },
+
     async list_transactions(args: Args<'list_transactions'>) {
       const { fromIso, toIso: toIsoDate } = monthRange(args.bs_year, args.bs_month);
       return inTenantTx(async (tx) => {
@@ -795,6 +848,9 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
   verify_audit_chain:
     'Verify this business\'s tamper-evident audit-log hash-chain. PASS = the record is intact (no row ' +
     'altered/inserted/deleted/reordered); FAIL = tamper detected (records untrusted — escalate). Read-only.',
+  get_cost_summary:
+    'This business\'s HisabKitab usage this month vs its plan budget: turns, tokens, estimated cost (NPR), ' +
+    'and the verdict OK | WARN (near limit) | THROTTLE (limit reached). Read-only; helps explain a usage limit.',
   list_transactions: 'List sales/expenses for a BS month (draft + confirmed unless filtered).',
   mark_return_filed_by_user: 'Owner confirmed they filed the return themselves on the IRD portal.',
   upsert_vendor: 'Remember a vendor (PAN, VAT status) so the owner is not re-asked every time.',

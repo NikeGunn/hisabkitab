@@ -32,6 +32,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
   await adminSql`INSERT INTO payments (tenant_id, provider, pidx, purchase_order_id, purchase_order_name, amount_paisa) VALUES (${id}, 'khalti', ${'pidx-' + id.slice(0, 8)}, 'po', 'momo', 904000)`;
   await adminSql`INSERT INTO reminder_log (tenant_id, bs_year, bs_month, kind, verdict) VALUES (${id}, 2082, 1, 'return_prepared', 'PASS')`;
   await adminSql`INSERT INTO tenant_sessions (tenant_id, session_id, vault_id) VALUES (${id}, ${'sesn_' + id.slice(0, 8)}, ${'vault_' + id.slice(0, 8)})`;
+  await adminSql`INSERT INTO usage_counters (tenant_id, period, turns, cost_paisa) VALUES (${id}, '2026-06', 3, 1500)`;
   // P8: an owner user + membership for this tenant.
   const [u] = await adminSql`INSERT INTO users (whatsapp_e164) VALUES (${e164}) RETURNING id`;
   await adminSql`INSERT INTO memberships (user_id, tenant_id, role, status) VALUES (${u!['id']}, ${id}, 'owner', 'active')`;
@@ -41,7 +42,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
 const TENANT_TABLES = [
   'sales', 'expenses', 'vendors', 'vat_returns', 'validation_events',
   'audit_log', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
-  'memberships',
+  'usage_counters', 'memberships',
 ];
 
 async function rowCount(table: string, tenantId: string): Promise<number> {

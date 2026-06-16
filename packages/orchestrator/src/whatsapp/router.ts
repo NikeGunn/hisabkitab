@@ -27,8 +27,21 @@ import {
 import { attachInboundMedia } from './media.js';
 import { scanForCredentials, CREDENTIAL_REFUSAL } from '../security/credential-guard.js';
 import { TenantRateLimiter, RATE_LIMITED_REPLY } from '../resilience/rate-limit.js';
+import { checkBudget, recordTurnUsage, latchWarn } from '../resilience/cost-guard.js';
+import { routeTurn, BUDGET_THROTTLED_REPLY, BUDGET_WARN_NOTE } from '@hisab/shared';
 import type { InboundMessage } from './inbound.js';
 import type { WaClient } from './wa-client.js';
+
+/**
+ * Cost-control wiring (P11). `db` is the cross-tenant orch handle used to read the
+ * tenant's plan + usage and record the turn's token cost. `model` is the active
+ * agent model (HISAB_MODEL) used to price the turn. Omitted = no budgeting (e.g.
+ * unit tests that don't exercise cost).
+ */
+export interface CostGuardDeps {
+  db: Db;
+  model: string;
+}
 
 /** Per-key promise chains: serialize work per tenant/sender, parallel across keys. */
 export class SerialQueues {
@@ -56,6 +69,8 @@ export interface RouterDeps extends SessionStoreDeps {
   turnTimeoutMs?: number;
   /** Per-tenant inbound rate limiter (cost guard). Omitted = no limiting. */
   rateLimiter?: TenantRateLimiter;
+  /** Per-tenant monthly budget + token accounting (P11). Omitted = no budgeting. */
+  costGuard?: CostGuardDeps;
   /**
    * Dispatch a PDF report the agent asked for this turn (Module C). Runs AFTER the turn
    * so the agent's "preparing your PDF…" acknowledgement is delivered first, then the
@@ -188,6 +203,36 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       return true;
     }
 
+    // Model routing (P11 §7): a trivial turn ("ok"/"thanks"/👍) is answered LOCALLY
+    // with a canned reply — no agent session, no model call (the biggest cost saver).
+    // Media always forces a real turn (a bill must reach the agent). The turn still
+    // counts toward `turns` (≈0 cost) so the spend dashboard sees the traffic.
+    const route = routeTurn(msg.text, Boolean(msg.media));
+    if (route.intent === 'trivial' && route.cannedReply) {
+      await deps.wa.sendText(msg.fromE164, route.cannedReply);
+      if (deps.costGuard) {
+        await recordTurnUsage(deps.costGuard.db, tenant.tenantId, '', { inputTokens: 0, outputTokens: 0 });
+      }
+      return true;
+    }
+
+    // Budget gate (P11 §7): if the tenant has burned this month's model budget, stop
+    // starting agent turns (backpressure, never data loss) — tell them it resets /
+    // to upgrade. A WARN is served but flagged so we append a one-time nudge below.
+    let warnNote = false;
+    if (deps.costGuard) {
+      const budget = await checkBudget(deps.costGuard.db, tenant.tenantId);
+      if (budget.verdict === 'THROTTLE') {
+        deps.log?.(`budget THROTTLE ${tenant.tenantId} (${budget.spentPaisa}/${budget.capPaisa} paisa)`);
+        await deps.wa.sendText(msg.fromE164, BUDGET_THROTTLED_REPLY);
+        return true;
+      }
+      if (budget.verdict === 'WARN') {
+        // nudge the owner at most once per period (latch wins the race)
+        warnNote = await latchWarn(deps.costGuard.db, tenant.tenantId);
+      }
+    }
+
     const { sessionId } = await getOrCreateTenantSession(deps, tenant.tenantId, {
       role: member.role,
       userId: member.userId,
@@ -221,6 +266,23 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       ...(deps.log ? { onEvent: (type: string) => deps.log?.(`event ${type}`) } : {}),
     });
     if (turn.status === 'timeout') deps.log?.(`turn TIMED OUT for ${msg.waMessageId}`);
+
+    // P11: record this turn's token cost (atomic upsert) and, if we just crossed the
+    // soft-warn line, nudge the owner exactly once this period. Accounting failures
+    // must never break the chat — log and move on.
+    if (deps.costGuard) {
+      try {
+        await recordTurnUsage(deps.costGuard.db, tenant.tenantId, deps.costGuard.model, {
+          inputTokens: turn.usage.inputTokens,
+          outputTokens: turn.usage.outputTokens,
+        });
+      } catch (err) {
+        deps.log?.(`usage record failed for ${tenant.tenantId}: ${String(err)}`);
+      }
+      if (warnNote) {
+        await deps.wa.sendText(msg.fromE164, BUDGET_WARN_NOTE.trim());
+      }
+    }
 
     // After the turn (so the "preparing…" ack lands first), render+deliver any reports
     // the agent requested. A report failure never breaks the chat — it self-holds + asks.

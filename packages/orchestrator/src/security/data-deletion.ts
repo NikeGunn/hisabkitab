@@ -34,6 +34,7 @@ const {
   users,
   tenants,
   deletionLog,
+  usageCounters,
 } = schema;
 
 export interface DeletionReport {
@@ -74,6 +75,7 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
     await n('audit_log', (await tx.delete(auditLog).where(eq(auditLog.tenantId, tenantId)).returning({ id: auditLog.id })).length);
     await n('pairing_codes', (await tx.delete(pairingCodes).where(eq(pairingCodes.tenantId, tenantId)).returning({ code: pairingCodes.code })).length);
     await n('tenant_sessions', (await tx.delete(tenantSessions).where(eq(tenantSessions.tenantId, tenantId)).returning({ tenantId: tenantSessions.tenantId })).length);
+    await n('usage_counters', (await tx.delete(usageCounters).where(eq(usageCounters.tenantId, tenantId)).returning({ tenantId: usageCounters.tenantId })).length);
 
     // P8: drop this tenant's memberships, capturing the affected users…
     const removed = await tx.delete(memberships).where(eq(memberships.tenantId, tenantId)).returning({ userId: memberships.userId });
