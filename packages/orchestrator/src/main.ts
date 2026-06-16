@@ -14,6 +14,7 @@ import { createLedgerSummaryProvider } from './scheduler/ledger-summary.js';
 import { TenantRateLimiter } from './resilience/rate-limit.js';
 import { dispatchReport } from './reports/dispatch.js';
 import { withTenant, appendAudit } from '@hisab/db';
+import { HISAB_MODEL } from './agent/definition.js';
 
 const config = await loadConfig();
 const handle = createDb(config.DATABASE_URL);
@@ -35,6 +36,8 @@ const app = buildServer({
     gateLogger: new DbGateLogger(config.DATABASE_URL),
     queues: new SerialQueues(),
     rateLimiter: new TenantRateLimiter(), // per-tenant inbound cost guard
+    // P11: per-tenant monthly budget + token accounting (runs as hisab_orch).
+    costGuard: { db: handle.db, model: HISAB_MODEL },
     agentId: config.AGENT_ID,
     environmentId: config.ENVIRONMENT_ID,
     ledgerMcpUrl: config.LEDGER_MCP_URL,

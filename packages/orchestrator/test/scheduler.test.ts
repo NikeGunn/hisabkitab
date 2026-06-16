@@ -108,6 +108,7 @@ beforeEach(async () => {
     'tenant_sessions',
     'pairing_codes',
     'vendors',
+    'usage_counters',
     'memberships',
     'users',
     'tenants',

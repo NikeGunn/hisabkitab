@@ -458,3 +458,28 @@ export const deletionLog = pgTable('deletion_log', {
   detail: jsonb('detail'),
   deletedAt: timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ----- P11 (v2.0 §7): per-tenant monthly usage accounting (cost controls) -----
+
+/**
+ * One row per (tenant, period). Monotonic counters accumulate via an idempotent
+ * upsert (recordUsage). `costPaisa` is integer paisa. Written by hisab_orch in the
+ * turn path (cross-tenant), read tenant-scoped by hisab_app (the cost-summary tool).
+ * `warnedAt` latches the soft-warn so the owner is nudged at most once per period.
+ */
+export const usageCounters = pgTable(
+  'usage_counters',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    period: text('period').notNull(), // billing month 'YYYY-MM'
+    turns: bigint('turns', { mode: 'bigint' }).notNull().default(0n),
+    inputTokens: bigint('input_tokens', { mode: 'bigint' }).notNull().default(0n),
+    outputTokens: bigint('output_tokens', { mode: 'bigint' }).notNull().default(0n),
+    costPaisa: bigint('cost_paisa', { mode: 'bigint' }).notNull().default(0n),
+    warnedAt: timestamp('warned_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.period] }), index('usage_counters_period_idx').on(t.period)],
+);

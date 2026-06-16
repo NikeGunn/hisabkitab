@@ -90,6 +90,14 @@ export interface CapturedReportRequest {
   bs_month?: number;
 }
 
+/** Token usage summed across every model request in a turn (P11 cost accounting). */
+export interface TurnTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+}
+
 export interface TurnResult {
   delivered: string[];
   holds: number;
@@ -99,6 +107,8 @@ export interface TurnResult {
   reportRequests: CapturedReportRequest[];
   /** names of every tool the agent invoked this turn, in order (cost/quality probes). */
   toolUses: string[];
+  /** total token usage this turn, summed over all model requests (P11). */
+  usage: TurnTokenUsage;
 }
 
 /**
@@ -112,7 +122,15 @@ export async function runTurn(
   userText: string,
   opts: TurnOptions,
 ): Promise<TurnResult> {
-  const result: TurnResult = { delivered: [], holds: 0, status: 'idle', errors: [], reportRequests: [], toolUses: [] };
+  const result: TurnResult = {
+    delivered: [],
+    holds: 0,
+    status: 'idle',
+    errors: [],
+    reportRequests: [],
+    toolUses: [],
+    usage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+  };
   const deadline = Date.now() + (opts.timeoutMs ?? 600_000);
 
   const stream = await client.beta.sessions.events.stream(sessionId);
@@ -173,6 +191,19 @@ export async function runTurn(
               { type: 'user.tool_confirmation', tool_use_id: event.id, result: 'allow' },
             ] as never,
           });
+        }
+        break;
+      }
+
+      case 'span.model_request_end': {
+        // Sum token usage across every model request in the turn (P11 cost
+        // accounting). cache_read tokens are billed cheaper but we track all four.
+        const u = (event as { model_usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } }).model_usage;
+        if (u) {
+          result.usage.inputTokens += u.input_tokens ?? 0;
+          result.usage.outputTokens += u.output_tokens ?? 0;
+          result.usage.cacheCreationInputTokens += u.cache_creation_input_tokens ?? 0;
+          result.usage.cacheReadInputTokens += u.cache_read_input_tokens ?? 0;
         }
         break;
       }

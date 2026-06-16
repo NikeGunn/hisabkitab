@@ -205,6 +205,27 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   the Docker stack (0009 migrates, subscriptions/billing_payments RLS on). Still DEV-safe until deploy +
   `PAYMENTS_LIVE=1` + real Khalti merchant key.
 
+**✅ P11 (v2.0 §7) — cost controls — DONE (2026-06-16):** protects unit economics + stops abuse.
+- **Model routing / trivial short-circuit** (`@hisab/shared/cost/routing.ts`, pure): a trivial turn
+  ("ok"/"thanks"/धन्यवाद/bare 👍) is answered LOCALLY with a canned reply — **no agent session, no model
+  call** (biggest saver). DELIBERATELY conservative: any digit / unknown word / >4 tokens / attached media
+  ⇒ substantive (never misroute a money message). `pickModel(intent)` documents the cheap-vs-money split.
+- **Per-tenant monthly budgets** (`@hisab/shared/cost/budget.ts`, pure): `projectBudget(plan, usage)` →
+  `OK | WARN(≥80%) | THROTTLE(≥cap)`; per-plan caps in ONE place (`PLAN_BUDGET_PAISA`, integer paisa,
+  Starter Rs 500 / Pro Rs 1,200 / Business Rs 3,000). `estimateCostPaisa(model, tokens)` rounds UP; unknown
+  model → most-expensive rate (can't sneak past). Unknown plan → strictest (starter) cap (deny-by-default).
+- **Usage accounting** — migration **0013** `usage_counters` (PK `(tenant_id, period)`, monotonic
+  turns/tokens/cost_paisa + `warned_at` latch) + RLS (tenant read for the tool; orch_all for the recorder)
+  + grants (app SELECT; orch S/I/U/**D** for the GDPR purge). `@hisab/db` `recordUsage` (atomic upsert
+  `+=`), `getUsage`, `markWarned` (once-per-period latch), `getTenantSpend` (dashboard). Purged on deletion.
+- **Wired server-side** in the router (NEVER the prompt): trivial → canned reply + count; pre-turn
+  `checkBudget` (THROTTLE = backpressure, never data loss, friendly "resets next month / upgrade"; WARN =
+  serve + one-time nudge); post-turn token usage recorded from the stream's `span.model_request_end`
+  events (summed in `runTurn`). New read-only **`get_cost_summary`** ledger tool (verdict + NPR figures).
+- Tests: shared cost-routing + cost-budget pure units (+ probes: no-misroute, cap boundary, unknown-model);
+  DB usage-counters contract (atomic-race probe, warn latch); router cost integration (trivial never starts
+  a turn, throttle blocks pre-turn); ledger get_cost_summary contract (+ THROTTLE + viewer-role probes).
+
 **✅ Audit-log hash-chain (v2.0 §9) — DONE (2026-06-16; 424 tests, +13):** tamper-evident SINGLE
 SOURCE OF TRUTH so the agent/owner record can't be silently rewritten. Each `audit_log` row carries
 `prev_hash` + `row_hash` = SHA-256(prev_hash + canonical(row)), chained per tenant from a genesis hash.
@@ -262,7 +283,7 @@ Migration **0011** grants UPDATE on idempotency_keys (finalize). Was an intermit
 **⬜ PENDING — build in this order:**
 - ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
   paid-customer subset: ✅ **P8** identity/RBAC (DONE) → ✅ **P9** idempotency → ✅ **P10** billing (DONE) →
-  ⬜ **P11** cost controls → minimal ⬜ **P15** security → ✅ **P16** infra/CI-CD (DONE).
+  ✅ **P11** cost controls (DONE) → minimal ⬜ **P15** security → ✅ **P16** infra/CI-CD (DONE).
   Defer until volume: ⬜ P12 voice, ⬜ P13 accounting completeness, ⬜ P14 observability, ⬜ P17 growth,
   ⬜ P18 support/admin, ⬜ P19 accountant channel.
 
