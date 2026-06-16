@@ -205,6 +205,26 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   the Docker stack (0009 migrates, subscriptions/billing_payments RLS on). Still DEV-safe until deploy +
   `PAYMENTS_LIVE=1` + real Khalti merchant key.
 
+**✅ P15 (v2.0 §9) — security & compliance (minimal required subset) — DONE (2026-06-16):** the
+last required-for-first-paid-customer item. (Hash-chain, RBAC, web-governance, deletion, secrets-
+in-vaults were already done; this closes the remaining gaps.)
+- **Field-level PII encryption** for PAN/VAT (most sensitive PII): pure `@hisab/shared/crypto`
+  AES-256-GCM, **authenticated** (tamper/wrong-key fail closed, never silent garbage), versioned
+  self-describing ciphertext (`enc:v1:iv:tag:ct`) so a column holds a mix during rollout. Key from
+  `FIELD_ENCRYPTION_KEY` (32B base64, secret manager); **unset in dev/test ⇒ plaintext** (back-compat,
+  nothing breaks). `@hisab/db` `encPII`/`decPII` (process-cached key) wired at the 3 sites: vendors +
+  parties PAN (encrypt on write / decrypt on read in the ledger tools) + tenant PAN (decrypt on read
+  in reports). PAN is never a query key, so zero query impact. Compose passes the key to ledger +
+  orchestrator. Tests: 16 pure (roundtrip, random-IV, tamper/wrong-key/malformed/short-key probes,
+  dev passthrough) + 4 ledger contract (stored ciphertext, plaintext-never-in-DB probe, dev mode).
+- **Legal + auditor disclaimer:** `docs/legal/{TERMS,PRIVACY,DATA-PROCESSING}.md`; the
+  "assistance, not a substitute for a licensed auditor / no statutory sign-off" disclaimer is an
+  exported `AUDITOR_DISCLAIMER` constant **surfaced in the paired (signup) welcome** + a definition test.
+- **Incident-response + DR runbook:** `docs/INCIDENT-RESPONSE.md` (breach / data-loss / wrong-filing
+  playbooks, secret-rotation order, hash-chain as source of truth) + backups/PITR/retention + RPO≤15m /
+  RTO≤2h targets, also summarized in `docs/DEPLOY.md §5`. Full secret-rotation automation + at-rest
+  infra encryption + tested PITR restore remain scale-time (documented).
+
 **✅ P11 (v2.0 §7) — cost controls — DONE (2026-06-16):** protects unit economics + stops abuse.
 - **Model routing / trivial short-circuit** (`@hisab/shared/cost/routing.ts`, pure): a trivial turn
   ("ok"/"thanks"/धन्यवाद/bare 👍) is answered LOCALLY with a canned reply — **no agent session, no model
@@ -281,11 +301,11 @@ Migration **0011** grants UPDATE on idempotency_keys (finalize). Was an intermit
   serving other tenants keeps their identity). Tests incl. probes for each.
 
 **⬜ PENDING — build in this order:**
-- ⬜ **Commercialization (v2.0) — build ONLY after a v1 pilot proves retention.** Required-for-first-
-  paid-customer subset: ✅ **P8** identity/RBAC (DONE) → ✅ **P9** idempotency → ✅ **P10** billing (DONE) →
-  ✅ **P11** cost controls (DONE) → minimal ⬜ **P15** security → ✅ **P16** infra/CI-CD (DONE).
-  Defer until volume: ⬜ P12 voice, ⬜ P13 accounting completeness, ⬜ P14 observability, ⬜ P17 growth,
-  ⬜ P18 support/admin, ⬜ P19 accountant channel.
+- ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
+  → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
+  **The product can now charge its first paying customer** (after the external pilot prerequisites below).
+- ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, ⬜ P13 accounting
+  completeness, ⬜ P14 observability, ⬜ P17 growth, ⬜ P18 support/admin, ⬜ P19 accountant channel.
 
 **🌐 EXTERNAL (not code — needed before a real pilot):** Meta business verification + WhatsApp number
 + webhook registration; Khalti **merchant onboarding** (sandbox `test-admin.khalti.com`; prod needs the

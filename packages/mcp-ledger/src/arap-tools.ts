@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 import { and, eq, gte, lte, sql, inArray } from 'drizzle-orm';
-import { appendAudit, schema, type Tx } from '@hisab/db';
+import { appendAudit, encPII, decPII, schema, type Tx } from '@hisab/db';
 import {
   bsMonthRange,
   buildAgingReport,
@@ -209,7 +209,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           .values({
             tenantId,
             name: args.name,
-            panVatNo: args.pan_vat_no ?? null,
+            panVatNo: encPII(args.pan_vat_no ?? null), // field-level PII encryption (§9)
             isVatRegistered: args.is_vat_registered ?? null,
             kind: args.kind ?? 'both',
             phone: args.phone ?? null,
@@ -217,7 +217,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           .onConflictDoUpdate({
             target: [parties.tenantId, parties.name],
             set: {
-              ...(args.pan_vat_no !== undefined ? { panVatNo: args.pan_vat_no } : {}),
+              ...(args.pan_vat_no !== undefined ? { panVatNo: encPII(args.pan_vat_no) } : {}),
               ...(args.is_vat_registered !== undefined ? { isVatRegistered: args.is_vat_registered } : {}),
               ...(args.kind !== undefined ? { kind: args.kind } : {}),
               ...(args.phone !== undefined ? { phone: args.phone } : {}),
@@ -226,7 +226,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           .returning();
         await auditAgent(tx, tenantId, 'upsert_party', { name: args.name });
         const p = row!;
-        return { party_id: p.id, name: p.name, kind: p.kind, pan_vat_no: p.panVatNo, is_vat_registered: p.isVatRegistered };
+        return { party_id: p.id, name: p.name, kind: p.kind, pan_vat_no: decPII(p.panVatNo), is_vat_registered: p.isVatRegistered };
       });
     },
 

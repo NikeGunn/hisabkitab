@@ -12,6 +12,7 @@ export * from './billing/features.js';
 export * from './rbac/roles.js';
 export * from './cost/routing.js';
 export * from './cost/budget.js';
+export * from './crypto/field-crypto.js';
 export * from './audit/hash-chain.js';
 export * from './validation/engine.js';
 export * from './verification/verdict.js';

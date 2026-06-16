@@ -7,7 +7,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createTenantToken } from '@hisab/mcp-ledger';
-import { schema, withTenant, type Db } from '@hisab/db';
+import { decPII, schema, withTenant, type Db } from '@hisab/db';
 import { eq } from 'drizzle-orm';
 import { runReportJob, type ReportAuditSink, type ReportDelivery } from './report-job.js';
 import type { LedgerReadClient } from './report-data.js';
@@ -47,7 +47,8 @@ export async function dispatchReport(
       .select({ businessName: schema.tenants.businessName, panOrVatNo: schema.tenants.panOrVatNo })
       .from(schema.tenants)
       .where(eq(schema.tenants.id, tenantId));
-    return row;
+    // PAN/VAT may be field-encrypted at rest (§9) — decrypt for the report header.
+    return row ? { ...row, panOrVatNo: decPII(row.panOrVatNo) ?? '' } : row;
   });
   if (!tenant) {
     deps.log?.(`report dispatch: tenant ${tenantId} not found`);

@@ -74,6 +74,8 @@ services:
       DATABASE_URL: postgres://hisab_app:${HISAB_APP_PASSWORD:-hisab_app_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
       LEDGER_MCP_TOKEN: ${LEDGER_MCP_TOKEN:?set LEDGER_MCP_TOKEN}
       TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
+      # P15: PAN/VAT field encryption (unset in dev ⇒ plaintext; required in prod).
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -122,6 +124,8 @@ services:
       REDIS_URL: redis://redis:6379
       TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY}
+      # P15: same PAN/VAT field key as the ledger (orchestrator decrypts tenant PAN for reports).
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
       LEDGER_MCP_URL: ${LEDGER_MCP_URL:-http://ledger:8080/mcp}
       WA_PHONE_NUMBER_ID: ${WA_PHONE_NUMBER_ID:-dev-phone-id}
       WA_ACCESS_TOKEN: ${WA_ACCESS_TOKEN:-dev-wa-token}

@@ -105,5 +105,27 @@ Health: `curl localhost:8801/healthz` (ledger), `:8802` (payments), `:8810` (orc
 ### Secrets the pipeline sets for you
 From your local `.env`, these are pushed to the repo with `gh secret set` (no manual UI needed):
 `ANTHROPIC_API_KEY`, `TENANT_SIGNING_SECRET`, `LEDGER_MCP_TOKEN`, `PAYMENTS_MCP_TOKEN`,
-`KHALTI_SECRET_KEY`, `WA_*`. The server-only secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`)
-you add once you have the VM.
+`KHALTI_SECRET_KEY`, `WA_*`, and **`FIELD_ENCRYPTION_KEY`** (P15 — AES-256-GCM key for PAN/VAT
+field encryption; generate with `openssl rand -base64 32`). The server-only secrets
+(`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`) you add once you have the VM.
+
+> **`FIELD_ENCRYPTION_KEY` is not rotate-and-forget:** rotating it requires a re-encrypt pass
+> (read with the old key, write with the new) before the old key is discarded — see
+> `docs/INCIDENT-RESPONSE.md` §3. Losing this key makes existing PAN/VAT ciphertext
+> unrecoverable, so back it up in the secret manager, never in the DB backup.
+
+---
+
+## 5. Backups, DR & incident response (P15 §9)
+
+- **Backups:** nightly Postgres base backup + continuous WAL archiving to encrypted off-host
+  storage; daily-for-30d / weekly-for-90d retention. Alert if the last good backup is > 25h old.
+- **Recovery targets:** RPO ≤ 15 min (PITR), RTO ≤ 2h for a restore. **0 silent double-writes /
+  0 wrong figures sent** is an inviolable financial invariant (audit gate + idempotency).
+- **Restore drill:** run quarterly (PITR to a scratch DB → `verify_audit_chain` PASS → boot +
+  healthz). Steps in **`docs/INCIDENT-RESPONSE.md`**.
+- **Incident playbooks:** security breach, data loss/corruption, and wrong-filing dispute — all
+  in **`docs/INCIDENT-RESPONSE.md`**, with secret-rotation order and the hash-chained audit log
+  as the source of truth for "what actually happened."
+- **Legal:** ToS / Privacy / Data-Processing notice live in `docs/legal/`; the auditor disclaimer
+  ("assistance, not a substitute for a licensed auditor") is surfaced at signup.

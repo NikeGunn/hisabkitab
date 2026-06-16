@@ -117,6 +117,18 @@ export const ONBOARDING_PROMPT =
   'If you have a pairing code, reply: START <code>. ' +
   'If not, please contact us to sign up your business first.';
 
+/**
+ * Auditor disclaimer surfaced at signup (PRD v2.0 §9 "Legal"): HisabKitab assists
+ * with bookkeeping/VAT prep but is NOT a licensed auditor and does NOT provide
+ * statutory sign-off; the owner remains responsible for what they file. Kept as a
+ * single exported constant so it can be reused (privacy doc, /pay page) + tested.
+ */
+export const AUDITOR_DISCLAIMER =
+  'Please note: HisabKitab helps you keep records and prepare VAT/TDS figures — it is assistance, ' +
+  'not a substitute for a licensed auditor, and it does not provide statutory sign-off. You always ' +
+  'review and file with the IRD yourself. Full terms: https://hisabkitab.pro/terms';
+
 export const pairedWelcome = (businessName: string): string =>
   `You're all set, ${businessName}! 🎉 Send me a photo of any bill, or tell me today's sales — ` +
-  `for example: "add catering 9000". I'll always show you what I read before saving anything.`;
+  `for example: "add catering 9000". I'll always show you what I read before saving anything.\n\n` +
+  AUDITOR_DISCLAIMER;

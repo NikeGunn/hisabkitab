@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
-import { appendAudit, schema, withTenant, type Db, type Tx } from '@hisab/db';
+import { appendAudit, encPII, decPII, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import {
   bsMonthRange,
   computeTds,
@@ -798,20 +798,20 @@ export function createToolHandlers(ctx: ToolContext) {
           .values({
             tenantId: ctx.tenantId,
             name: args.name,
-            panVatNo: args.pan_vat_no ?? null,
+            panVatNo: encPII(args.pan_vat_no ?? null), // field-level PII encryption (§9)
             isVatRegistered: args.is_vat_registered ?? null,
           })
           .onConflictDoUpdate({
             target: [vendors.tenantId, vendors.name],
             set: {
-              ...(args.pan_vat_no !== undefined ? { panVatNo: args.pan_vat_no } : {}),
+              ...(args.pan_vat_no !== undefined ? { panVatNo: encPII(args.pan_vat_no) } : {}),
               ...(args.is_vat_registered !== undefined ? { isVatRegistered: args.is_vat_registered } : {}),
             },
           })
           .returning();
         await logWrite(tx, ctx, 'upsert_vendor', { name: args.name });
         const v = row!;
-        return { vendor_id: v.id, name: v.name, pan_vat_no: v.panVatNo, is_vat_registered: v.isVatRegistered };
+        return { vendor_id: v.id, name: v.name, pan_vat_no: decPII(v.panVatNo), is_vat_registered: v.isVatRegistered };
       });
     },
 
@@ -822,7 +822,7 @@ export function createToolHandlers(ctx: ToolContext) {
           .from(vendors)
           .where(and(eq(vendors.tenantId, ctx.tenantId), sql`lower(${vendors.name}) = lower(${args.name})`));
         return v
-          ? { found: true as const, vendor_id: v.id, name: v.name, pan_vat_no: v.panVatNo, is_vat_registered: v.isVatRegistered }
+          ? { found: true as const, vendor_id: v.id, name: v.name, pan_vat_no: decPII(v.panVatNo), is_vat_registered: v.isVatRegistered }
           : { found: false as const };
       });
     },
