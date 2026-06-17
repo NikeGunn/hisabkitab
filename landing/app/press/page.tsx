@@ -17,14 +17,14 @@ export default function PressPage() {
       <Section title="One line">
         <p>
           <strong>HisabKitab is a WhatsApp bookkeeping agent for small VAT-registered businesses in
-          Nepal</strong> — it reads bills, computes 13% VAT and TDS, and prepares the monthly return,
+          Nepal</strong>. It reads bills, computes 13% VAT and TDS, and prepares the monthly return,
           while the owner approves every entry.
         </p>
       </Section>
 
       <Section title="Facts">
         <ul className="ml-5 list-disc space-y-2">
-          <li><strong>What it is:</strong> a bookkeeping and VAT assistant that runs entirely inside WhatsApp — no app to install.</li>
+          <li><strong>What it is:</strong> a bookkeeping and VAT assistant that runs entirely inside WhatsApp, with no app to install.</li>
           <li><strong>Where:</strong> built in Kathmandu, for Nepal&apos;s VAT, TDS, and Bikram Sambat calendar.</li>
           <li><strong>Stage:</strong> currently onboarding a free pilot.</li>
           <li><strong>The principle:</strong> it prepares and shows its work; it never files for you and never saves without approval.</li>

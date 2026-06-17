@@ -105,6 +105,26 @@ export function bsMonthRange(year: number, month: number): BsMonthRange {
   throw new BsDateError(`could not determine length of BS ${year}-${month}`);
 }
 
+/**
+ * The Nepali fiscal year runs Shrawan (month 4) through Ashadh (month 3 of the next
+ * BS year). So a date in months 4–12 belongs to FY = its own year; a date in months
+ * 1–3 (Baisakh/Jestha/Ashadh) belongs to FY = year − 1. The FY is named by its
+ * starting year (e.g. FY 2082/83 starts Shrawan 2082). IRD requires invoice numbers
+ * to be gap-free and reset PER fiscal year (PRD v2.0 §12), so this is the series key.
+ */
+export function bsFiscalYear(bs: Pick<BsDate, 'year' | 'month'>): number {
+  if (!Number.isInteger(bs.year) || !Number.isInteger(bs.month)) {
+    throw new BsDateError(`BS year/month must be integers: ${JSON.stringify(bs)}`);
+  }
+  if (bs.month < 1 || bs.month > 12) throw new BsDateError(`BS month must be 1–12, got ${bs.month}`);
+  return bs.month >= 4 ? bs.year : bs.year - 1;
+}
+
+/** Human label for a fiscal year, e.g. 2082 → "2082/83". */
+export function bsFiscalYearLabel(fy: number): string {
+  return `${fy}/${String((fy + 1) % 100).padStart(2, '0')}`;
+}
+
 export interface FilingDeadline {
   bs: BsDate;
   ad: Date;

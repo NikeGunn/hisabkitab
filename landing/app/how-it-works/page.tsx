@@ -9,12 +9,12 @@ export const metadata: Metadata = {
 };
 
 const STEPS = [
-  { n: '01', t: 'Send a bill', b: 'Snap a photo, forward a PDF, or just type the amount. Whatever is fastest in the moment — all inside WhatsApp.' },
+  { n: '01', t: 'Send a bill', b: 'Snap a photo, forward a PDF, or just type the amount. Whatever is fastest in the moment, all inside WhatsApp.' },
   { n: '02', t: 'The agent reads it', b: 'Vendor, date, amount, and VAT are extracted from even messy receipts, then checked against Nepal’s 17 / 17Ka and one-year credit rules.' },
-  { n: '03', t: 'It asks when unsure', b: 'A smudged total or a borderline input credit doesn’t get a guess — it gets a question, or a hand-off to an accountant.' },
+  { n: '03', t: 'It asks when unsure', b: 'A smudged total or a borderline input credit doesn’t get a guess. It gets a question, or a hand-off to an accountant.' },
   { n: '04', t: 'You approve', b: 'Nothing reaches your books without your ✅. Once approved, the entry is written once, with an audit trail.' },
   { n: '05', t: 'Your return is prepared', b: 'Before the 25th, the agent assembles the period’s VAT, self-verifies the totals in integer paisa, and nudges you.' },
-  { n: '06', t: 'You review and file', b: 'You file on the IRD portal yourself. HisabKitab prepares and shows its work — it never files for you.' },
+  { n: '06', t: 'You review and file', b: 'You file on the IRD portal yourself. HisabKitab prepares and shows its work; it never files for you.' },
 ];
 
 export default function HowItWorksPage() {
@@ -22,7 +22,7 @@ export default function HowItWorksPage() {
     <PageShell
       eyebrow="Resources"
       title="How it works"
-      lede="Six steps, one WhatsApp thread. You stay the approver the entire way — the agent does the carrying, you keep the control."
+      lede="Six steps, one WhatsApp thread. You stay the approver the entire way: the agent does the carrying, you keep the control."
     >
       <div className="mx-auto max-w-3xl space-y-5">
         {STEPS.map((s) => (

@@ -300,12 +300,34 @@ Migration **0011** grants UPDATE on idempotency_keys (finalize). Was an intermit
   owner user+membership; `deleteTenantData` purges memberships + orphaned-only users (a shared accountant
   serving other tenants keeps their identity). Tests incl. probes for each.
 
+**✅ P13 (v2.0 §12) — accounting completeness (CORE) — DONE (2026-06-17):** the two highest-value,
+correctness-oriented, fully-offline-testable pieces.
+- **Sequential VAT invoice numbering** (IRD Rule-17, gap-free per BS fiscal year): migration **0014**
+  `invoice_sequences` (PK `(tenant_id, fiscal_year)`) + RLS + `hisab_app` grant. Pure `bsFiscalYear`/
+  `bsFiscalYearLabel` in `@hisab/shared` (Shrawan–Ashadh; month≥4 ⇒ FY=year, else year−1). New
+  **`next_invoice_number`** ledger tool allocates under `last_number = last_number + 1 RETURNING`
+  (Postgres serializes on the row) so concurrent allocations never reuse/skip — 12-way race probe gives
+  exactly 1..N. Series resets each FY. Number format `"<FY label>-<4-digit seq>"` e.g. `2082/83-0007`.
+- **Credit / debit notes** (never edit a confirmed invoice): migration **0014** `credit_notes`
+  (FK→`ar_invoices`, draft→confirmed) + RLS + grant. Pure `computeNote` in `@hisab/shared/accounting`
+  (a CREDIT note can't exceed the original; VAT must be coherent with the taxable base within 1-paisa;
+  negatives/zero rejected) + 9 probes. New **`issue_note`** (refuses a DRAFT original; recomputes VAT,
+  never hand-entered; allocates a note number from the same series) + **`confirm_note`** ledger tools.
+  Capabilities: numbering/note draft = `record_entry`, confirm = `confirm_entry` (viewer-denied probe).
+- accounts-reports SKILL got a "Corrections & sequential invoice numbers" section; landing Platform page
+  got an "Invoices & corrections" section. Tests: shared +7 (bsFiscalYear boundary) +9 (notes) = 239;
+  ledger +1 file (`accounting.contract.test.ts`: gap-free, FY-reset, concurrency, over-credit, draft-
+  reject, debit, RBAC probes). **Deferred within P13** (larger / depend on report-recompute, build when
+  demand requires): fiscal-year carry-forward & annual summary, opening balances, backdated-entry
+  recompute, TDS deposit reminder.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
   **The product can now charge its first paying customer** (after the external pilot prerequisites below).
-- ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, ⬜ P13 accounting
-  completeness, ⬜ P14 observability, ⬜ P17 growth, ⬜ P18 support/admin, ⬜ P19 accountant channel.
+- ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, 🟡 P13 accounting
+  completeness (CORE done; carry-forward/opening-balances/backdate/TDS-reminder deferred), ⬜ P14
+  observability, ⬜ P17 growth, ⬜ P18 support/admin, ⬜ P19 accountant channel.
 
 **🌐 EXTERNAL (not code — needed before a real pilot):** Meta business verification + WhatsApp number
 + webhook registration; Khalti **merchant onboarding** (sandbox `test-admin.khalti.com`; prod needs the

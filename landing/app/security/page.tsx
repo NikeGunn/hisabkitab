@@ -19,9 +19,11 @@ export default function SecurityPage() {
         <CardGrid
           items={[
             { title: 'Approval-gated writes', body: 'No entry is saved to your books without your explicit ✅. The agent can prepare, but only you can commit.', emoji: '✅' },
-            { title: 'Append-only audit log', body: 'Every entry, edit, and approval is logged immutably — the trail you need for a 6-year IRD record.', emoji: '🧾' },
+            { title: 'Tamper-evident audit log', body: 'Every entry, edit, and approval is hash-chained, so the record cannot be silently rewritten. The trail you need for a 6-year IRD record.', emoji: '🧾' },
             { title: 'Role-based access', body: 'Owners approve; staff capture. Permissions are enforced on the server, not just hidden in the UI.', emoji: '🔐' },
             { title: 'Idempotent payments', body: 'Khalti payments carry an idempotency key, so a retried message can never double-count a sale.', emoji: '🔁' },
+            { title: 'Encrypted PII', body: 'Your most sensitive identifiers, like PAN and VAT numbers, are encrypted at the field level with authenticated AES-256.', emoji: '🛡️' },
+            { title: 'Per-business isolation', body: 'Each business sees only its own books. Tenant boundaries are enforced in the database itself, not just the app.', emoji: '🧱' },
           ]}
         />
       </Section>

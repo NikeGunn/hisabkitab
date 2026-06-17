@@ -483,3 +483,54 @@ export const usageCounters = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.period] }), index('usage_counters_period_idx').on(t.period)],
 );
+
+// ----- P13 (v2.0 §12): accounting completeness — invoice numbering + credit/debit notes -----
+
+/**
+ * Gap-free sequential VAT invoice numbering per tenant per BS fiscal year (IRD Rule-17).
+ * `lastNumber` is bumped under SELECT … FOR UPDATE inside the allocating tx so two
+ * concurrent allocations can never reuse or skip a number. One row per (tenant, fiscal_year);
+ * the series resets each fiscal year (Shrawan–Ashadh).
+ */
+export const invoiceSequences = pgTable(
+  'invoice_sequences',
+  {
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    fiscalYear: integer('fiscal_year').notNull(), // BS fiscal year (start year)
+    lastNumber: integer('last_number').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.fiscalYear] })],
+);
+
+/**
+ * Credit / debit notes (returns, cancellations, corrections). A confirmed invoice is
+ * NEVER edited; a note references the original and carries its own taxable + VAT split
+ * (validated by @hisab/shared computeNote before insert). draft → confirmed like every
+ * other entry. `noteNo` is allocated from invoiceSequences so notes share the gap-free series.
+ */
+export const creditNotes = pgTable(
+  'credit_notes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    originalInvoiceId: uuid('original_invoice_id')
+      .notNull()
+      .references(() => arInvoices.id),
+    kind: text('kind', { enum: ['credit', 'debit'] }).notNull(),
+    noteNo: text('note_no'),
+    issuedOn: date('issued_on').notNull(),
+    taxablePaisa: bigint('taxable_paisa', { mode: 'bigint' }).notNull(),
+    vatPaisa: bigint('vat_paisa', { mode: 'bigint' }).notNull(),
+    totalPaisa: bigint('total_paisa', { mode: 'bigint' }).notNull(),
+    reason: text('reason'),
+    status: text('status', { enum: ['draft', 'confirmed'] })
+      .notNull()
+      .default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('credit_notes_invoice_idx').on(t.tenantId, t.originalInvoiceId)],
+);

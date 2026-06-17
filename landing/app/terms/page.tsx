@@ -24,7 +24,7 @@ export default function TermsPage() {
       <Section title="Your responsibilities">
         <p>
           Review every entry before approving it, file your returns on the IRD portal yourself, and keep
-          your account credentials safe. Nothing is saved to your books without your approval — which
+          your account credentials safe. Nothing is saved to your books without your approval, which
           means accuracy of approvals is on you.
         </p>
       </Section>

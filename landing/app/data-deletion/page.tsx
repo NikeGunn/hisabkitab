@@ -24,7 +24,7 @@ export default function DataDeletionPage() {
       </Section>
       <Section title="What gets deleted">
         <p>
-          Your account, your messages, and your bookkeeping records — except records we are legally
+          Your account, your messages, and your bookkeeping records, except records we are legally
           required to retain under the IRD&apos;s 6-year rule, which are kept isolated and deleted once that
           period ends.
         </p>

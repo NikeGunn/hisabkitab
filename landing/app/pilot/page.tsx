@@ -20,7 +20,7 @@ export default function PilotPage() {
           items={[
             { title: 'Free during the pilot', body: 'No card, no commitment. We want your feedback more than your money right now.', emoji: '🎁' },
             { title: 'You approve everything', body: 'Nothing is saved to your books without your ✅. The agent prepares; you decide.', emoji: '✅' },
-            { title: 'Real Nepal VAT logic', body: '13% VAT, 17/17Ka credit checks, TDS, and the 25th deadline — handled, not faked.', emoji: '🧮' },
+            { title: 'Real Nepal VAT logic', body: '13% VAT, 17/17Ka credit checks, TDS, and the 25th deadline, handled, not faked.', emoji: '🧮' },
             { title: 'Leave anytime', body: 'Export your data and walk away whenever you like. No lock-in.', emoji: '🚪' },
           ]}
         />
