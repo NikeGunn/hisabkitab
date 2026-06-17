@@ -3,6 +3,8 @@ import {
   adToBs,
   BS_MONTH_NAMES,
   BsDateError,
+  bsFiscalYear,
+  bsFiscalYearLabel,
   bsMonthRange,
   bsToAd,
   vatFilingDeadline,
@@ -60,5 +62,35 @@ describe('month names', () => {
     expect(BS_MONTH_NAMES[0]).toBe('Baisakh');
     expect(BS_MONTH_NAMES[3]).toBe('Shrawan');
     expect(BS_MONTH_NAMES[11]).toBe('Chaitra');
+  });
+});
+
+describe('bsFiscalYear (Shrawan–Ashadh)', () => {
+  it('Shrawan (month 4) starts the FY: FY == year', () => {
+    expect(bsFiscalYear({ year: 2082, month: 4 })).toBe(2082);
+  });
+
+  it('Chaitra (month 12) is still the same FY', () => {
+    expect(bsFiscalYear({ year: 2082, month: 12 })).toBe(2082);
+  });
+
+  it('PROBE: Ashadh (month 3) belongs to the PREVIOUS FY, not its own year', () => {
+    // Ashadh 2083 is the last month of FY 2082/83, so its fiscal year is 2082.
+    expect(bsFiscalYear({ year: 2083, month: 3 })).toBe(2082);
+  });
+
+  it('the cusp: Ashadh 2083 (FY 2082) then Shrawan 2083 (FY 2083) are different FYs', () => {
+    expect(bsFiscalYear({ year: 2083, month: 3 })).toBe(2082);
+    expect(bsFiscalYear({ year: 2083, month: 4 })).toBe(2083);
+  });
+
+  it('rejects an out-of-range month', () => {
+    expect(() => bsFiscalYear({ year: 2082, month: 0 })).toThrow(BsDateError);
+    expect(() => bsFiscalYear({ year: 2082, month: 13 })).toThrow(BsDateError);
+  });
+
+  it('labels the fiscal year as start/end-two-digits', () => {
+    expect(bsFiscalYearLabel(2082)).toBe('2082/83');
+    expect(bsFiscalYearLabel(2099)).toBe('2099/00');
   });
 });

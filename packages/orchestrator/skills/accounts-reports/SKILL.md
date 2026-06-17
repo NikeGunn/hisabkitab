@@ -52,6 +52,19 @@ When the owner wants a report/PDF/statement:
 4. The backend validates, renders, RECONCILES, and sends the PDF as a WhatsApp document. If it can't
    reconcile, it holds the report and tells the owner — it never sends a report whose totals don't tie.
 
+## Corrections & sequential invoice numbers (P13)
+- **Never edit a confirmed invoice.** A return, cancellation, or correction is a NOTE that references
+  the original:
+  - `issue_note` with `kind: 'credit'` to REDUCE/refund (a return or over-bill), or `kind: 'debit'`
+    to ADD (an under-bill correction). Pass `original_invoice_id` (must be a CONFIRMED AR invoice),
+    `issued_on`, `amount_paisa` (VAT-inclusive unless `inclusive: false`), and a `reason`.
+  - It returns a DRAFT with the recomputed VAT split and an allocated note number. Echo it, get the
+    owner's "✅", then `confirm_note`. A credit note can never exceed the original — the tool refuses,
+    so ask the owner to correct the amount.
+- **Gap-free invoice numbers:** `next_invoice_number` allocates the next sequential number for the
+  fiscal year of `issued_on` (IRD Rule-17 requires no gaps; the series resets each BS fiscal year).
+  Use it when the owner needs a proper sequential number for an invoice or note.
+
 ## Always
 - Confirm before saving; reconcile before sending. When unsure, ask — that is always correct.
 - Reports reflect only what's been recorded; gently remind the owner to log transactions for

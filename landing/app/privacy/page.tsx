@@ -29,7 +29,7 @@ export default function PrivacyPage() {
       <Section title="How long we keep it">
         <p>
           Tax records are retained in line with the IRD&apos;s 6-year requirement. Everything else is kept
-          only as long as your account is active. You can request deletion any time — see{' '}
+          only as long as your account is active. You can request deletion any time, see{' '}
           <a className="text-primary underline-offset-4 hover:underline" href="/data-deletion">Data deletion</a>.
         </p>
       </Section>

@@ -34,6 +34,7 @@ import {
   type Role,
 } from '@hisab/shared';
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
+import { accountingInputSchemas, accountingToolDescriptions, createAccountingToolHandlers } from './accounting-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
 
 const { sales, expenses, vendors, vatReturns, validationEvents, auditLog, usageCounters, subscriptions } = schema;
@@ -145,6 +146,7 @@ export const inputSchemas = {
   },
   get_vendor: { name: z.string().min(1).max(200) },
   ...arapInputSchemas,
+  ...accountingInputSchemas,
 } as const;
 
 /**
@@ -180,6 +182,10 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   record_credit_sale: 'record_entry',
   record_credit_purchase: 'record_entry',
   record_party_payment: 'record_entry',
+  // P13 accounting completeness: allocate a number / draft a note = record; confirm = confirm
+  next_invoice_number: 'record_entry',
+  issue_note: 'record_entry',
+  confirm_note: 'confirm_entry',
   // confirm (save)
   confirm_entry: 'confirm_entry',
   confirm_arap_entry: 'confirm_entry',
@@ -342,6 +348,7 @@ export function createToolHandlers(ctx: ToolContext) {
 
   return {
     ...createArapToolHandlers(ctx),
+    ...createAccountingToolHandlers(ctx),
     async compute_vat(args: Args<'compute_vat'>) {
       const split = splitAmount(BigInt(args.amount_paisa), args.inclusive, true, ctx.cfg);
       return { excl_paisa: n(split.exclPaisa), vat_paisa: n(split.vatPaisa) };
@@ -856,4 +863,5 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
   upsert_vendor: 'Remember a vendor (PAN, VAT status) so the owner is not re-asked every time.',
   get_vendor: 'Look up a remembered vendor by name (case-insensitive).',
   ...arapToolDescriptions,
+  ...accountingToolDescriptions,
 };
