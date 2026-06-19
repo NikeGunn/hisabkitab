@@ -10,7 +10,10 @@ import { WaClient } from './whatsapp/wa-client.js';
 import { SerialQueues } from './whatsapp/router.js';
 import { buildServer } from './server.js';
 import { startScheduler, type SchedulerHandle } from './scheduler/queue.js';
-import { createLedgerSummaryProvider } from './scheduler/ledger-summary.js';
+import {
+  createLedgerSummaryProvider,
+  createTdsSummaryProvider,
+} from './scheduler/ledger-summary.js';
 import { TenantRateLimiter } from './resilience/rate-limit.js';
 import { dispatchReport } from './reports/dispatch.js';
 import { withTenant, appendAudit } from '@hisab/db';
@@ -50,13 +53,18 @@ const app = buildServer({
           ledgerMcpUrl: config.LEDGER_MCP_URL,
           signingSecret: config.TENANT_SIGNING_SECRET,
           delivery: {
-            sendDocument: (to, bytes, filename, caption) => wa.sendDocument(to, bytes, filename, caption),
+            sendDocument: (to, bytes, filename, caption) =>
+              wa.sendDocument(to, bytes, filename, caption),
             sendText: (to, body) => wa.sendText(to, body),
           },
           audit: {
             log: (entry) =>
               withTenant(handle.db, entry.tenantId, async (tx) => {
-                await appendAudit(tx, entry.tenantId, { actor: 'system', action: entry.action, detail: entry.detail });
+                await appendAudit(tx, entry.tenantId, {
+                  actor: 'system',
+                  action: entry.action,
+                  detail: entry.detail,
+                });
               }),
           },
           log: (msg) => console.log(`[reports] ${msg}`),
@@ -90,10 +98,20 @@ if (config.SCHEDULER_ENABLED) {
       sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
       log: (msg) => console.log(`[dunning] ${msg}`),
     },
+    // P13: TDS-deposit reminder runs in the same daily tick (after the VAT reminder).
+    tds: {
+      db: handle.db,
+      getTdsSummary: createTdsSummaryProvider({
+        ledgerMcpUrl: config.LEDGER_MCP_URL,
+        signingSecret: config.TENANT_SIGNING_SECRET,
+      }),
+      sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+      log: (msg) => console.log(`[tds] ${msg}`),
+    },
     ...(config.REMINDER_CRON ? { cron: config.REMINDER_CRON } : {}),
     log: (msg) => console.log(`[scheduler] ${msg}`),
   });
-  console.log('hisab reminder + dunning scheduler started (BullMQ)');
+  console.log('hisab reminder + dunning + tds scheduler started (BullMQ)');
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

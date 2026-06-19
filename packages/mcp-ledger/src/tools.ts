@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { appendAudit, encPII, decPII, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import {
+  assignBsPeriod,
   bsMonthRange,
   computeTds,
   splitVatInclusive,
@@ -34,10 +35,23 @@ import {
   type Role,
 } from '@hisab/shared';
 import { arapInputSchemas, arapToolDescriptions, createArapToolHandlers } from './arap-tools.js';
-import { accountingInputSchemas, accountingToolDescriptions, createAccountingToolHandlers } from './accounting-tools.js';
+import {
+  accountingInputSchemas,
+  accountingToolDescriptions,
+  createAccountingToolHandlers,
+} from './accounting-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
 
-const { sales, expenses, vendors, vatReturns, validationEvents, auditLog, usageCounters, subscriptions } = schema;
+const {
+  sales,
+  expenses,
+  vendors,
+  vatReturns,
+  validationEvents,
+  auditLog,
+  usageCounters,
+  subscriptions,
+} = schema;
 
 // ---------------------------------------------------------------- zod building blocks
 
@@ -62,7 +76,9 @@ const idempotencyKey = z
   .min(1)
   .max(200)
   .optional()
-  .describe('optional exactly-once key: a retry with the same key returns the original result, never a duplicate entry');
+  .describe(
+    'optional exactly-once key: a retry with the same key returns the original result, never a duplicate entry',
+  );
 
 export const inputSchemas = {
   compute_vat: {
@@ -89,7 +105,10 @@ export const inputSchemas = {
     is_service: z.boolean().describe('service payments may attract TDS'),
     for_taxable_business_use: z.boolean().describe('required for input-credit eligibility'),
     receipt_file_id: z.string().max(200).optional(),
-    extraction: z.record(z.string(), z.unknown()).optional().describe('per-field {value, confidence}'),
+    extraction: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .describe('per-field {value, confidence}'),
     idempotency_key: idempotencyKey,
   },
   validate_entry: {
@@ -116,7 +135,9 @@ export const inputSchemas = {
     // never trusts this to set the deadline — it only confirms or HOLDS on it.
     observed_deadline_ad: isoDate
       .optional()
-      .describe('the deadline date you READ on the IRD site (YYYY-MM-DD); omit if you did not web_fetch it'),
+      .describe(
+        'the deadline date you READ on the IRD site (YYYY-MM-DD); omit if you did not web_fetch it',
+      ),
     source_url: z
       .string()
       .url()
@@ -186,6 +207,11 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   next_invoice_number: 'record_entry',
   issue_note: 'record_entry',
   confirm_note: 'confirm_entry',
+  // P13 remainder: TDS/annual summaries are read-only reports; opening balances draft→confirm
+  generate_tds_summary: 'generate_report',
+  get_annual_summary: 'generate_report',
+  record_opening_balance: 'record_entry',
+  confirm_opening_balance: 'confirm_entry',
   // confirm (save)
   confirm_entry: 'confirm_entry',
   confirm_arap_entry: 'confirm_entry',
@@ -261,8 +287,8 @@ async function findDuplicateCandidates(
       id: row.id,
       totalPaisa: row.amountExclVatPaisa + row.vatPaisa,
       occurredOn: toDate(row.occurredOn),
-      ...(('vendorName' in row && row.vendorName) ? { vendorName: row.vendorName } : {}),
-      ...(('invoiceNo' in row && row.invoiceNo) ? { invoiceNo: row.invoiceNo } : {}),
+      ...('vendorName' in row && row.vendorName ? { vendorName: row.vendorName } : {}),
+      ...('invoiceNo' in row && row.invoiceNo ? { invoiceNo: row.invoiceNo } : {}),
       recordedOn: row.createdAt,
     });
   }
@@ -343,8 +369,14 @@ export function createToolHandlers(ctx: ToolContext) {
    * body + the idempotency-key row commit together; a retry with the same key
    * returns the original result and writes nothing. `scope` is the tool name.
    */
-  const idemTx = <T extends IdempotentResult>(scope: string, key: string | undefined, body: (tx: Tx) => Promise<T>) =>
-    inTenantTx((tx) => withIdempotency(txIdempotencyStore(tx, ctx.tenantId), key, scope, () => body(tx)));
+  const idemTx = <T extends IdempotentResult>(
+    scope: string,
+    key: string | undefined,
+    body: (tx: Tx) => Promise<T>,
+  ) =>
+    inTenantTx((tx) =>
+      withIdempotency(txIdempotencyStore(tx, ctx.tenantId), key, scope, () => body(tx)),
+    );
 
   return {
     ...createArapToolHandlers(ctx),
@@ -357,8 +389,21 @@ export function createToolHandlers(ctx: ToolContext) {
     async record_sale(args: Args<'record_sale'>) {
       const amount = BigInt(args.amount_paisa);
       const { exclPaisa, vatPaisa } = splitAmount(amount, args.inclusive, true, ctx.cfg);
+      // P13: a future-dated entry is rejected; an earlier-month entry is flagged backdated.
+      let period;
+      try {
+        period = assignBsPeriod(toDate(args.occurred_on));
+      } catch (err) {
+        return { saved: false as const, reason: err instanceof Error ? err.message : String(err) };
+      }
       return idemTx('record_sale', args.idempotency_key, async (tx) => {
-        const existing = await findDuplicateCandidates(tx, ctx, sales, args.occurred_on, exclPaisa + vatPaisa);
+        const existing = await findDuplicateCandidates(
+          tx,
+          ctx,
+          sales,
+          args.occurred_on,
+          exclPaisa + vatPaisa,
+        );
         const report = validateSale(
           {
             occurredOn: toDate(args.occurred_on),
@@ -370,8 +415,18 @@ export function createToolHandlers(ctx: ToolContext) {
           { asOf: new Date(), existing, cfg: ctx.cfg },
         );
         if (report.overall === 'fail') {
-          await logWrite(tx, ctx, 'record_sale.rejected', { args }, { report, entryType: 'sale', entryId: null });
-          return { saved: false as const, reason: 'validation failed — never saved', validation: serializeValidation(report) };
+          await logWrite(
+            tx,
+            ctx,
+            'record_sale.rejected',
+            { args },
+            { report, entryType: 'sale', entryId: null },
+          );
+          return {
+            saved: false as const,
+            reason: 'validation failed — never saved',
+            validation: serializeValidation(report),
+          };
         }
         const [row] = await tx
           .insert(sales)
@@ -382,6 +437,7 @@ export function createToolHandlers(ctx: ToolContext) {
             amountExclVatPaisa: exclPaisa,
             vatPaisa,
             paymentMethod: args.payment_method ?? null,
+            isBackdated: period.isBackdated,
           })
           .returning({ id: sales.id });
         const saleId = row!.id;
@@ -389,7 +445,12 @@ export function createToolHandlers(ctx: ToolContext) {
           tx,
           ctx,
           'record_sale.draft',
-          { sale_id: saleId, inclusive: args.inclusive, amount_paisa: args.amount_paisa },
+          {
+            sale_id: saleId,
+            inclusive: args.inclusive,
+            amount_paisa: args.amount_paisa,
+            is_backdated: period.isBackdated,
+          },
           { report, entryType: 'sale', entryId: saleId },
         );
         return {
@@ -398,7 +459,15 @@ export function createToolHandlers(ctx: ToolContext) {
           status: 'draft' as const,
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
-          assumption: args.inclusive ? 'amount treated as VAT-INCLUSIVE' : 'amount treated as VAT-EXCLUSIVE',
+          assumption: args.inclusive
+            ? 'amount treated as VAT-INCLUSIVE'
+            : 'amount treated as VAT-EXCLUSIVE',
+          is_backdated: period.isBackdated,
+          ...(period.isBackdated
+            ? {
+                backdated_note: `This sale occurred in BS ${period.occurredBs.year}-${String(period.occurredBs.month).padStart(2, '0')} (earlier than now). If that return period was already prepared, re-run generate_return_summary for it.`,
+              }
+            : {}),
           validation: serializeValidation(report),
         };
       });
@@ -406,9 +475,21 @@ export function createToolHandlers(ctx: ToolContext) {
 
     async record_expense(args: Args<'record_expense'>) {
       const amount = BigInt(args.amount_paisa);
-      const { exclPaisa, vatPaisa } = splitAmount(amount, args.inclusive, args.vendor_is_vat_registered, ctx.cfg);
+      const { exclPaisa, vatPaisa } = splitAmount(
+        amount,
+        args.inclusive,
+        args.vendor_is_vat_registered,
+        ctx.cfg,
+      );
       const totalPaisa = exclPaisa + vatPaisa;
       const invoiceDate = toDate(args.occurred_on);
+      // P13: reject a future-dated bill; flag an earlier-month bill as backdated.
+      let period;
+      try {
+        period = assignBsPeriod(invoiceDate);
+      } catch (err) {
+        return { saved: false as const, reason: err instanceof Error ? err.message : String(err) };
+      }
 
       const tds = computeTds(
         {
@@ -421,10 +502,17 @@ export function createToolHandlers(ctx: ToolContext) {
       const tdsComputed = tds.kind === 'computed' ? tds : null;
 
       return idemTx('record_expense', args.idempotency_key, async (tx) => {
-        const existing = await findDuplicateCandidates(tx, ctx, expenses, args.occurred_on, totalPaisa, {
-          name: args.vendor_name,
-          invoiceNo: args.invoice_no,
-        });
+        const existing = await findDuplicateCandidates(
+          tx,
+          ctx,
+          expenses,
+          args.occurred_on,
+          totalPaisa,
+          {
+            name: args.vendor_name,
+            invoiceNo: args.invoice_no,
+          },
+        );
         const candidate: ExpenseCandidate = {
           vendorVatRegistered: args.vendor_is_vat_registered,
           invoiceDate,
@@ -438,8 +526,18 @@ export function createToolHandlers(ctx: ToolContext) {
         };
         const report = validateExpense(candidate, { asOf: new Date(), existing, cfg: ctx.cfg });
         if (report.overall === 'fail') {
-          await logWrite(tx, ctx, 'record_expense.rejected', { args }, { report, entryType: 'expense', entryId: null });
-          return { saved: false as const, reason: 'validation failed — never saved', validation: serializeValidation(report) };
+          await logWrite(
+            tx,
+            ctx,
+            'record_expense.rejected',
+            { args },
+            { report, entryType: 'expense', entryId: null },
+          );
+          return {
+            saved: false as const,
+            reason: 'validation failed — never saved',
+            validation: serializeValidation(report),
+          };
         }
         const inputVatPaisa = report.inputCreditEligible ? vatPaisa : 0n;
         const [row] = await tx
@@ -460,6 +558,7 @@ export function createToolHandlers(ctx: ToolContext) {
             invoiceType: args.invoice_type ?? null,
             inputCreditEligible: report.inputCreditEligible,
             extraction: args.extraction ?? null,
+            isBackdated: period.isBackdated,
           })
           .returning({ id: expenses.id });
         const expenseId = row!.id;
@@ -467,7 +566,12 @@ export function createToolHandlers(ctx: ToolContext) {
           tx,
           ctx,
           'record_expense.draft',
-          { expense_id: expenseId, inclusive: args.inclusive, amount_paisa: args.amount_paisa },
+          {
+            expense_id: expenseId,
+            inclusive: args.inclusive,
+            amount_paisa: args.amount_paisa,
+            is_backdated: period.isBackdated,
+          },
           { report, entryType: 'expense', entryId: expenseId },
         );
         return {
@@ -481,9 +585,22 @@ export function createToolHandlers(ctx: ToolContext) {
           input_credit_reasons: report.inputCreditReasons,
           tds:
             tds.kind === 'computed'
-              ? { applies: true, rate_bps: tds.rateBps, tds_paisa: n(tds.tdsPaisa), base: 'amount EXCLUDING VAT' }
+              ? {
+                  applies: true,
+                  rate_bps: tds.rateBps,
+                  tds_paisa: n(tds.tdsPaisa),
+                  base: 'amount EXCLUDING VAT',
+                }
               : { applies: false, kind: tds.kind, reason: tds.reason },
-          assumption: args.inclusive ? 'amount treated as VAT-INCLUSIVE' : 'amount treated as VAT-EXCLUSIVE',
+          assumption: args.inclusive
+            ? 'amount treated as VAT-INCLUSIVE'
+            : 'amount treated as VAT-EXCLUSIVE',
+          is_backdated: period.isBackdated,
+          ...(period.isBackdated
+            ? {
+                backdated_note: `This bill occurred in BS ${period.occurredBs.year}-${String(period.occurredBs.month).padStart(2, '0')} (earlier than now). If that return period was already prepared, re-run generate_return_summary for it.`,
+              }
+            : {}),
           validation: serializeValidation(report),
         };
       });
@@ -519,7 +636,13 @@ export function createToolHandlers(ctx: ToolContext) {
               vctx,
             );
       await inTenantTx((tx) =>
-        logWrite(tx, ctx, 'validate_entry', { entry_type: args.entry_type }, { report, entryType: `${args.entry_type}_candidate`, entryId: null }),
+        logWrite(
+          tx,
+          ctx,
+          'validate_entry',
+          { entry_type: args.entry_type },
+          { report, entryType: `${args.entry_type}_candidate`, entryId: null },
+        ),
       );
       return {
         ...serializeValidation(report),
@@ -696,7 +819,8 @@ export function createToolHandlers(ctx: ToolContext) {
     async get_cost_summary(args: Args<'get_cost_summary'>) {
       // Read-only (PRD v2.0 §7): this tenant's usage this period vs its plan budget.
       const now = new Date();
-      const period = args.period ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+      const period =
+        args.period ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
       return inTenantTx(async (tx) => {
         const [usage] = await tx
           .select({
@@ -728,10 +852,10 @@ export function createToolHandlers(ctx: ToolContext) {
           verdict: proj.verdict,
           note:
             proj.verdict === 'THROTTLE'
-              ? 'This month\'s usage limit is reached. It resets next month, or upgrade the plan to continue now.'
+              ? "This month's usage limit is reached. It resets next month, or upgrade the plan to continue now."
               : proj.verdict === 'WARN'
-                ? 'Close to this month\'s usage limit.'
-                : 'Within this month\'s usage limit.',
+                ? "Close to this month's usage limit."
+                : "Within this month's usage limit.",
         };
       });
     },
@@ -748,7 +872,11 @@ export function createToolHandlers(ctx: ToolContext) {
           );
         const items: Array<Record<string, unknown>> = [];
         if (args.type !== 'expense') {
-          for (const r of await tx.select().from(sales).where(inMonth(sales)).orderBy(sales.occurredOn)) {
+          for (const r of await tx
+            .select()
+            .from(sales)
+            .where(inMonth(sales))
+            .orderBy(sales.occurredOn)) {
             items.push({
               id: r.id,
               kind: 'sale',
@@ -761,7 +889,11 @@ export function createToolHandlers(ctx: ToolContext) {
           }
         }
         if (args.type !== 'sale') {
-          for (const r of await tx.select().from(expenses).where(inMonth(expenses)).orderBy(expenses.occurredOn)) {
+          for (const r of await tx
+            .select()
+            .from(expenses)
+            .where(inMonth(expenses))
+            .orderBy(expenses.occurredOn)) {
             items.push({
               id: r.id,
               kind: 'expense',
@@ -787,14 +919,21 @@ export function createToolHandlers(ctx: ToolContext) {
           .where(and(eq(vatReturns.id, args.return_id), eq(vatReturns.status, 'prepared')))
           .returning({ id: vatReturns.id });
         if (updated.length === 0) {
-          return { ok: false as const, reason: 'return not found in this business, or already marked filed' };
+          return {
+            ok: false as const,
+            reason: 'return not found in this business, or already marked filed',
+          };
         }
         await appendAudit(tx, ctx.tenantId, {
           actor: 'owner',
           action: 'mark_return_filed_by_user',
           detail: { return_id: args.return_id },
         });
-        return { ok: true as const, return_id: args.return_id, status: 'confirmed_filed_by_user' as const };
+        return {
+          ok: true as const,
+          return_id: args.return_id,
+          status: 'confirmed_filed_by_user' as const,
+        };
       });
     },
 
@@ -812,13 +951,20 @@ export function createToolHandlers(ctx: ToolContext) {
             target: [vendors.tenantId, vendors.name],
             set: {
               ...(args.pan_vat_no !== undefined ? { panVatNo: encPII(args.pan_vat_no) } : {}),
-              ...(args.is_vat_registered !== undefined ? { isVatRegistered: args.is_vat_registered } : {}),
+              ...(args.is_vat_registered !== undefined
+                ? { isVatRegistered: args.is_vat_registered }
+                : {}),
             },
           })
           .returning();
         await logWrite(tx, ctx, 'upsert_vendor', { name: args.name });
         const v = row!;
-        return { vendor_id: v.id, name: v.name, pan_vat_no: decPII(v.panVatNo), is_vat_registered: v.isVatRegistered };
+        return {
+          vendor_id: v.id,
+          name: v.name,
+          pan_vat_no: decPII(v.panVatNo),
+          is_vat_registered: v.isVatRegistered,
+        };
       });
     },
 
@@ -827,9 +973,20 @@ export function createToolHandlers(ctx: ToolContext) {
         const [v] = await tx
           .select()
           .from(vendors)
-          .where(and(eq(vendors.tenantId, ctx.tenantId), sql`lower(${vendors.name}) = lower(${args.name})`));
+          .where(
+            and(
+              eq(vendors.tenantId, ctx.tenantId),
+              sql`lower(${vendors.name}) = lower(${args.name})`,
+            ),
+          );
         return v
-          ? { found: true as const, vendor_id: v.id, name: v.name, pan_vat_no: decPII(v.panVatNo), is_vat_registered: v.isVatRegistered }
+          ? {
+              found: true as const,
+              vendor_id: v.id,
+              name: v.name,
+              pan_vat_no: decPII(v.panVatNo),
+              is_vat_registered: v.isVatRegistered,
+            }
           : { found: false as const };
       });
     },
@@ -837,13 +994,16 @@ export function createToolHandlers(ctx: ToolContext) {
 }
 
 export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
-  compute_vat: 'Pure VAT helper (no write): split an amount into excl + 13% VAT. inclusive=true divides, false adds.',
+  compute_vat:
+    'Pure VAT helper (no write): split an amount into excl + 13% VAT. inclusive=true divides, false adds.',
   record_sale:
     'Record a sale as a DRAFT (requires later confirm_entry after the owner explicitly approves). Amount is VAT-inclusive unless inclusive=false. Validation fail → nothing saved.',
   record_expense:
     'Record a purchase/expense as a DRAFT with input-VAT-credit eligibility and TDS computed on the VAT-exclusive base. Validation fail → nothing saved. Duplicates are flagged.',
-  validate_entry: 'Run the Validation Engine on candidate figures WITHOUT saving. Use before asserting any figure.',
-  confirm_entry: 'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ).',
+  validate_entry:
+    'Run the Validation Engine on candidate figures WITHOUT saving. Use before asserting any figure.',
+  confirm_entry:
+    'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ).',
   generate_return_summary:
     'Compute the VAT return for a BS month from CONFIRMED entries only (does NOT file). Net payable = max(output−input, 0); excess input carries forward.',
   verify_filing_deadline:
@@ -853,10 +1013,10 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
     'unreadable → HOLD and ask, NEVER state or adopt the web value. The returned filing_deadline_ad is ' +
     'always the computed value, never the web one.',
   verify_audit_chain:
-    'Verify this business\'s tamper-evident audit-log hash-chain. PASS = the record is intact (no row ' +
+    "Verify this business's tamper-evident audit-log hash-chain. PASS = the record is intact (no row " +
     'altered/inserted/deleted/reordered); FAIL = tamper detected (records untrusted — escalate). Read-only.',
   get_cost_summary:
-    'This business\'s HisabKitab usage this month vs its plan budget: turns, tokens, estimated cost (NPR), ' +
+    "This business's HisabKitab usage this month vs its plan budget: turns, tokens, estimated cost (NPR), " +
     'and the verdict OK | WARN (near limit) | THROTTLE (limit reached). Read-only; helps explain a usage limit.',
   list_transactions: 'List sales/expenses for a BS month (draft + confirmed unless filtered).',
   mark_return_filed_by_user: 'Owner confirmed they filed the return themselves on the IRD portal.',

@@ -23,8 +23,13 @@
  *   - graceful close (drain worker, then queue)
  */
 import { Queue, Worker, type ConnectionOptions, type Job } from 'bullmq';
-import { runReminderPass, type ReminderJobDeps, type TenantReminderOutcome } from './reminder-job.js';
+import {
+  runReminderPass,
+  type ReminderJobDeps,
+  type TenantReminderOutcome,
+} from './reminder-job.js';
 import { runDunningPass, type DunningJobDeps } from './dunning-job.js';
+import { runTdsReminderPass, type TdsReminderJobDeps } from './tds-reminder-job.js';
 
 export const REMINDER_QUEUE = 'hisab-vat-reminders';
 export const REMINDER_JOB = 'monthly-vat-return';
@@ -49,6 +54,11 @@ export interface SchedulerOptions extends ReminderJobDeps {
    * latch guarantees as reminders.
    */
   dunning?: DunningJobDeps;
+  /**
+   * Optional P13 TDS-deposit reminder, run in the SAME daily tick (after the VAT
+   * reminder). Omitted = no TDS reminder. Same exactly-once reminder_log latch.
+   */
+  tds?: TdsReminderJobDeps;
 }
 
 export interface SchedulerHandle {
@@ -66,7 +76,7 @@ export interface SchedulerHandle {
 }
 
 export async function startScheduler(opts: SchedulerOptions): Promise<SchedulerHandle> {
-  const { connection, cron, timezone, attempts, now, dunning, ...jobDeps } = opts;
+  const { connection, cron, timezone, attempts, now, dunning, tds, ...jobDeps } = opts;
   const runNow = now ?? (() => new Date());
 
   const queue = new Queue(REMINDER_QUEUE, {
@@ -95,7 +105,21 @@ export async function startScheduler(opts: SchedulerOptions): Promise<SchedulerH
         acc[o.status] = (acc[o.status] ?? 0) + 1;
         return acc;
       }, {});
-      jobDeps.log?.(`reminder pass ${job.id}: ${JSON.stringify(tally)} (${outcomes.length} tenants)`);
+      jobDeps.log?.(
+        `reminder pass ${job.id}: ${JSON.stringify(tally)} (${outcomes.length} tenants)`,
+      );
+      // P13 TDS reminder runs in the same tick (after the VAT reminder). Caught + logged
+      // separately so a TDS failure never masks a successful VAT reminder pass.
+      if (tds) {
+        try {
+          const t = await runTdsReminderPass(tds, runNow());
+          jobDeps.log?.(`tds reminder pass ${job.id}: ${t.length} tenants`);
+        } catch (err) {
+          jobDeps.log?.(
+            `tds reminder pass ${job.id} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
       // P10 dunning runs in the same tick (after reminders). A dunning failure must
       // NOT mask a successful reminder pass, so it's caught and logged separately.
       if (dunning) {
@@ -103,14 +127,18 @@ export async function startScheduler(opts: SchedulerOptions): Promise<SchedulerH
           const d = await runDunningPass(dunning, runNow());
           jobDeps.log?.(`dunning pass ${job.id}: ${d.length} subscriptions`);
         } catch (err) {
-          jobDeps.log?.(`dunning pass ${job.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+          jobDeps.log?.(
+            `dunning pass ${job.id} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
       }
       // Surfacing an error here lets BullMQ retry with backoff; the reminder_log
       // latch makes the retry re-send only what genuinely failed.
       const errored = outcomes.filter((o) => o.status === 'error');
       if (errored.length > 0) {
-        throw new Error(`${errored.length}/${outcomes.length} tenants errored: ${errored.map((e) => `${e.tenantId}:${e.detail}`).join(' | ')}`);
+        throw new Error(
+          `${errored.length}/${outcomes.length} tenants errored: ${errored.map((e) => `${e.tenantId}:${e.detail}`).join(' | ')}`,
+        );
       }
       return { tally, count: outcomes.length };
     },

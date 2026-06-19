@@ -108,6 +108,9 @@ export const sales = pgTable('sales', {
     .notNull()
     .default('manual'),
   gatewayRef: text('gateway_ref'),
+  // P13: true when the entry occurred in an EARLIER BS month than it was recorded
+  // (a late-logged sale) — flags a prior return period for re-summary. Default false.
+  isBackdated: boolean('is_backdated').notNull().default(false),
   status: text('status', { enum: ['draft', 'confirmed'] })
     .notNull()
     .default('draft'),
@@ -133,6 +136,8 @@ export const expenses = pgTable('expenses', {
   invoiceType: text('invoice_type', { enum: ['rule17', 'rule17ka', 'other'] }),
   inputCreditEligible: boolean('input_credit_eligible').notNull().default(false),
   extraction: jsonb('extraction'),
+  // P13: occurred in an earlier BS month than recorded (a late-logged bill). Default false.
+  isBackdated: boolean('is_backdated').notNull().default(false),
   status: text('status', { enum: ['draft', 'confirmed'] })
     .notNull()
     .default('draft'),
@@ -159,7 +164,9 @@ export const vatReturns = pgTable(
     summaryFileId: text('summary_file_id'),
     preparedAt: timestamp('prepared_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('vat_returns_tenant_id_bs_year_bs_month_key').on(t.tenantId, t.bsYear, t.bsMonth)],
+  (t) => [
+    uniqueIndex('vat_returns_tenant_id_bs_year_bs_month_key').on(t.tenantId, t.bsYear, t.bsMonth),
+  ],
 );
 
 export const auditLog = pgTable(
@@ -431,14 +438,21 @@ export const reminderLog = pgTable(
       .references(() => tenants.id),
     bsYear: integer('bs_year').notNull(),
     bsMonth: integer('bs_month').notNull(),
-    kind: text('kind', { enum: ['return_prepared', 'vat_due_soon'] }).notNull(),
+    kind: text('kind', { enum: ['return_prepared', 'vat_due_soon', 'tds_due_soon'] }).notNull(),
     verdict: text('verdict', { enum: ['PASS', 'FAIL', 'BLOCKED'] }).notNull(),
     netPayablePaisa: bigint('net_payable_paisa', { mode: 'bigint' }),
     isNil: boolean('is_nil'),
     detail: text('detail'),
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('reminder_log_tenant_id_bs_year_bs_month_kind_key').on(t.tenantId, t.bsYear, t.bsMonth, t.kind)],
+  (t) => [
+    uniqueIndex('reminder_log_tenant_id_bs_year_bs_month_kind_key').on(
+      t.tenantId,
+      t.bsYear,
+      t.bsMonth,
+      t.kind,
+    ),
+  ],
 );
 
 // ----- Phase 7 (hardening): tenant data-deletion proof -----
@@ -481,7 +495,10 @@ export const usageCounters = pgTable(
     warnedAt: timestamp('warned_at', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [primaryKey({ columns: [t.tenantId, t.period] }), index('usage_counters_period_idx').on(t.period)],
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.period] }),
+    index('usage_counters_period_idx').on(t.period),
+  ],
 );
 
 // ----- P13 (v2.0 §12): accounting completeness — invoice numbering + credit/debit notes -----
@@ -533,4 +550,35 @@ export const creditNotes = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('credit_notes_invoice_idx').on(t.tenantId, t.originalInvoiceId)],
+);
+
+/**
+ * Opening balances (PRD v2.0 §12). A mid-year onboarding business seeds its existing open
+ * debtors (receivable) / creditors (payable) and any carried VAT credit (vat_credit) so the
+ * first report is accurate. Owner-asserted → draft → confirmed like every other entry.
+ * Figures validated by @hisab/shared computeOpening before insert. `partyId` is set for
+ * receivable/payable and null for vat_credit (DB CHECK `opening_party_shape` enforces it).
+ */
+export const openingBalances = pgTable(
+  'opening_balances',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    kind: text('kind', { enum: ['receivable', 'payable', 'vat_credit'] }).notNull(),
+    partyId: uuid('party_id').references(() => parties.id),
+    amountPaisa: bigint('amount_paisa', { mode: 'bigint' }).notNull(),
+    asOf: date('as_of').notNull(),
+    fiscalYear: integer('fiscal_year').notNull(),
+    note: text('note'),
+    status: text('status', { enum: ['draft', 'confirmed'] })
+      .notNull()
+      .default('draft'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('opening_balances_tenant_idx').on(t.tenantId, t.kind, t.status),
+    index('opening_balances_party_idx').on(t.tenantId, t.partyId),
+  ],
 );

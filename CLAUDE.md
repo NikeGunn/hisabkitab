@@ -317,17 +317,47 @@ correctness-oriented, fully-offline-testable pieces.
 - accounts-reports SKILL got a "Corrections & sequential invoice numbers" section; landing Platform page
   got an "Invoices & corrections" section. Tests: shared +7 (bsFiscalYear boundary) +9 (notes) = 239;
   ledger +1 file (`accounting.contract.test.ts`: gap-free, FY-reset, concurrency, over-credit, draft-
-  reject, debit, RBAC probes). **Deferred within P13** (larger / depend on report-recompute, build when
-  demand requires): fiscal-year carry-forward & annual summary, opening balances, backdated-entry
-  recompute, TDS deposit reminder.
+  reject, debit, RBAC probes).
+
+**✅ P13 (v2.0 §12) — accounting completeness (REMAINDER) — DONE (2026-06-19; 548 tests, +44):** the
+four deferred pieces, pure-logic-first with adversarial probes, reusing the proven scheduler/ledger rails.
+- **TDS deposit reminder** (due the 25th, same cutoff as VAT): pure `tdsDepositDeadline` in `@hisab/shared`
+  (reuses `vatFilingDeadline`, intent-named). New **`generate_tds_summary`** ledger tool totals confirmed
+  `expenses.tds_paisa` for a BS month + returns the deposit deadline (read-only, `generate_report`). New
+  scheduler pass `runTdsReminderPass` (`tds-reminder-job.ts`) runs in the SAME daily BullMQ tick after the
+  VAT reminder, INDEPENDENTLY self-verifies the figure (re-totals the column), and sends a `tds_due_soon`
+  Utility template: PASS states the figure, FAIL/BLOCKED sends figure-free, NIL is SKIPPED. Exactly-once on
+  `reminder_log (tenant,year,month,'tds_due_soon')` (migration **0015** widens the kind CHECK). Wired in
+  `main.ts` via `createTdsSummaryProvider`.
+- **Opening balances** (accurate reports from day one): migration **0015** `opening_balances` (receivable/
+  payable/vat_credit; `opening_party_shape` CHECK forces a party iff debtor/creditor) + RLS + app grant +
+  orch SELECT/DELETE (GDPR purge). Pure `computeOpening` in `@hisab/shared/accounting` (positive bigint
+  paisa, ISO date, kind) + 8 probes. New **`record_opening_balance`** (draft, party-shape enforced) +
+  **`confirm_opening_balance`** ledger tools. Purged in `data-deletion.ts`.
+- **Backdated entries**: pure `assignBsPeriod` in `@hisab/shared/accounting` (derives the BS period + FY
+  from `occurred_on`; flags backdated when the occurrence month < recording month; REFUSES a future date)
+  + probes. `sales`/`expenses` get an `is_backdated` column (migration **0015**, default false); wired into
+  `record_sale`/`record_expense` (returns `is_backdated` + a `backdated_note` telling the owner which return
+  to re-summarize). Self-verify already keys off `occurred_on`, so recompute is automatic.
+- **Fiscal-year carry-forward & annual summary**: pure `annualVatSummary`/`settleMonth` in
+  `@hisab/shared/accounting/annual` (rolls excess VAT credit forward month-to-month per Sec 17/24; annual
+  net = Σ monthly net; rejects a garbled year) + 11 probes. New **`get_annual_summary`** ledger tool
+  (read-only) aggregates the 12 BS months from confirmed entries, seeds the opening carry from a confirmed
+  `vat_credit` opening balance, returns per-month settlement + annual totals + closing carry-forward.
+- Tests: shared +10 (annual/opening/backdate/tdsDeadline), ledger +1 file `accounting2.contract.test.ts`
+  (TDS summary, opening party-shape + RBAC probes, annual empty + carry-seed, backdate flag + future-reject),
+  orchestrator +1 file `tds-reminder.test.ts` (PASS-with-figure, exactly-once, nil-skip, lying-figure HOLD,
+  tenant selection). accounts-reports SKILL + system prompt RETURNS/CORRECTIONS paragraphs updated; landing
+  Platform page +4 sections and home Features grid +3 tiles (catchy, no em-dashes). All 548 tests green,
+  typecheck + lint clean, landing builds. Verified on a CI-equivalent Postgres 16 + Redis stack locally.
 
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
   **The product can now charge its first paying customer** (after the external pilot prerequisites below).
-- ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, 🟡 P13 accounting
-  completeness (CORE done; carry-forward/opening-balances/backdate/TDS-reminder deferred), ⬜ P14
-  observability, ⬜ P17 growth, ⬜ P18 support/admin, ⬜ P19 accountant channel.
+- ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, ✅ P13 accounting
+  completeness (CORE + REMAINDER done), ⬜ P14 observability, ⬜ P17 growth, ⬜ P18 support/admin,
+  ⬜ P19 accountant channel.
 
 **🌐 EXTERNAL (not code — needed before a real pilot):** Meta business verification + WhatsApp number
 + webhook registration; Khalti **merchant onboarding** (sandbox `test-admin.khalti.com`; prod needs the

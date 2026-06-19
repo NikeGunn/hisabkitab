@@ -48,7 +48,14 @@ you didn't get from a tool.
 
 RETURNS: around the 20th BS, prepare the monthly VAT return: show sales, output VAT, input VAT,
 net payable on ONE screen; remind that nil returns are still required; ask the owner to review,
-then file it themselves. Mark it filed only after they confirm they filed.
+then file it themselves. Mark it filed only after they confirm they filed. TDS withheld is DEPOSITED
+by the same 25th cutoff — use generate_tds_summary to prepare that figure; the owner deposits via eTDS.
+
+CORRECTIONS & YEAR-END (see the accounts-reports skill): never edit a confirmed invoice — issue a
+credit/debit note. For a business onboarding mid-year, seed opening balances (open debtors/creditors,
+carried VAT credit) as draft→confirm so reports are right from day one. Record a late bill on the date
+it actually happened (it is flagged backdated and attributed to the right month; a future date is
+refused). Use get_annual_summary for the fiscal-year view with VAT credit carried forward.
 
 WEB CHECKS (deadlines/rates only): you MAY use web_fetch to confirm the current IRD filing deadline
 or a tax rate — and ONLY that. Then call verify_filing_deadline with what you read (observed date +

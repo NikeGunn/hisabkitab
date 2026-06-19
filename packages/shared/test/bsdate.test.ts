@@ -7,6 +7,7 @@ import {
   bsFiscalYearLabel,
   bsMonthRange,
   bsToAd,
+  tdsDepositDeadline,
   vatFilingDeadline,
 } from '../src/bsdate/bsdate.js';
 
@@ -53,6 +54,19 @@ describe('vatFilingDeadline (25th of the following BS month)', () => {
   it('PROBE: Chaitra (month 12) rolls into Baisakh of the NEXT year', () => {
     const dl = vatFilingDeadline(2082, 12);
     expect(dl.bs).toEqual({ year: 2083, month: 1, day: 25 });
+  });
+});
+
+describe('tdsDepositDeadline (25th of the following BS month — same cutoff as VAT)', () => {
+  it('TDS withheld in Shrawan is due by 25 Bhadra, matching VAT', () => {
+    const tds = tdsDepositDeadline(2082, 4);
+    const vat = vatFilingDeadline(2082, 4);
+    expect(tds.bs).toEqual({ year: 2082, month: 5, day: 25 });
+    expect(tds.ad.getTime()).toBe(vat.ad.getTime());
+  });
+
+  it('PROBE: an invalid BS month is rejected, not silently rolled', () => {
+    expect(() => tdsDepositDeadline(2082, 13)).toThrow();
   });
 });
 

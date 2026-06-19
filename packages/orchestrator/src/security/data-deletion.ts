@@ -35,6 +35,7 @@ const {
   tenants,
   deletionLog,
   usageCounters,
+  openingBalances,
 } = schema;
 
 export interface DeletionReport {
@@ -65,20 +66,113 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
     };
     // Order matters: children before parents. payments.sale_id → sales, so
     // payments BEFORE sales; everything references tenants, so tenants LAST.
-    await n('payments', (await tx.delete(payments).where(eq(payments.tenantId, tenantId)).returning({ id: payments.id })).length);
-    await n('reminder_log', (await tx.delete(reminderLog).where(eq(reminderLog.tenantId, tenantId)).returning({ id: reminderLog.id })).length);
-    await n('validation_events', (await tx.delete(validationEvents).where(eq(validationEvents.tenantId, tenantId)).returning({ id: validationEvents.id })).length);
-    await n('vat_returns', (await tx.delete(vatReturns).where(eq(vatReturns.tenantId, tenantId)).returning({ id: vatReturns.id })).length);
-    await n('expenses', (await tx.delete(expenses).where(eq(expenses.tenantId, tenantId)).returning({ id: expenses.id })).length);
-    await n('sales', (await tx.delete(sales).where(eq(sales.tenantId, tenantId)).returning({ id: sales.id })).length);
-    await n('vendors', (await tx.delete(vendors).where(eq(vendors.tenantId, tenantId)).returning({ id: vendors.id })).length);
-    await n('audit_log', (await tx.delete(auditLog).where(eq(auditLog.tenantId, tenantId)).returning({ id: auditLog.id })).length);
-    await n('pairing_codes', (await tx.delete(pairingCodes).where(eq(pairingCodes.tenantId, tenantId)).returning({ code: pairingCodes.code })).length);
-    await n('tenant_sessions', (await tx.delete(tenantSessions).where(eq(tenantSessions.tenantId, tenantId)).returning({ tenantId: tenantSessions.tenantId })).length);
-    await n('usage_counters', (await tx.delete(usageCounters).where(eq(usageCounters.tenantId, tenantId)).returning({ tenantId: usageCounters.tenantId })).length);
+    await n(
+      'payments',
+      (
+        await tx
+          .delete(payments)
+          .where(eq(payments.tenantId, tenantId))
+          .returning({ id: payments.id })
+      ).length,
+    );
+    await n(
+      'reminder_log',
+      (
+        await tx
+          .delete(reminderLog)
+          .where(eq(reminderLog.tenantId, tenantId))
+          .returning({ id: reminderLog.id })
+      ).length,
+    );
+    await n(
+      'validation_events',
+      (
+        await tx
+          .delete(validationEvents)
+          .where(eq(validationEvents.tenantId, tenantId))
+          .returning({ id: validationEvents.id })
+      ).length,
+    );
+    await n(
+      'vat_returns',
+      (
+        await tx
+          .delete(vatReturns)
+          .where(eq(vatReturns.tenantId, tenantId))
+          .returning({ id: vatReturns.id })
+      ).length,
+    );
+    await n(
+      'expenses',
+      (
+        await tx
+          .delete(expenses)
+          .where(eq(expenses.tenantId, tenantId))
+          .returning({ id: expenses.id })
+      ).length,
+    );
+    await n(
+      'sales',
+      (await tx.delete(sales).where(eq(sales.tenantId, tenantId)).returning({ id: sales.id }))
+        .length,
+    );
+    await n(
+      'vendors',
+      (await tx.delete(vendors).where(eq(vendors.tenantId, tenantId)).returning({ id: vendors.id }))
+        .length,
+    );
+    await n(
+      'audit_log',
+      (
+        await tx
+          .delete(auditLog)
+          .where(eq(auditLog.tenantId, tenantId))
+          .returning({ id: auditLog.id })
+      ).length,
+    );
+    await n(
+      'pairing_codes',
+      (
+        await tx
+          .delete(pairingCodes)
+          .where(eq(pairingCodes.tenantId, tenantId))
+          .returning({ code: pairingCodes.code })
+      ).length,
+    );
+    await n(
+      'tenant_sessions',
+      (
+        await tx
+          .delete(tenantSessions)
+          .where(eq(tenantSessions.tenantId, tenantId))
+          .returning({ tenantId: tenantSessions.tenantId })
+      ).length,
+    );
+    await n(
+      'usage_counters',
+      (
+        await tx
+          .delete(usageCounters)
+          .where(eq(usageCounters.tenantId, tenantId))
+          .returning({ tenantId: usageCounters.tenantId })
+      ).length,
+    );
+    // P13: opening balances (FK → parties, tenants) — purge before tenants.
+    await n(
+      'opening_balances',
+      (
+        await tx
+          .delete(openingBalances)
+          .where(eq(openingBalances.tenantId, tenantId))
+          .returning({ id: openingBalances.id })
+      ).length,
+    );
 
     // P8: drop this tenant's memberships, capturing the affected users…
-    const removed = await tx.delete(memberships).where(eq(memberships.tenantId, tenantId)).returning({ userId: memberships.userId });
+    const removed = await tx
+      .delete(memberships)
+      .where(eq(memberships.tenantId, tenantId))
+      .returning({ userId: memberships.userId });
     await n('memberships', removed.length);
     // …then delete ONLY users who now have no membership anywhere (a shared
     // accountant who still serves other businesses keeps their identity).
@@ -97,7 +191,11 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
     }
     await n('users', orphanedUsers);
 
-    await n('tenants', (await tx.delete(tenants).where(eq(tenants.id, tenantId)).returning({ id: tenants.id })).length);
+    await n(
+      'tenants',
+      (await tx.delete(tenants).where(eq(tenants.id, tenantId)).returning({ id: tenants.id }))
+        .length,
+    );
   });
 
   return rowsByTable;
@@ -125,7 +223,9 @@ async function purgeManagedAgents(
         sessionsDeleted.push(sessionId);
         warnings.push(`session ${sessionId}: deleted via archive (hard delete unavailable)`);
       } catch (err2) {
-        warnings.push(`session ${sessionId}: could not delete (${err2 instanceof Error ? err2.message : String(err2)}; ${err instanceof Error ? err.message : String(err)})`);
+        warnings.push(
+          `session ${sessionId}: could not delete (${err2 instanceof Error ? err2.message : String(err2)}; ${err instanceof Error ? err.message : String(err)})`,
+        );
       }
     }
   }
@@ -181,6 +281,8 @@ export async function deleteTenantData(
     filesDeleted: [], // uploaded Files are session-scoped and removed with the session
     warnings: ma.warnings,
   };
-  deps.log?.(`tenant ${tenantId} deleted: ${totalRows} rows, ${ma.sessionsDeleted.length} sessions`);
+  deps.log?.(
+    `tenant ${tenantId} deleted: ${totalRows} rows, ${ma.sessionsDeleted.length} sessions`,
+  );
   return report;
 }

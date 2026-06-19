@@ -53,7 +53,8 @@ function assertBsFields(bs: BsDate): void {
   if (!Number.isInteger(bs.year) || !Number.isInteger(bs.month) || !Number.isInteger(bs.day)) {
     throw new BsDateError(`BS date fields must be integers: ${JSON.stringify(bs)}`);
   }
-  if (bs.month < 1 || bs.month > 12) throw new BsDateError(`BS month must be 1–12, got ${bs.month}`);
+  if (bs.month < 1 || bs.month > 12)
+    throw new BsDateError(`BS month must be 1–12, got ${bs.month}`);
   if (bs.day < 1 || bs.day > 32) throw new BsDateError(`BS day must be 1–32, got ${bs.day}`);
 }
 
@@ -63,7 +64,9 @@ export function adToBs(ad: Date): BsDate {
     const nd = new NepaliDate(new Date(ad.getFullYear(), ad.getMonth(), ad.getDate()));
     return { year: nd.getYear(), month: nd.getMonth() + 1, day: nd.getDate() };
   } catch (err) {
-    throw new BsDateError(`AD date ${ad.toISOString().slice(0, 10)} is outside the supported BS range: ${String(err)}`);
+    throw new BsDateError(
+      `AD date ${ad.toISOString().slice(0, 10)} is outside the supported BS range: ${String(err)}`,
+    );
   }
 }
 
@@ -74,7 +77,9 @@ export function bsToAd(bs: BsDate): Date {
   try {
     ad = new NepaliDate(bs.year, bs.month - 1, bs.day).toJsDate();
   } catch (err) {
-    throw new BsDateError(`BS ${bs.year}-${bs.month}-${bs.day} is invalid or out of range: ${String(err)}`);
+    throw new BsDateError(
+      `BS ${bs.year}-${bs.month}-${bs.day} is invalid or out of range: ${String(err)}`,
+    );
   }
   const back = adToBs(ad);
   if (back.year !== bs.year || back.month !== bs.month || back.day !== bs.day) {
@@ -116,7 +121,8 @@ export function bsFiscalYear(bs: Pick<BsDate, 'year' | 'month'>): number {
   if (!Number.isInteger(bs.year) || !Number.isInteger(bs.month)) {
     throw new BsDateError(`BS year/month must be integers: ${JSON.stringify(bs)}`);
   }
-  if (bs.month < 1 || bs.month > 12) throw new BsDateError(`BS month must be 1–12, got ${bs.month}`);
+  if (bs.month < 1 || bs.month > 12)
+    throw new BsDateError(`BS month must be 1–12, got ${bs.month}`);
   return bs.month >= 4 ? bs.year : bs.year - 1;
 }
 
@@ -138,6 +144,20 @@ export interface FilingDeadline {
 export function vatFilingDeadline(bsYear: number, bsMonth: number): FilingDeadline {
   assertBsFields({ year: bsYear, month: bsMonth, day: 1 });
   const bs: BsDate =
-    bsMonth === 12 ? { year: bsYear + 1, month: 1, day: 25 } : { year: bsYear, month: bsMonth + 1, day: 25 };
+    bsMonth === 12
+      ? { year: bsYear + 1, month: 1, day: 25 }
+      : { year: bsYear, month: bsMonth + 1, day: 25 };
   return { bs, ad: bsToAd(bs) };
+}
+
+/**
+ * TDS withheld in BS month M must be DEPOSITED by the 25th of the FOLLOWING BS month
+ * (PRD v1.1 §5.2 / §5.3 — "Deposit by 25th of following month; eTDS mandatory"). This
+ * is the SAME statutory cutoff as the VAT return, so we reuse the VAT computation rather
+ * than duplicate the rule (one place to change if IRD ever shifts it). Kept as a named,
+ * intent-revealing function so the TDS reminder reads as TDS, not VAT. The agent still
+ * web-confirms the live IRD calendar before reminding (deadlines are config, never assumed).
+ */
+export function tdsDepositDeadline(bsYear: number, bsMonth: number): FilingDeadline {
+  return vatFilingDeadline(bsYear, bsMonth);
 }

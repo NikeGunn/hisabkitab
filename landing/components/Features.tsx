@@ -60,6 +60,14 @@ export function Features() {
 
           <Tile delay={0.2}><Icon>📊</Icon><h3 className="mt-3 font-serif font-semibold">AR / AP and aging</h3><p className="mt-1 text-sm leading-relaxed text-muted">Who owes you and what you owe, bucketed by age.</p></Tile>
           <Tile delay={0.25}><Icon>📑</Icon><h3 className="mt-3 font-serif font-semibold">PDF reports</h3><p className="mt-1 text-sm leading-relaxed text-muted">Rendered from validated data, with reconcile or hold.</p></Tile>
+
+          <Tile delay={0.3} className="flex items-start gap-5 sm:col-span-2">
+            <Icon big>🧾</Icon>
+            <div><h3 className="font-serif font-semibold">TDS deposit, never missed</h3><p className="mt-1 text-sm leading-relaxed text-muted">TDS is due on the 25th too. It totals what you withheld, checks the figure, and reminds you in time to deposit. Two deadlines, one calm nudge.</p></div>
+          </Tile>
+
+          <Tile delay={0.35}><Icon>🌱</Icon><h3 className="mt-3 font-serif font-semibold">Opening balances</h3><p className="mt-1 text-sm leading-relaxed text-muted">Switching mid year? Bring your open debtors, creditors, and VAT credit so day one is accurate.</p></Tile>
+          <Tile delay={0.4}><Icon>📅</Icon><h3 className="mt-3 font-serif font-semibold">Year end carry forward</h3><p className="mt-1 text-sm leading-relaxed text-muted">Every month settled and excess VAT credit carried forward, the way the VAT Act intends.</p></Tile>
         </div>
       </div>
     </section>

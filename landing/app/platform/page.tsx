@@ -59,6 +59,41 @@ export default function PlatformPage() {
         </p>
       </Section>
 
+      <Section id="opening-balances" title="Start with your real numbers">
+        <p>
+          Switching mid-year? You are not starting from zero. Enter your existing open debtors, open
+          creditors, and any carried VAT credit as <strong>opening balances</strong>, and your very
+          first statement is accurate from day one. Every opening balance is yours to approve before it
+          is saved, just like any other entry.
+        </p>
+      </Section>
+
+      <Section id="tds-reminder" title="TDS deposit, never missed">
+        <p>
+          TDS you withheld is due by the 25th, the same day as VAT. HisabKitab totals the TDS withheld
+          for the month, double-checks the figure against your confirmed entries, and reminds you in
+          time to deposit through eTDS. <strong>It prepares the number; you deposit it.</strong> Two
+          deadlines, one calm reminder, zero late fees.
+        </p>
+      </Section>
+
+      <Section id="backdated-entries" title="Log it late, file it right">
+        <p>
+          A bill surfaced a week later? Record it on the date it actually happened. HisabKitab files it
+          into the correct Nepali month automatically, flags it as backdated, and tells you exactly
+          which return period to refresh. <strong>A future date is refused</strong>, because a financial
+          entry should never be dated ahead of today.
+        </p>
+      </Section>
+
+      <Section id="year-end" title="The whole year, carried forward correctly">
+        <p>
+          See your fiscal year at a glance: every month settled, the annual totals, and any excess VAT
+          credit <strong>carried forward month to month</strong> the way the VAT Act intends. No
+          spreadsheet, no manual carry-over, no credit quietly lost between months.
+        </p>
+      </Section>
+
       <Section id="reminders" title="Reminders">
         <p>
           Before the 25th of each Nepali month, the IRD filing deadline, the agent prepares your
