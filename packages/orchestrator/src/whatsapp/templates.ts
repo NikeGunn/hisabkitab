@@ -74,18 +74,10 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
-  {
-    name: 'pairing_code',
-    category: 'UTILITY',
-    language: 'en',
-    components: [
-      {
-        type: 'BODY',
-        text: 'Welcome to HisabKitab! To connect your business, reply: START {{1}}. The code expires in 15 minutes.',
-        example: { body_text: [['4821']] },
-      },
-    ],
-  },
+  // NOTE: no `pairing_code` template. The onboarding code is given out-of-band and
+  // the runtime greets unknown senders with the free-form ONBOARDING_PROMPT inside the
+  // 24h service window (no template needed). Meta also rejects code-delivery as UTILITY
+  // (INCORRECT_CATEGORY → it wants AUTHENTICATION), so a UTILITY pairing_code can't pass.
   // ---- P10 billing dunning (subscription renewal nudges) ----
   {
     name: 'subscription_due_soon',
