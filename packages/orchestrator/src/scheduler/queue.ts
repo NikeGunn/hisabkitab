@@ -30,6 +30,7 @@ import {
 } from './reminder-job.js';
 import { runDunningPass, type DunningJobDeps } from './dunning-job.js';
 import { runTdsReminderPass, type TdsReminderJobDeps } from './tds-reminder-job.js';
+import { runCalendarNoticePass, type CalendarNoticeJobDeps } from './calendar-notice-job.js';
 
 export const REMINDER_QUEUE = 'hisab-vat-reminders';
 export const REMINDER_JOB = 'monthly-vat-return';
@@ -59,6 +60,11 @@ export interface SchedulerOptions extends ReminderJobDeps {
    * reminder). Omitted = no TDS reminder. Same exactly-once reminder_log latch.
    */
   tds?: TdsReminderJobDeps;
+  /**
+   * Optional compliance-calendar digest, run in the SAME daily tick (after TDS).
+   * Omitted = no digest. Once per BS month via the reminder_log latch.
+   */
+  calendar?: CalendarNoticeJobDeps;
 }
 
 export interface SchedulerHandle {
@@ -76,7 +82,7 @@ export interface SchedulerHandle {
 }
 
 export async function startScheduler(opts: SchedulerOptions): Promise<SchedulerHandle> {
-  const { connection, cron, timezone, attempts, now, dunning, tds, ...jobDeps } = opts;
+  const { connection, cron, timezone, attempts, now, dunning, tds, calendar, ...jobDeps } = opts;
   const runNow = now ?? (() => new Date());
 
   const queue = new Queue(REMINDER_QUEUE, {
@@ -117,6 +123,18 @@ export async function startScheduler(opts: SchedulerOptions): Promise<SchedulerH
         } catch (err) {
           jobDeps.log?.(
             `tds reminder pass ${job.id} failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+      // Compliance-calendar digest runs in the same tick (after TDS). Caught + logged
+      // separately so a digest failure never masks a successful reminder pass.
+      if (calendar) {
+        try {
+          const c = await runCalendarNoticePass(calendar, runNow());
+          jobDeps.log?.(`calendar digest pass ${job.id}: ${c.length} tenants`);
+        } catch (err) {
+          jobDeps.log?.(
+            `calendar digest pass ${job.id} failed: ${err instanceof Error ? err.message : String(err)}`,
           );
         }
       }

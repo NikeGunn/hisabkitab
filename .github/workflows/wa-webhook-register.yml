@@ -1,0 +1,108 @@
+# Register (or refresh) the WhatsApp Cloud API webhook with Meta — entirely from
+# GitHub secrets, so there is NOTHING to click in the Meta dashboard.
+#
+# What it does, via the Graph API (no UI):
+#   1. POST /{app-id}/subscriptions  → sets callback_url + verify_token for the
+#      whatsapp_business_account object and subscribes the `messages` field.
+#      (Meta calls back the GET handshake immediately, so the orchestrator at
+#       <callback_url> MUST be reachable & serving /webhook when this runs.)
+#   2. POST /{waba-id}/subscribed_apps → links your WABA to this app so messages
+#      to your number actually fan out to the webhook.
+#   3. Reads back both edges and prints them for proof.
+#
+# Trigger (zero manual Meta steps):
+#   gh workflow run wa-webhook-register.yml -f callback_url=https://<public>/webhook
+# Defaults to the prod domain; override with -f callback_url=<your tunnel>/webhook
+# when testing locally.
+#
+# All credentials come from repo secrets (set by `gh secret set`):
+#   WA_APP_ID, WA_APP_SECRET, WA_ACCESS_TOKEN, WA_BUSINESS_ACCOUNT_ID,
+#   WA_WEBHOOK_VERIFY_TOKEN.
+
+name: wa-webhook-register
+
+on:
+  workflow_dispatch:
+    inputs:
+      callback_url:
+        description: 'Public HTTPS webhook URL (must end in /webhook and be live now)'
+        required: true
+        default: 'https://api.hisabkitab.pro/webhook'
+      graph_version:
+        description: 'Graph API version'
+        required: false
+        default: 'v23.0'
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    env:
+      GRAPH: https://graph.facebook.com/${{ github.event.inputs.graph_version }}
+      APP_ID: ${{ secrets.WA_APP_ID }}
+      APP_SECRET: ${{ secrets.WA_APP_SECRET }}
+      WABA_ID: ${{ secrets.WA_BUSINESS_ACCOUNT_ID }}
+      SYS_TOKEN: ${{ secrets.WA_ACCESS_TOKEN }}
+      VERIFY_TOKEN: ${{ secrets.WA_WEBHOOK_VERIFY_TOKEN }}
+      CALLBACK_URL: ${{ github.event.inputs.callback_url }}
+    steps:
+      - name: Preflight — required secrets present
+        run: |
+          missing=()
+          for v in APP_ID APP_SECRET WABA_ID SYS_TOKEN VERIFY_TOKEN; do
+            [ -n "${!v}" ] || missing+=("WA_$v")
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]} — set them with 'gh secret set'."
+            exit 1
+          fi
+          case "$CALLBACK_URL" in
+            https://*/webhook) : ;;
+            *) echo "::error::callback_url must be https and end in /webhook"; exit 1 ;;
+          esac
+          echo "All secrets present; callback = $CALLBACK_URL"
+
+      - name: Preflight — callback handshake answers correctly
+        run: |
+          # Meta will hit this exact GET; fail early (clearer than Meta's generic error)
+          # if our own server doesn't echo the challenge for the real verify token.
+          probe="$CALLBACK_URL?hub.mode=subscribe&hub.verify_token=$VERIFY_TOKEN&hub.challenge=ci_probe_42"
+          body=$(curl -s --max-time 15 "$probe" || true)
+          if [ "$body" != "ci_probe_42" ]; then
+            echo "::error::Handshake probe failed (got: '${body:0:80}'). Is the orchestrator live at $CALLBACK_URL with the same WA_WEBHOOK_VERIFY_TOKEN?"
+            exit 1
+          fi
+          echo "Handshake OK — server echoes the challenge for the real verify token."
+
+      - name: Subscribe app → set callback_url + verify_token (whatsapp_business_account)
+        run: |
+          # App access token is app-id|app-secret (no extra secret needed).
+          APP_TOKEN="${APP_ID}|${APP_SECRET}"
+          resp=$(curl -s -X POST "$GRAPH/$APP_ID/subscriptions" \
+            -d "object=whatsapp_business_account" \
+            -d "callback_url=$CALLBACK_URL" \
+            -d "verify_token=$VERIFY_TOKEN" \
+            -d "fields=messages,message_template_status_update" \
+            -d "access_token=$APP_TOKEN")
+          echo "subscriptions → $resp"
+          echo "$resp" | grep -q '"success":true' || { echo "::error::App subscription failed"; exit 1; }
+
+      - name: Link WABA → subscribed_apps (fan messages out to the webhook)
+        run: |
+          resp=$(curl -s -X POST "$GRAPH/$WABA_ID/subscribed_apps" \
+            -d "access_token=$SYS_TOKEN")
+          echo "subscribed_apps → $resp"
+          echo "$resp" | grep -q '"success":true' || { echo "::error::WABA subscribed_apps failed"; exit 1; }
+
+      - name: Read back & prove
+        run: |
+          APP_TOKEN="${APP_ID}|${APP_SECRET}"
+          echo "=== App subscriptions ==="
+          curl -s "$GRAPH/$APP_ID/subscriptions?access_token=$APP_TOKEN"
+          echo ""
+          echo "=== WABA subscribed apps ==="
+          curl -s "$GRAPH/$WABA_ID/subscribed_apps?access_token=$SYS_TOKEN"
+          echo ""
+          echo "::notice::Webhook registered. Messages to your number now POST to $CALLBACK_URL"

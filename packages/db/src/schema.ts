@@ -438,7 +438,9 @@ export const reminderLog = pgTable(
       .references(() => tenants.id),
     bsYear: integer('bs_year').notNull(),
     bsMonth: integer('bs_month').notNull(),
-    kind: text('kind', { enum: ['return_prepared', 'vat_due_soon', 'tds_due_soon'] }).notNull(),
+    kind: text('kind', {
+      enum: ['return_prepared', 'vat_due_soon', 'tds_due_soon', 'deadline_digest'],
+    }).notNull(),
     verdict: text('verdict', { enum: ['PASS', 'FAIL', 'BLOCKED'] }).notNull(),
     netPayablePaisa: bigint('net_payable_paisa', { mode: 'bigint' }),
     isNil: boolean('is_nil'),

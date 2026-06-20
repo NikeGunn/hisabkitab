@@ -10,6 +10,7 @@ export * from './accounting/notes.js';
 export * from './accounting/annual.js';
 export * from './accounting/opening.js';
 export * from './accounting/backdate.js';
+export * from './calendar/calendar.js';
 export * from './idempotency/idempotency.js';
 export * from './billing/billing.js';
 export * from './billing/features.js';
