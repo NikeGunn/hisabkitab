@@ -108,10 +108,16 @@ if (config.SCHEDULER_ENABLED) {
       sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
       log: (msg) => console.log(`[tds] ${msg}`),
     },
+    // Compliance-calendar digest runs in the same daily tick (once per BS month).
+    calendar: {
+      db: handle.db,
+      sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+      log: (msg) => console.log(`[calendar] ${msg}`),
+    },
     ...(config.REMINDER_CRON ? { cron: config.REMINDER_CRON } : {}),
     log: (msg) => console.log(`[scheduler] ${msg}`),
   });
-  console.log('hisab reminder + dunning + tds scheduler started (BullMQ)');
+  console.log('hisab reminder + dunning + tds + calendar scheduler started (BullMQ)');
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

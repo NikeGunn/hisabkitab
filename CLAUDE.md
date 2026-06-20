@@ -351,6 +351,38 @@ four deferred pieces, pure-logic-first with adversarial probes, reusing the prov
   Platform page +4 sections and home Features grid +3 tiles (catchy, no em-dashes). All 548 tests green,
   typecheck + lint clean, landing builds. Verified on a CI-equivalent Postgres 16 + Redis stack locally.
 
+**✅ Compliance-calendar mechanism (zero-hallucination, wired to Managed Agents) — DONE (2026-06-20;
+572 tests, +24):** the proactive "agent gets notified under the hood" digest. Once per BS month each
+active tenant with a bound number gets ONE figure-free "what's due this month" digest from the
+deterministic calendar engine (statutory VAT/TDS deadlines + the tenant's own open invoice/bill due
+dates) — additive to the figure-specific VAT/TDS reminders.
+- Pure `computeComplianceCalendar` in `@hisab/shared/calendar` (statutory dates + DueItems → sorted
+  `CalendarEvent[]` with `daysUntil`; never fabricates a holiday) + probes; migration **0016**
+  `0016_calendar_notice.sql` widens the `reminder_log` kind CHECK with `'deadline_digest'`.
+- Scheduler pass `runCalendarNoticePass`/`noticeTenant` (`calendar-notice-job.ts`) runs in the SAME
+  daily BullMQ tick; exactly-once on the `reminder_log (tenant,year,month,'deadline_digest')` latch
+  (claim-first, send-then-keep, delete-on-send-fail). Figure-free ⇒ no self-verify. New `deadline_digest`
+  Utility template. Wired in `main.ts` via the `calendar` scheduler dep.
+- Zero-hallucination: every date comes from the engine; the scheduler never formats a date it computed
+  itself. Tests: shared calendar units + orchestrator `calendar-notice.test.ts` (figure-free digest,
+  exactly-once probe, tenant selection / unbound-number skip). Fixed the shared-test-DB `beforeEach`
+  cleanup to purge FK-child tables (`subscriptions`/`billing_payments`/`deletion_log`) other files leave.
+
+**✅ Meta WhatsApp Cloud API — LIVE webhook registration (no-dashboard) — DONE (2026-06-20):** real
+test number `+1 555-673-7959` (Phone ID `1207406082449839`, WABA `935012972908181`, App `HISABKITAB`
+ID `1505059784444619`) wired end-to-end against the REAL Graph API.
+- All 6 WA creds in GitHub secrets + local `.env` (gitignored): `WA_APP_ID`, `WA_APP_SECRET`,
+  `WA_ACCESS_TOKEN` (never-expire system-user token), `WA_PHONE_NUMBER_ID`, `WA_BUSINESS_ACCOUNT_ID`,
+  `WA_WEBHOOK_VERIFY_TOKEN`. New **`.github/workflows/wa-webhook-register.yml`** registers the webhook
+  ENTIRELY from secrets (no Meta UI): `POST /{app-id}/subscriptions` (callback_url+verify_token, app
+  access token = `app-id|app-secret`) + `POST /{waba-id}/subscribed_apps`, with a pre-flight handshake
+  probe. Run: `gh workflow run wa-webhook-register.yml -f callback_url=https://<public>/webhook`.
+- Verified LIVE this session: real verify-token handshake (200), valid-HMAC POST (200), forged sig
+  (401), wrong token (403); registered the real webhook via cloudflared tunnel → Meta `{"success":true}`,
+  WABA linked, subscription `active`. Inbound→outbound proven (real Graph send hit only `131030 recipient
+  not in allowed list`, the expected test-number gate). REMAINING manual (Meta has no API, anti-spam):
+  add your phone to the test number's allowed recipients + (later) submit the HisabKitab Utility templates.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
