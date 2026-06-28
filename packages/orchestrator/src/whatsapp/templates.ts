@@ -74,10 +74,31 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
-  // NOTE: no `pairing_code` template. The onboarding code is given out-of-band and
-  // the runtime greets unknown senders with the free-form ONBOARDING_PROMPT inside the
-  // 24h service window (no template needed). Meta also rejects code-delivery as UTILITY
-  // (INCORRECT_CATEGORY → it wants AUTHENTICATION), so a UTILITY pairing_code can't pass.
+  // `pairing_code` — AUTHENTICATION category (Meta REJECTED the old UTILITY one with
+  // INCORRECT_CATEGORY; an auth/one-time-code template MUST be AUTHENTICATION). The
+  // body copy is FIXED by Meta ("<CODE> is your verification code."); we only opt into
+  // the security disclaimer + expiry line and supply the COPY_CODE OTP button. Used to
+  // deliver the onboarding code proactively (outside the 24h service window). Re-create
+  // requires deleting the rejected version first — `templates:resubmit` does that.
+  {
+    name: 'pairing_code',
+    category: 'AUTHENTICATION',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        add_security_recommendation: true,
+      },
+      {
+        type: 'FOOTER',
+        code_expiration_minutes: 15,
+      },
+      {
+        type: 'BUTTONS',
+        buttons: [{ type: 'OTP', otp_type: 'COPY_CODE', text: 'Copy code' }],
+      },
+    ],
+  },
   // ---- P10 billing dunning (subscription renewal nudges) ----
   {
     name: 'subscription_due_soon',
@@ -117,18 +138,45 @@ export const TEMPLATES: TemplateDefinition[] = [
   },
 ];
 
+/**
+ * Delete a template by NAME (removes ALL language/version rows for that name).
+ * Required before re-creating a name that has a REJECTED version under a different
+ * category (Meta keys templates by name+language and will not silently re-categorise).
+ */
+export async function deleteTemplateByName(opts: {
+  businessAccountId: string;
+  accessToken: string;
+  name: string;
+  graphVersion?: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ ok: boolean; detail: string }> {
+  const base = (opts.baseUrl ?? 'https://graph.facebook.com').replace(/\/$/, '');
+  const version = opts.graphVersion ?? 'v23.0';
+  const doFetch = opts.fetchImpl ?? fetch;
+  const url = `${base}/${version}/${opts.businessAccountId}/message_templates?name=${encodeURIComponent(opts.name)}`;
+  const res = await doFetch(url, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${opts.accessToken}` },
+  });
+  return { ok: res.ok, detail: (await res.text()).slice(0, 300) };
+}
+
 export async function submitTemplates(opts: {
   businessAccountId: string;
   accessToken: string;
   graphVersion?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
+  /** Submit only this subset of template names (default: all). */
+  only?: string[];
 }): Promise<{ name: string; ok: boolean; detail: string }[]> {
   const base = (opts.baseUrl ?? 'https://graph.facebook.com').replace(/\/$/, '');
   const version = opts.graphVersion ?? 'v23.0';
   const doFetch = opts.fetchImpl ?? fetch;
   const results: { name: string; ok: boolean; detail: string }[] = [];
-  for (const tpl of TEMPLATES) {
+  const wanted = opts.only ? TEMPLATES.filter((t) => opts.only!.includes(t.name)) : TEMPLATES;
+  for (const tpl of wanted) {
     const res = await doFetch(`${base}/${version}/${opts.businessAccountId}/message_templates`, {
       method: 'POST',
       headers: {
@@ -155,6 +203,23 @@ if (isDirectRun) {
   if (!businessAccountId || !accessToken) {
     console.error('WA_BUSINESS_ACCOUNT_ID and WA_ACCESS_TOKEN are required');
     process.exit(1);
+  }
+  // Usage:
+  //   templates.ts                       → submit all (already-approved ones error harmlessly)
+  //   templates.ts resubmit <name>       → DELETE the existing (e.g. rejected) version, then
+  //                                         submit it fresh (used to flip pairing_code to AUTH)
+  const [cmd, name] = process.argv.slice(2);
+  if (cmd === 'resubmit') {
+    if (!name) {
+      console.error('usage: templates.ts resubmit <template_name>');
+      process.exit(1);
+    }
+    const del = await deleteTemplateByName({ businessAccountId, accessToken, name });
+    console.log(`${del.ok ? 'deleted' : 'delete-skip'}  ${name}  ${del.detail}`);
+    const results = await submitTemplates({ businessAccountId, accessToken, only: [name] });
+    for (const r of results)
+      console.log(`${r.ok ? 'submitted' : 'FAILED'}  ${r.name}  ${r.detail}`);
+    process.exit(results.every((r) => r.ok) ? 0 : 1);
   }
   const results = await submitTemplates({ businessAccountId, accessToken });
   for (const r of results) console.log(`${r.ok ? 'submitted' : 'FAILED'}  ${r.name}  ${r.detail}`);
