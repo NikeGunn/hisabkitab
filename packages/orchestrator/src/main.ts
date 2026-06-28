@@ -18,6 +18,7 @@ import { TenantRateLimiter } from './resilience/rate-limit.js';
 import { dispatchReport } from './reports/dispatch.js';
 import { withTenant, appendAudit } from '@hisab/db';
 import { HISAB_MODEL } from './agent/definition.js';
+import { rootLogger, metrics } from './obs.js';
 
 const config = await loadConfig();
 const handle = createDb(config.DATABASE_URL);
@@ -67,18 +68,21 @@ const app = buildServer({
                 });
               }),
           },
-          log: (msg) => console.log(`[reports] ${msg}`),
+          log: (msg) => rootLogger.info(msg, { component: 'reports' }),
         },
         tenantId,
         toE164,
         req,
       ),
-    log: (msg) => console.log(msg),
+    log: (msg) => rootLogger.debug(msg),
   },
 });
 
 await app.listen({ port: config.PORT, host: '0.0.0.0' });
-console.log(`hisab orchestrator webhook listening on :${config.PORT}/webhook`);
+rootLogger.info('orchestrator listening', {
+  port: config.PORT,
+  endpoints: ['/webhook', '/healthz', '/metrics'],
+});
 
 // Phase 6: monthly VAT-return reminder scheduler (BullMQ). Runs the worker in
 // this process unless SCHEDULER_ENABLED=0 (webhook-only nodes).
@@ -96,7 +100,7 @@ if (config.SCHEDULER_ENABLED) {
     dunning: {
       db: handle.db,
       sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
-      log: (msg) => console.log(`[dunning] ${msg}`),
+      log: (msg) => schedLog('dunning', msg),
     },
     // P13: TDS-deposit reminder runs in the same daily tick (after the VAT reminder).
     tds: {
@@ -106,18 +110,29 @@ if (config.SCHEDULER_ENABLED) {
         signingSecret: config.TENANT_SIGNING_SECRET,
       }),
       sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
-      log: (msg) => console.log(`[tds] ${msg}`),
+      log: (msg) => schedLog('tds', msg),
     },
     // Compliance-calendar digest runs in the same daily tick (once per BS month).
     calendar: {
       db: handle.db,
       sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
-      log: (msg) => console.log(`[calendar] ${msg}`),
+      log: (msg) => schedLog('calendar', msg),
     },
     ...(config.REMINDER_CRON ? { cron: config.REMINDER_CRON } : {}),
-    log: (msg) => console.log(`[scheduler] ${msg}`),
+    log: (msg) => schedLog('reminder', msg),
   });
-  console.log('hisab reminder + dunning + tds + calendar scheduler started (BullMQ)');
+  rootLogger.info('scheduler started', { passes: ['reminder', 'dunning', 'tds', 'calendar'] });
+}
+
+/**
+ * One scheduler-pass log sink: structured line + a §8 pass metric. A line that
+ * mentions "fail" is recorded as a failed pass so the metric reflects reliability.
+ */
+function schedLog(kind: string, msg: string): void {
+  const result: 'ok' | 'error' = /\bfail/i.test(msg) ? 'error' : 'ok';
+  metrics.schedulerPass({ kind, result });
+  if (result === 'error') metrics.error({ component: `scheduler-${kind}` });
+  rootLogger[result === 'error' ? 'warn' : 'info'](msg, { component: 'scheduler', pass: kind });
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

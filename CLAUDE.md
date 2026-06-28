@@ -383,12 +383,37 @@ ID `1505059784444619`) wired end-to-end against the REAL Graph API.
   not in allowed list`, the expected test-number gate). REMAINING manual (Meta has no API, anti-spam):
   add your phone to the test number's allowed recipients + (later) submit the HisabKitab Utility templates.
 
+**✅ P14 (v2.0 §8) — observability & reliability (Tier 1) — DONE (2026-06-28; 597 tests, +25):**
+the pure-code, zero-new-infra core that makes the first pilot DEBUGGABLE the moment a
+message arrives. (Tier 2 circuit-breakers/DLQ + Tier 3 canary/SLO-paging deferred to deploy.)
+- **Pure `@hisab/shared/obs`** (fully unit-tested + adversarial probes): structured JSON
+  `Logger` (levels, `child()` field threading, injectable sink → testable, stdout in prod);
+  **secret redaction** (`redact.ts`: bearer/PAN/VAT/OTP/api-key shapes scrubbed deep through
+  any value — closes the §9 "no secret in logs" gap, ONE ruleset reused by logger + audit
+  preview); `MetricsRegistry` (Counter monotonic + Histogram with cumulative `le` buckets,
+  Prometheus **text exposition**); `bindMetrics`/`METRIC` canonical §8 instrument catalog +
+  `metricsResponse` (framework-agnostic `/metrics` body — DRY across raw-http + Fastify).
+- **`GET /metrics`** on all 3 services (orchestrator Fastify + ledger/payments raw http),
+  aggregate low-cardinality only (never a tenant id/phone/body). Structured boot logs replace
+  the ad-hoc `console.log`s.
+- **correlation_id threaded** WhatsApp msg → router → turn → MCP: one id per inbound message
+  (the `wa_message_id`) via `orchestrator/src/obs.ts` `inboundCtx`; child-logger tags every
+  downstream line `{correlation_id, tenant_id, role}`; forwarded to the ledger MCP as
+  `x-correlation-id`. Instruments wired at the spine: inbound counter, **audit-gate hold rate**
+  (the headline §8 metric, counted at the single gate point in `runTurn`), turn-latency
+  histogram + outcome counter, gateway calls (Khalti), scheduler-pass result, error-by-component.
+- Tests: shared +24 (logger/redact probes — a PAN/bearer/OTP NEVER reaches the sink; metrics
+  format exact, monotonic-counter probe, label escaping); orchestrator +1 (`GET /metrics`
+  Prometheus + correlation-id propagation assertion). All 597 green, typecheck + lint clean,
+  landing builds.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
   **The product can now charge its first paying customer** (after the external pilot prerequisites below).
 - ⬜ **Defer until volume** (v2.0, build only as demand requires): ⬜ P12 voice, ✅ P13 accounting
-  completeness (CORE + REMAINDER done), ⬜ P14 observability, ⬜ P17 growth, ⬜ P18 support/admin,
+  completeness (CORE + REMAINDER done), ✅ P14 observability (Tier 1 done; Tier 2 breakers/DLQ +
+  Tier 3 canary/SLO-paging deferred to deploy), ⬜ P17 growth, ⬜ P18 support/admin,
   ⬜ P19 accountant channel.
 
 **🌐 EXTERNAL (not code — needed before a real pilot):** Meta business verification + WhatsApp number

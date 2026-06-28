@@ -17,6 +17,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { eq } from 'drizzle-orm';
 import { createDb, schema, type Db } from '@hisab/db';
+import { MetricsRegistry, bindMetrics, metricsResponse, createLogger } from '@hisab/shared';
 import { verifyTenantToken, AuthError, type TenantSession } from '@hisab/mcp-ledger';
 import { buildPaymentsServer } from './server.js';
 import { settlePayment } from './tools.js';
@@ -63,6 +64,11 @@ export interface PaymentsHttpDeps {
 }
 
 export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<typeof createServer> {
+  // Per-instance observability (one registry per server; tests get isolated ones).
+  const metricsRegistry = new MetricsRegistry();
+  const metrics = bindMetrics(metricsRegistry);
+  const log = createLogger('mcp-payments');
+
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -72,35 +78,70 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
       return res.end(JSON.stringify({ ok: true, service: 'mcp-payments' }));
     }
 
+    // ---- Prometheus scrape (P14 §8, aggregate only, no auth) ------------------
+    if (req.method === 'GET' && url.pathname === '/metrics') {
+      const m = metricsResponse(metricsRegistry);
+      res.writeHead(m.status, { 'content-type': m.contentType });
+      return res.end(m.body);
+    }
+
     // ---- payer redirect from Khalti (GET, unauthenticated) -------------------
     if (req.method === 'GET' && url.pathname === '/payments/khalti/return') {
       const pidx = url.searchParams.get('pidx') ?? '';
-      let body = 'Payment status could not be confirmed yet. The shop owner will verify it shortly.';
+      let body =
+        'Payment status could not be confirmed yet. The shop owner will verify it shortly.';
       if (pidx) {
         try {
           // A pidx is either a customer COLLECTION (payments → a sale) or a
           // SUBSCRIPTION payment (billing_payments → extends the period). Try
           // collection first, then subscription. Both settle by lookup, exactly-once.
-          const [coll] = await deps.orchDb.select().from(schema.payments).where(eq(schema.payments.pidx, pidx));
+          const [coll] = await deps.orchDb
+            .select()
+            .from(schema.payments)
+            .where(eq(schema.payments.pidx, pidx));
           const [bill] = coll
             ? [undefined]
-            : await deps.orchDb.select().from(schema.billingPayments).where(eq(schema.billingPayments.pidx, pidx));
+            : await deps.orchDb
+                .select()
+                .from(schema.billingPayments)
+                .where(eq(schema.billingPayments.pidx, pidx));
           if (coll) {
-            const outcome = await deps.orchDb.transaction((tx) => settlePayment({ khalti: deps.khalti }, tx, coll));
+            const outcome = await deps.orchDb.transaction((tx) =>
+              settlePayment({ khalti: deps.khalti }, tx, coll),
+            );
+            metrics.gateway({ target: 'khalti', result: 'ok' });
+            log.info('khalti return settled', {
+              kind: 'collection',
+              status: String(outcome['status']),
+            });
             deps.log?.(`khalti return (collection) ${pidx}: ${JSON.stringify(outcome['status'])}`);
             body =
               outcome['status'] === 'completed'
                 ? 'Payment received — thank you! 🙏 The shop has been notified.'
                 : `Payment not completed (${String(outcome['gateway_status'] ?? outcome['status'])}).`;
           } else if (bill) {
-            const outcome = await deps.orchDb.transaction((tx) => settleSubscriptionPayment({ khalti: deps.khalti }, tx, bill));
-            deps.log?.(`khalti return (subscription) ${pidx}: ${JSON.stringify(outcome['status'])}`);
+            const outcome = await deps.orchDb.transaction((tx) =>
+              settleSubscriptionPayment({ khalti: deps.khalti }, tx, bill),
+            );
+            metrics.gateway({ target: 'khalti', result: 'ok' });
+            log.info('khalti return settled', {
+              kind: 'subscription',
+              status: String(outcome['status']),
+            });
+            deps.log?.(
+              `khalti return (subscription) ${pidx}: ${JSON.stringify(outcome['status'])}`,
+            );
             body =
               outcome['status'] === 'completed'
                 ? 'Subscription payment received — thank you! 🙏 Your HisabKitab plan is active.'
                 : `Payment not completed (${String(outcome['gateway_status'] ?? outcome['status'])}).`;
           }
         } catch (err) {
+          metrics.gateway({ target: 'khalti', result: 'error' });
+          metrics.error({ component: 'khalti-return' });
+          log.error('khalti return failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
           deps.log?.(`khalti return ${pidx} failed: ${String(err)}`);
         }
       }
@@ -139,6 +180,8 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
       await server.connect(transport);
       await transport.handleRequest(req, res, await readBody(req));
     } catch (err) {
+      metrics.error({ component: 'payments-mcp' });
+      log.error('mcp request failed', { error: err instanceof Error ? err.message : String(err) });
       if (!res.headersSent) deny(res, 500, err instanceof Error ? err.message : 'internal error');
     }
   });
@@ -162,8 +205,15 @@ if (isDirectRun) {
     returnUrl: `${publicBase}/payments/khalti/return`,
     websiteUrl: process.env['WEBSITE_URL'] ?? 'https://hisabkitab.example',
     // Subscription billing stays in DEV mode unless explicitly switched on.
-    live: process.env['PAYMENTS_LIVE'] === '1' || process.env['PAYMENTS_LIVE']?.toLowerCase() === 'true',
+    live:
+      process.env['PAYMENTS_LIVE'] === '1' ||
+      process.env['PAYMENTS_LIVE']?.toLowerCase() === 'true',
     log: (m) => console.log(`[payments] ${m}`),
   });
-  httpServer.listen(port, () => console.log(`hisab-payments listening on :${port} (/mcp + /payments/khalti/return)`));
+  httpServer.listen(port, () =>
+    createLogger('mcp-payments').info('mcp-payments listening', {
+      port,
+      endpoints: ['/mcp', '/payments/khalti/return', '/healthz', '/metrics'],
+    }),
+  );
 }

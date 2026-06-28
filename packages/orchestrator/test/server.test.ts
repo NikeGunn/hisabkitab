@@ -24,7 +24,13 @@ const PAYLOAD = JSON.stringify({
           field: 'messages',
           value: {
             messages: [
-              { id: 'wamid.s1', from: '977980', timestamp: '1', type: 'text', text: { body: 'hi' } },
+              {
+                id: 'wamid.s1',
+                from: '977980',
+                timestamp: '1',
+                type: 'text',
+                text: { body: 'hi' },
+              },
             ],
           },
         },
@@ -53,6 +59,17 @@ describe('GET /healthz + /livez (Docker/K8s probes)', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ ok: true, service: 'orchestrator' });
     }
+  });
+});
+
+describe('GET /metrics (P14 Prometheus scrape)', () => {
+  it('returns Prometheus text with the §8 instruments, no auth', async () => {
+    const res = await app.inject({ url: '/metrics' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    // The bound instruments are always present (render emits a zero series).
+    expect(res.body).toContain('hisab_errors_total');
+    expect(res.body).toContain('# TYPE hisab_agent_turns_total counter');
   });
 });
 
@@ -92,6 +109,8 @@ describe('POST /webhook', () => {
     expect(processInbound).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ waMessageId: 'wamid.s1' }),
+      // P14: a per-message obs context whose correlation id IS the wa_message_id.
+      expect.objectContaining({ correlationId: 'wamid.s1' }),
     );
   });
 
