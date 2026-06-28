@@ -14,8 +14,20 @@ import { pathToFileURL } from 'node:url';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { timingSafeEqual } from 'node:crypto';
 import { createDb } from '@hisab/db';
+import {
+  MetricsRegistry,
+  bindMetrics,
+  metricsResponse,
+  createLogger,
+  type Logger,
+} from '@hisab/shared';
 import { buildLedgerServer } from './server.js';
 import { verifyTenantToken, AuthError, type TenantSession } from './auth.js';
+
+/** Process-wide observability for this service (one registry, one logger). */
+const metricsRegistry = new MetricsRegistry();
+const metrics = bindMetrics(metricsRegistry);
+const log: Logger = createLogger('mcp-ledger');
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -53,7 +65,18 @@ export function startHttpServer(port: number): ReturnType<typeof createServer> {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ ok: true, service: 'mcp-ledger' }));
     }
+    // Prometheus scrape endpoint (P14 §8). No auth — exposes only aggregate,
+    // low-cardinality counters/histograms (never a tenant id or message body).
+    if (req.method === 'GET' && req.url === '/metrics') {
+      const m = metricsResponse(metricsRegistry);
+      res.writeHead(m.status, { 'content-type': m.contentType });
+      return res.end(m.body);
+    }
     if (req.url !== '/mcp' || req.method !== 'POST') return deny(res, 404, 'not found');
+    // Correlation id threads in from the orchestrator (x-correlation-id) so a
+    // ledger call is greppable back to the originating WhatsApp message.
+    const correlationId = String(req.headers['x-correlation-id'] ?? '');
+    const reqLog = correlationId ? log.child({ correlation_id: correlationId }) : log;
     const auth = req.headers.authorization ?? '';
     if (!auth.startsWith('Bearer ')) return deny(res, 401, 'missing bearer token');
     const bearer = auth.slice(7);
@@ -83,11 +106,17 @@ export function startHttpServer(port: number): ReturnType<typeof createServer> {
       await server.connect(transport);
       await transport.handleRequest(req, res, await readBody(req));
     } catch (err) {
+      metrics.error({ component: 'ledger-mcp' });
+      reqLog.error('mcp request failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       if (!res.headersSent) deny(res, 500, err instanceof Error ? err.message : 'internal error');
     }
   });
 
-  httpServer.listen(port, () => console.log(`hisab-ledger MCP listening on :${port}/mcp`));
+  httpServer.listen(port, () =>
+    log.info('mcp-ledger listening', { port, endpoints: ['/mcp', '/healthz', '/metrics'] }),
+  );
   return httpServer;
 }
 
