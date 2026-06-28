@@ -6,9 +6,11 @@
  *   GET  /healthz
  */
 import Fastify, { type FastifyInstance } from 'fastify';
+import { metricsResponse } from '@hisab/shared';
 import { handleVerifyHandshake, verifyWebhookSignature } from './whatsapp/signature.js';
 import { parseInboundWebhook } from './whatsapp/inbound.js';
 import { processInbound, type RouterDeps } from './whatsapp/router.js';
+import { metricsRegistry, inboundCtx } from './obs.js';
 
 export interface ServerOptions {
   verifyToken: string;
@@ -31,6 +33,13 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.get('/healthz', health);
   app.get('/livez', health);
 
+  // Prometheus scrape (P14 §8). Aggregate, low-cardinality counters/histograms
+  // only — never a tenant id, phone number, or message body.
+  app.get('/metrics', (_req, reply) => {
+    const m = metricsResponse(metricsRegistry);
+    return reply.code(m.status).header('content-type', m.contentType).send(m.body);
+  });
+
   app.get('/webhook', (req, reply) => {
     const challenge = handleVerifyHandshake(req.query as Record<string, unknown>, opts.verifyToken);
     if (challenge === null) return reply.code(403).send('forbidden');
@@ -52,11 +61,16 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     }
 
     const work = Promise.allSettled(
-      messages.map((m) =>
-        processInbound(opts.deps, m).catch((err) =>
-          opts.deps.log?.(`processInbound(${m.waMessageId}) failed: ${String(err)}`),
-        ),
-      ),
+      messages.map((m) => {
+        // One correlation id per inbound message (the wa_message_id) threads the
+        // whole pipeline; every line below is greppable back to this message.
+        const ctx = inboundCtx(m.waMessageId);
+        return processInbound(opts.deps, m, ctx).catch((err) => {
+          ctx.metrics.error({ component: 'process-inbound' });
+          ctx.log.error('processInbound failed', { error: String(err) });
+          opts.deps.log?.(`processInbound(${m.waMessageId}) failed: ${String(err)}`);
+        });
+      }),
     );
     if (opts.awaitProcessing) await work;
     return reply.code(200).send({ received: messages.length });

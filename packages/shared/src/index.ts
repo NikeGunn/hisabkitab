@@ -19,6 +19,7 @@ export * from './cost/routing.js';
 export * from './cost/budget.js';
 export * from './crypto/field-crypto.js';
 export * from './audit/hash-chain.js';
+export * from './obs/index.js';
 export * from './validation/engine.js';
 export * from './verification/verdict.js';
 export { checks as verificationChecks } from './verification/checks.js';

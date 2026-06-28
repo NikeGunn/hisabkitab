@@ -16,6 +16,7 @@ import {
   newTurnEvidence,
 } from '../audit/gate.js';
 import type { GateLogger } from '../audit/audit-logger.js';
+import type { BoundMetrics } from '@hisab/shared';
 
 const MAX_HOLDS_PER_TURN = 2;
 
@@ -32,7 +33,10 @@ function captureReportRequest(rawToolResult: string): CapturedReportRequest | nu
     const texts = Array.isArray(blocks) ? blocks.map((b) => b.text ?? '') : [blocks.text ?? ''];
     for (const t of texts) {
       if (!t.includes('report_request')) continue;
-      const parsed = JSON.parse(t) as { accepted?: boolean; report_request?: CapturedReportRequest };
+      const parsed = JSON.parse(t) as {
+        accepted?: boolean;
+        report_request?: CapturedReportRequest;
+      };
       if (parsed.accepted && parsed.report_request) return parsed.report_request;
     }
   } catch {
@@ -79,6 +83,10 @@ export interface TurnOptions {
   onEvent?: (type: string) => void;
   /** Observe each tool the agent invoked this turn, by name (cost/quality probes). */
   onToolUse?: (name: string) => void;
+  /** Correlation id (the inbound wa_message_id) — forwarded to MCP calls (P14 §8). */
+  correlationId?: string;
+  /** Shared metrics registry — gate decisions are counted here. Omitted = no metrics. */
+  metrics?: BoundMetrics;
 }
 
 /** A report the agent asked to generate this turn (from the request_report tool result). */
@@ -129,7 +137,12 @@ export async function runTurn(
     errors: [],
     reportRequests: [],
     toolUses: [],
-    usage: { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+    usage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+    },
   };
   const deadline = Date.now() + (opts.timeoutMs ?? 600_000);
 
@@ -198,7 +211,16 @@ export async function runTurn(
       case 'span.model_request_end': {
         // Sum token usage across every model request in the turn (P11 cost
         // accounting). cache_read tokens are billed cheaper but we track all four.
-        const u = (event as { model_usage?: { input_tokens?: number; output_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } }).model_usage;
+        const u = (
+          event as {
+            model_usage?: {
+              input_tokens?: number;
+              output_tokens?: number;
+              cache_creation_input_tokens?: number;
+              cache_read_input_tokens?: number;
+            };
+          }
+        ).model_usage;
         if (u) {
           result.usage.inputTokens += u.input_tokens ?? 0;
           result.usage.outputTokens += u.output_tokens ?? 0;
@@ -220,6 +242,9 @@ export async function runTurn(
       case 'agent.message': {
         const text = event.content.map((b) => b.text).join('\n');
         const decision = auditOutbound(text, evidence);
+        // Audit-gate hold rate is a headline §8 metric (a rising hold rate means the
+        // agent is producing unverifiable figures). Counted at the single gate point.
+        opts.metrics?.gate({ decision: decision.action === 'deliver' ? 'pass' : 'hold' });
         await opts.logger.log({
           tenantId: opts.tenantId,
           sessionId,
