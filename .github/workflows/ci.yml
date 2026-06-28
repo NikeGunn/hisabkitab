@@ -42,7 +42,7 @@ jobs:
       TEST_ORCH_DATABASE_URL: postgres://hisab_orch:hisab_orch_dev@localhost:5432/hisabkitab_test
       REDIS_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
         with: { version: 10.14.0 }
@@ -85,10 +85,10 @@ jobs:
       matrix:
         service: [orchestrator, mcp-ledger, mcp-payments]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
       - name: Build ${{ matrix.service }} image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -126,7 +126,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@v0.36.0
         env:
