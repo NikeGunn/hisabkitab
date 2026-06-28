@@ -24,12 +24,12 @@
     "reports:sample": "tsx src/reports/sample.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.2",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@hisab/db": "workspace:*",
     "@hisab/mcp-ledger": "workspace:*",
     "@hisab/shared": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "bullmq": "^5.78.1",
+    "bullmq": "^5.79.1",
     "drizzle-orm": "0.45.2",
     "fastify": "^5.8.5",
     "ioredis": "^5.4.2",
@@ -40,7 +40,7 @@
     "@types/node": "^20.19.0",
     "@types/pdfmake": "^0.3.3",
     "postgres": "^3.4.9",
-    "sharp": "^0.35.1",
+    "sharp": "^0.35.2",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
