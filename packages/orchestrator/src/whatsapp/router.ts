@@ -12,11 +12,7 @@ import { appendAudit, schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
-import {
-  handleUnknownSender,
-  ONBOARDING_PROMPT,
-  pairedWelcome,
-} from '../onboarding/pairing.js';
+import { handleUnknownSender, ONBOARDING_PROMPT, pairedWelcome } from '../onboarding/pairing.js';
 import {
   resolveMembership,
   parseInviteCommand,
@@ -31,6 +27,7 @@ import { checkBudget, recordTurnUsage, latchWarn } from '../resilience/cost-guar
 import { routeTurn, BUDGET_THROTTLED_REPLY, BUDGET_WARN_NOTE } from '@hisab/shared';
 import type { InboundMessage } from './inbound.js';
 import type { WaClient } from './wa-client.js';
+import { inboundCtx, type ObsCtx } from '../obs.js';
 
 /**
  * Cost-control wiring (P11). `db` is the cross-tenant orch handle used to read the
@@ -87,7 +84,9 @@ export const MEDIA_FAILURE_REPLY =
   'Sorry — I could not download that file. Could you try sending it again?';
 
 /** Reply to an owner's invite command (PRD v2.0 §3). */
-function inviteReply(res: ReturnType<typeof inviteMember> extends Promise<infer R> ? R : never): string {
+function inviteReply(
+  res: ReturnType<typeof inviteMember> extends Promise<infer R> ? R : never,
+): string {
   switch (res.kind) {
     case 'invited':
       return (
@@ -101,7 +100,7 @@ function inviteReply(res: ReturnType<typeof inviteMember> extends Promise<infer 
     case 'bad_role':
       return 'You can add someone as accountant, staff, or viewer. For example: "add 98XXXXXXXX as accountant".';
     case 'bad_number':
-      return "I couldn't read that phone number. Try the full number, e.g. \"add 9779812345678 as staff\".";
+      return 'I couldn\'t read that phone number. Try the full number, e.g. "add 9779812345678 as staff".';
   }
 }
 
@@ -118,8 +117,19 @@ function memberWelcome(businessName: string, role: string): string {
   );
 }
 
-/** True when the message was processed; false when deduped as a retry. */
-export async function processInbound(deps: RouterDeps, msg: InboundMessage): Promise<boolean> {
+/**
+ * True when the message was processed; false when deduped as a retry.
+ *
+ * `obs` carries the correlation id (the inbound wa_message_id) so every line this
+ * message produces — here, in runTurn, and in the downstream MCP call — is greppable
+ * end to end (P14 §8). Omitted ⇒ derived from the message id (tests/back-compat).
+ */
+export async function processInbound(
+  deps: RouterDeps,
+  msg: InboundMessage,
+  obs: ObsCtx = inboundCtx(msg.waMessageId),
+): Promise<boolean> {
+  obs.metrics.inbound({ kind: msg.kind });
   // Exactly-once: Meta retries webhooks; the wa_events PK is the gate.
   const inserted = await deps.db
     .insert(schema.waEvents)
@@ -127,6 +137,7 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     .onConflictDoNothing()
     .returning({ id: schema.waEvents.waMessageId });
   if (inserted.length === 0) {
+    obs.log.debug('dedupe: message already processed');
     deps.log?.(`dedupe: ${msg.waMessageId} already processed`);
     return false;
   }
@@ -159,6 +170,9 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     }
 
     const tenant = { tenantId: member.tenantId, businessName: member.businessName };
+    // From here the correlation id also carries the tenant — every downstream line
+    // is tagged {correlation_id, tenant_id} without re-passing them.
+    const tlog = obs.log.child({ tenant_id: tenant.tenantId, role: member.role });
 
     // Owner-only invite command, handled BEFORE the agent turn so the model never
     // sees it as a normal request and a non-owner can never grant a seat. Authority
@@ -191,7 +205,9 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     // secret — only a redacted preview is logged for ops.
     const cred = scanForCredentials(msg.text);
     if (cred.blocked) {
-      deps.log?.(`credential blocked for ${msg.fromE164} [${cred.kinds.join(',')}]: ${cred.redactedPreview}`);
+      deps.log?.(
+        `credential blocked for ${msg.fromE164} [${cred.kinds.join(',')}]: ${cred.redactedPreview}`,
+      );
       await deps.db.transaction((tx) =>
         appendAudit(tx, tenant.tenantId, {
           actor: 'system',
@@ -211,7 +227,10 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     if (route.intent === 'trivial' && route.cannedReply) {
       await deps.wa.sendText(msg.fromE164, route.cannedReply);
       if (deps.costGuard) {
-        await recordTurnUsage(deps.costGuard.db, tenant.tenantId, '', { inputTokens: 0, outputTokens: 0 });
+        await recordTurnUsage(deps.costGuard.db, tenant.tenantId, '', {
+          inputTokens: 0,
+          outputTokens: 0,
+        });
       }
       return true;
     }
@@ -223,7 +242,9 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
     if (deps.costGuard) {
       const budget = await checkBudget(deps.costGuard.db, tenant.tenantId);
       if (budget.verdict === 'THROTTLE') {
-        deps.log?.(`budget THROTTLE ${tenant.tenantId} (${budget.spentPaisa}/${budget.capPaisa} paisa)`);
+        deps.log?.(
+          `budget THROTTLE ${tenant.tenantId} (${budget.spentPaisa}/${budget.capPaisa} paisa)`,
+        );
         await deps.wa.sendText(msg.fromE164, BUDGET_THROTTLED_REPLY);
         return true;
       }
@@ -258,12 +279,26 @@ export async function processInbound(deps: RouterDeps, msg: InboundMessage): Pro
       return true;
     }
 
+    const turnStart = Date.now();
     const turn = await runTurn(deps.anthropic, sessionId, turnText, {
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,
       deliver: (text) => deps.wa.sendText(msg.fromE164, text),
+      correlationId: obs.correlationId,
+      metrics: obs.metrics,
       ...(deps.turnTimeoutMs !== undefined ? { timeoutMs: deps.turnTimeoutMs } : {}),
       ...(deps.log ? { onEvent: (type: string) => deps.log?.(`event ${type}`) } : {}),
+    });
+    // Turn-level metrics (P14 §8): latency distribution + outcome counter.
+    obs.metrics.turnLatency(Date.now() - turnStart, { status: turn.status });
+    obs.metrics.turn({ status: turn.status === 'idle' ? 'delivered' : turn.status });
+    if (turn.holds > 0) obs.metrics.error({ component: 'audit-gate-hold' });
+    tlog.info('turn complete', {
+      status: turn.status,
+      delivered: turn.delivered.length,
+      holds: turn.holds,
+      tools: turn.toolUses.length,
+      latency_ms: Date.now() - turnStart,
     });
     if (turn.status === 'timeout') deps.log?.(`turn TIMED OUT for ${msg.waMessageId}`);
 
