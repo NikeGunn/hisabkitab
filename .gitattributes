@@ -1,0 +1,2 @@
+# Shell scripts must stay LF — a CRLF shebang breaks initdb/CI on Linux.
+*.sh text eol=lf
