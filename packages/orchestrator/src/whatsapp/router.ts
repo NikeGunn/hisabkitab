@@ -8,6 +8,7 @@
  * this asynchronously.
  */
 import type Anthropic from '@anthropic-ai/sdk';
+import { eq } from 'drizzle-orm';
 import { appendAudit, schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
@@ -47,11 +48,19 @@ export class SerialQueues {
   run<T>(key: string, task: () => Promise<T>): Promise<T> {
     const tail = this.tails.get(key) ?? Promise.resolve();
     const next = tail.then(task, task);
-    this.tails.set(
-      key,
-      next.catch(() => undefined),
-    );
+    const settled = next.catch(() => undefined);
+    this.tails.set(key, settled);
+    // Evict the key once this tail settles and no newer work replaced it — a
+    // long-running orchestrator must not hold one map entry per sender forever.
+    void settled.then(() => {
+      if (this.tails.get(key) === settled) this.tails.delete(key);
+    });
     return next;
+  }
+
+  /** Keys with in-flight work (drains to 0 when idle — leak probe). */
+  get size(): number {
+    return this.tails.size;
   }
 }
 
@@ -82,6 +91,10 @@ export const UNSUPPORTED_REPLY =
 
 export const MEDIA_FAILURE_REPLY =
   'Sorry — I could not download that file. Could you try sending it again?';
+
+export const PROCESSING_FAILURE_REPLY =
+  'माफ गर्नुहोस् — something went wrong on my side and I could not process that message. ' +
+  'Nothing was saved. Please send it again in a moment. 🙏';
 
 /** Reply to an owner's invite command (PRD v2.0 §3). */
 function inviteReply(
@@ -143,6 +156,50 @@ export async function processInbound(
   }
 
   return deps.queues.run(msg.fromE164, async () => {
+    // Crash containment: Meta was already ACKed 200, so NO retry is coming. If
+    // processing dies before anything reached the owner, we must (a) release the
+    // dedupe claim so a redelivery/resend is not swallowed, and (b) tell the
+    // owner to resend (the 24h service window is open — they just messaged us).
+    // A message that produced deliveries keeps its claim: re-running a turn that
+    // already spoke to the owner risks double side effects, the worse failure.
+    let deliveredAny = false;
+    const send = async (to: string, body: string): Promise<void> => {
+      await deps.wa.sendText(to, body);
+      deliveredAny = true;
+    };
+    try {
+      return await handleClaimed(deps, msg, obs, send);
+    } catch (err) {
+      obs.metrics.error({ component: 'inbound-crash' });
+      obs.log.error('inbound processing crashed', {
+        error: String(err),
+        delivered_any: deliveredAny,
+      });
+      if (!deliveredAny) {
+        try {
+          await deps.db.delete(schema.waEvents).where(eq(schema.waEvents.waMessageId, msg.waMessageId));
+        } catch (releaseErr) {
+          // claim release failed (DB down?) — a RESEND still gets a fresh id, so
+          // the owner's retry is never blocked; only a Meta redelivery would dedupe.
+          obs.log.error('claim release failed', { error: String(releaseErr) });
+        }
+        // direct, NOT via send() — this is the crash path itself, best-effort only
+        await deps.wa.sendText(msg.fromE164, PROCESSING_FAILURE_REPLY).catch(() => undefined);
+      }
+      throw err;
+    }
+  });
+}
+
+/** The post-claim pipeline. Every user-visible reply goes through `send` so the
+ *  crash handler above knows whether the owner heard anything this message. */
+async function handleClaimed(
+  deps: RouterDeps,
+  msg: InboundMessage,
+  obs: ObsCtx,
+  send: (to: string, body: string) => Promise<void>,
+): Promise<boolean> {
+  {
     const member = await resolveMembership(deps.db, msg.fromE164);
 
     if (!member) {
@@ -151,20 +208,20 @@ export async function processInbound(
       if (isAcceptCommand(msg.text)) {
         const accepted = await acceptInvite(deps.db, msg.fromE164);
         if (accepted.kind === 'accepted') {
-          await deps.wa.sendText(msg.fromE164, memberWelcome(accepted.businessName, accepted.role));
+          await send(msg.fromE164, memberWelcome(accepted.businessName, accepted.role));
           return true;
         }
       }
       const outcome = await handleUnknownSender(deps.db, msg.fromE164, msg.text);
       if (outcome.kind === 'paired') {
-        await deps.wa.sendText(msg.fromE164, pairedWelcome(outcome.businessName));
+        await send(msg.fromE164, pairedWelcome(outcome.businessName));
       } else if (outcome.kind === 'invalid_code') {
-        await deps.wa.sendText(
+        await send(
           msg.fromE164,
           'That code is not valid (or has expired). Please check it, or contact us for a new one.',
         );
       } else {
-        await deps.wa.sendText(msg.fromE164, ONBOARDING_PROMPT);
+        await send(msg.fromE164, ONBOARDING_PROMPT);
       }
       return true;
     }
@@ -180,7 +237,7 @@ export async function processInbound(
     const invite = parseInviteCommand(msg.text);
     if (invite) {
       const res = await inviteMember(deps.db, member, invite.e164, invite.role);
-      await deps.wa.sendText(msg.fromE164, inviteReply(res));
+      await send(msg.fromE164, inviteReply(res));
       return true;
     }
 
@@ -190,13 +247,13 @@ export async function processInbound(
       const decision = deps.rateLimiter.take(tenant.tenantId);
       if (!decision.allowed) {
         deps.log?.(`rate-limited ${msg.fromE164} (retry in ${decision.retryAfterMs}ms)`);
-        await deps.wa.sendText(msg.fromE164, RATE_LIMITED_REPLY);
+        await send(msg.fromE164, RATE_LIMITED_REPLY);
         return true;
       }
     }
 
     if (msg.kind === 'audio' || msg.kind === 'unsupported') {
-      await deps.wa.sendText(msg.fromE164, UNSUPPORTED_REPLY);
+      await send(msg.fromE164, UNSUPPORTED_REPLY);
       return true;
     }
 
@@ -215,7 +272,7 @@ export async function processInbound(
           detail: { kinds: cred.kinds, preview: cred.redactedPreview },
         }),
       );
-      await deps.wa.sendText(msg.fromE164, CREDENTIAL_REFUSAL);
+      await send(msg.fromE164, CREDENTIAL_REFUSAL);
       return true;
     }
 
@@ -225,7 +282,7 @@ export async function processInbound(
     // counts toward `turns` (≈0 cost) so the spend dashboard sees the traffic.
     const route = routeTurn(msg.text, Boolean(msg.media));
     if (route.intent === 'trivial' && route.cannedReply) {
-      await deps.wa.sendText(msg.fromE164, route.cannedReply);
+      await send(msg.fromE164, route.cannedReply);
       if (deps.costGuard) {
         await recordTurnUsage(deps.costGuard.db, tenant.tenantId, '', {
           inputTokens: 0,
@@ -245,7 +302,7 @@ export async function processInbound(
         deps.log?.(
           `budget THROTTLE ${tenant.tenantId} (${budget.spentPaisa}/${budget.capPaisa} paisa)`,
         );
-        await deps.wa.sendText(msg.fromE164, BUDGET_THROTTLED_REPLY);
+        await send(msg.fromE164, BUDGET_THROTTLED_REPLY);
         return true;
       }
       if (budget.verdict === 'WARN') {
@@ -270,12 +327,12 @@ export async function processInbound(
           (msg.text ? ` Their caption: "${msg.text}"` : '');
       } catch (err) {
         deps.log?.(`media failed for ${msg.waMessageId}: ${String(err)}`);
-        await deps.wa.sendText(msg.fromE164, MEDIA_FAILURE_REPLY);
+        await send(msg.fromE164, MEDIA_FAILURE_REPLY);
         return true;
       }
     }
     if (!turnText.trim()) {
-      await deps.wa.sendText(msg.fromE164, UNSUPPORTED_REPLY);
+      await send(msg.fromE164, UNSUPPORTED_REPLY);
       return true;
     }
 
@@ -283,7 +340,7 @@ export async function processInbound(
     const turn = await runTurn(deps.anthropic, sessionId, turnText, {
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,
-      deliver: (text) => deps.wa.sendText(msg.fromE164, text),
+      deliver: (text) => send(msg.fromE164, text),
       correlationId: obs.correlationId,
       metrics: obs.metrics,
       ...(deps.turnTimeoutMs !== undefined ? { timeoutMs: deps.turnTimeoutMs } : {}),
@@ -315,7 +372,7 @@ export async function processInbound(
         deps.log?.(`usage record failed for ${tenant.tenantId}: ${String(err)}`);
       }
       if (warnNote) {
-        await deps.wa.sendText(msg.fromE164, BUDGET_WARN_NOTE.trim());
+        await send(msg.fromE164, BUDGET_WARN_NOTE.trim());
       }
     }
 
@@ -331,5 +388,5 @@ export async function processInbound(
       }
     }
     return true;
-  });
+  }
 }

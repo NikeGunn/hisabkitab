@@ -407,6 +407,20 @@ message arrives. (Tier 2 circuit-breakers/DLQ + Tier 3 canary/SLO-paging deferre
   Prometheus + correlation-id propagation assertion). All 597 green, typecheck + lint clean,
   landing builds.
 
+**✅ Inbound crash containment (reliability audit) — DONE (2026-07-06; 600 tests, +3):** closed the
+one real at-least-once gap in the message spine. The webhook ACKs Meta 200 immediately, so Meta never
+retries — yet the `wa_events` dedupe row was claimed BEFORE processing, so any crash after the claim
+(Anthropic outage, session-create failure, turn crash) silently swallowed the owner's message forever.
+- Router now mirrors the schedulers' claim-first/release-on-fail: every user-visible reply goes through
+  a `send()` tracker; on a crash with ZERO deliveries the claim is **released** (DELETE the wa_events
+  row — migration **0017** grants hisab_orch DELETE) and the owner gets `PROCESSING_FAILURE_REPLY`
+  ("nothing was saved, please resend"). A crash AFTER something was delivered keeps the claim (re-running
+  a turn that already spoke to the owner risks double side effects — the worse failure). Crash counted
+  as `inbound-crash` error metric.
+- `SerialQueues` now **evicts settled tails** (`q.size` drains to 0) — the per-sender map no longer grows
+  unbounded over a long-running orchestrator. Probes: crash-before-reply releases claim + apologizes +
+  same-id redelivery is NOT false-deduped; pre-agent crash path same; queue-drain leak probe.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.

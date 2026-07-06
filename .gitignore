@@ -18,3 +18,5 @@ packages/orchestrator/report-samples/
 # (manuals, PRDs, product specs, deploy + incident runbooks, legal drafts).
 docs/
 context-manual.txt
+
+Kribaat.pem

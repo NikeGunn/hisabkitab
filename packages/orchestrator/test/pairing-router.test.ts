@@ -12,7 +12,13 @@ import {
   issuePairingCode,
   ONBOARDING_PROMPT,
 } from '../src/onboarding/pairing.js';
-import { processInbound, SerialQueues, UNSUPPORTED_REPLY, type RouterDeps } from '../src/whatsapp/router.js';
+import {
+  processInbound,
+  SerialQueues,
+  UNSUPPORTED_REPLY,
+  PROCESSING_FAILURE_REPLY,
+  type RouterDeps,
+} from '../src/whatsapp/router.js';
 import { MemoryGateLogger } from '../src/audit/audit-logger.js';
 import { TenantRateLimiter } from '../src/resilience/rate-limit.js';
 import type { WaClient } from '../src/whatsapp/wa-client.js';
@@ -181,7 +187,69 @@ describe('processInbound routing', () => {
   });
 });
 
+describe('crash containment (a message is NEVER silently lost)', () => {
+  it('PROBE: a crash before any reply releases the dedupe claim and asks the owner to resend', async () => {
+    // Pair a fresh tenant, then send a substantive message. anthropic is {} in
+    // makeDeps, so the agent path throws at getOrCreateTenantSession — a stand-in
+    // for any mid-pipeline outage (Anthropic down, session-create failure).
+    const [t5] = await admin.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Crash Pasal', panOrVatNo: '600000005' })
+      .returning({ id: schema.tenants.id });
+    const code = await issuePairingCode(orch.db, (t5 as { id: string }).id);
+    await handleUnknownSender(orch.db, '+9779804444444', `START ${code}`);
+
+    const sent: { to: string; body: string }[] = [];
+    const deps = makeDeps(sent);
+    const msg = textMsg('wamid.crash1', '+9779804444444', 'sold catering 9000');
+    await expect(processInbound(deps, msg)).rejects.toThrow();
+
+    // the owner was told to resend (never a silent drop)
+    expect(sent.some((s) => s.body === PROCESSING_FAILURE_REPLY)).toBe(true);
+    // the dedupe claim was released, so a redelivery of the SAME id is processed
+    // again (it re-crashes here, but it is not swallowed as a dupe)
+    const rows = await orch.db
+      .select()
+      .from(schema.waEvents)
+      .where(eq(schema.waEvents.waMessageId, 'wamid.crash1'));
+    expect(rows).toHaveLength(0);
+    await expect(processInbound(deps, msg)).rejects.toThrow(); // NOT false-dedupe
+  });
+
+  it('a crash on a pre-agent path (unknown sender) also releases and apologizes', async () => {
+    const sent: { to: string; body: string }[] = [];
+    const deps = makeDeps(sent);
+    // resolveMembership dies → claim must be released
+    const broken = { ...deps, db: new Proxy(deps.db, {
+      get(target, prop) {
+        if (prop === 'select') throw new Error('db down');
+        return Reflect.get(target, prop);
+      },
+    }) as typeof deps.db };
+    await expect(
+      processInbound(broken, textMsg('wamid.crash2', '+9779803333333', 'hello')),
+    ).rejects.toThrow('db down');
+    expect(sent.some((s) => s.body === PROCESSING_FAILURE_REPLY)).toBe(true);
+    const rows = await orch.db
+      .select()
+      .from(schema.waEvents)
+      .where(eq(schema.waEvents.waMessageId, 'wamid.crash2'));
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe('SerialQueues', () => {
+  it('evicts a settled tail (the per-sender map drains to zero — leak probe)', async () => {
+    const q = new SerialQueues();
+    await q.run('sender-a', async () => 'done');
+    await q.run('sender-b', async () => {
+      throw new Error('boom');
+    }).catch(() => undefined);
+    // eviction runs on the settle microtask — yield once
+    await new Promise((r) => setTimeout(r, 0));
+    expect(q.size).toBe(0);
+  });
+
   it('serializes per key, runs keys concurrently, survives failures', async () => {
     const q = new SerialQueues();
     const order: string[] = [];
