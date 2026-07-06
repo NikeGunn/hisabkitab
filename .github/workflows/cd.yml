@@ -105,7 +105,9 @@ jobs:
             # zero downtime (compose recreates only changed services, honoring the
             # healthchecks before old containers are removed).
             export IMAGE_TAG="sha-${GITHUB_SHA}"
-            export GHCR_OWNER="${{ github.repository_owner }}"
+            # image refs must be lowercase; github.repository_owner is "NikeGunn"
+            OWNER_RAW="${{ github.repository_owner }}"
+            export GHCR_OWNER="${OWNER_RAW,,}"
             echo "${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}" \
               | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             git pull --ff-only origin main || true
