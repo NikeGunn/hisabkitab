@@ -18,6 +18,7 @@ export const DEV_HISAB_MODEL = 'claude-sonnet-4-6';
 export const HISAB_MODEL = process.env['HISAB_MODEL']?.trim() || DEFAULT_HISAB_MODEL;
 export const LEDGER_MCP_NAME = 'ledger';
 export const PAYMENTS_MCP_NAME = 'payments';
+export const TALLY_MCP_NAME = 'tally';
 
 export interface SkillRefs {
   nepalVat: string;
@@ -25,12 +26,15 @@ export interface SkillRefs {
   billExtraction: string;
   nepalPayments: string;
   accountsReports: string;
+  tallyAccounts: string;
 }
 
 export interface AgentConfigInput {
   ledgerMcpUrl: string;
   /** Phase 5: Khalti payments MCP. Optional so pre-Phase-5 setups still work. */
   paymentsMcpUrl?: string;
+  /** Phase T: read-only TallyPrime MCP. Optional so non-Tally setups still work. */
+  tallyMcpUrl?: string;
   skillIds: SkillRefs;
 }
 
@@ -44,6 +48,7 @@ function requireHttps(rawUrl: string, label: string): void {
 export function buildAgentConfig(input: AgentConfigInput) {
   requireHttps(input.ledgerMcpUrl, 'ledger');
   if (input.paymentsMcpUrl) requireHttps(input.paymentsMcpUrl, 'payments');
+  if (input.tallyMcpUrl) requireHttps(input.tallyMcpUrl, 'tally');
 
   // A tenant-scoped MCP toolset: our tools, owner consent modeled in the tool
   // semantics (draft→confirm / owner_approved), so always_allow — otherwise the
@@ -66,12 +71,16 @@ export function buildAgentConfig(input: AgentConfigInput) {
       { type: 'agent_toolset_20260401' as const, default_config: { enabled: true } },
       tenantToolset(LEDGER_MCP_NAME),
       ...(input.paymentsMcpUrl ? [tenantToolset(PAYMENTS_MCP_NAME)] : []),
+      ...(input.tallyMcpUrl ? [tenantToolset(TALLY_MCP_NAME)] : []),
     ],
     mcp_servers: [
       // No auth here — per-tenant signed bearer tokens live in vaults, attached per session.
       { type: 'url' as const, name: LEDGER_MCP_NAME, url: input.ledgerMcpUrl },
       ...(input.paymentsMcpUrl
         ? [{ type: 'url' as const, name: PAYMENTS_MCP_NAME, url: input.paymentsMcpUrl }]
+        : []),
+      ...(input.tallyMcpUrl
+        ? [{ type: 'url' as const, name: TALLY_MCP_NAME, url: input.tallyMcpUrl }]
         : []),
     ],
     skills: [
@@ -80,6 +89,7 @@ export function buildAgentConfig(input: AgentConfigInput) {
       { type: 'custom' as const, skill_id: input.skillIds.billExtraction, version: 'latest' },
       { type: 'custom' as const, skill_id: input.skillIds.nepalPayments, version: 'latest' },
       { type: 'custom' as const, skill_id: input.skillIds.accountsReports, version: 'latest' },
+      { type: 'custom' as const, skill_id: input.skillIds.tallyAccounts, version: 'latest' },
     ],
     metadata: { project: 'hisabkitab', phase: '5' },
   };

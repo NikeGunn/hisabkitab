@@ -15,6 +15,31 @@ owner's confirmation. The agent shows its work, flags anything it's unsure about
 - `docs/nepali-smb-finance-agent-PRD*.md` — v1.0 base, v1.1 (safety + verified tax, authoritative),
   v1.2 (reports module), v2.0 (commercialization — build after the pilot).
 
+## TallyPrime integration (read-only) — NEW
+
+Businesses that keep their books in **TallyPrime** can connect them to HisabKitab and simply ask
+on WhatsApp: *"What's Sharma Traders' balance?"*, *"Who owes me?"*, *"Show outstanding bills."*
+
+- **Pull, never push.** The integration is read-only **by construction** — there is no code path
+  (tool, DB constraint, or connector operation) that can create, alter, or delete anything in Tally.
+- **Setup is one code.** The owner texts "connect my Tally", gets an 8-character setup code, and
+  types it into a small connector app on the computer that runs Tally. The connector only dials
+  OUT (long-polling) — no port forwarding, no firewall changes, Tally's port 9000 stays local.
+- **Every figure is verified.** Results are schema-validated and independently reconciled
+  (opening + credits − debits must equal closing; bill lines must sum to the report total) with
+  exact integer-paisa arithmetic. If the numbers don't tie, the owner is told the figure could
+  not be verified — a wrong number is never shown. Trust states:
+  `verified · verified_with_warnings · ambiguous · partial · stale · unavailable · failed`.
+- **Ambiguity is never guessed.** "Sharma" matching three ledgers returns the candidates; the
+  owner picks. Who may ask: owner, accountant, viewer (server-side RBAC); setup and company
+  binding are owner-only.
+- **Deterministic simulator** (`packages/tally-connector`) covers every failure mode for local
+  dev/CI — and production **rejects** simulator-sourced results, fail-closed.
+
+Packages: `packages/mcp-tally` (typed MCP tools + connector API) ·
+`packages/tally-connector` (customer-side connector + simulator) ·
+`packages/shared/src/tally` (pure money/reconciliation/trust core). Tracker: `PROGRESS.md`.
+
 ## Status — Phases 0–6 complete
 
 **Phase 6** ships the monthly VAT-return reminder scheduler in

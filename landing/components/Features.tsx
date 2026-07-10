@@ -68,6 +68,19 @@ export function Features() {
 
           <Tile delay={0.35}><Icon>🌱</Icon><h3 className="mt-3 font-serif font-semibold">Opening balances</h3><p className="mt-1 text-sm leading-relaxed text-muted">Switching mid year? Bring your open debtors, creditors, and VAT credit so day one is accurate.</p></Tile>
           <Tile delay={0.4}><Icon>📅</Icon><h3 className="mt-3 font-serif font-semibold">Year end carry forward</h3><p className="mt-1 text-sm leading-relaxed text-muted">Every month settled and excess VAT credit carried forward, the way the VAT Act intends.</p></Tile>
+
+          <Tile delay={0.45} className="flex items-start gap-5 sm:col-span-2 lg:col-span-4">
+            <Icon big>🔌</Icon>
+            <div>
+              <h3 className="font-serif font-semibold">Ask your TallyPrime, on WhatsApp</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted">
+                Keep your books in Tally? Connect it once with a simple code and ask away: a ledger
+                balance, who owes you, outstanding bills. Every figure is fetched live from your own
+                Tally, double checked before it reaches you, and it is read only. HisabKitab can ask
+                your Tally, never change it.
+              </p>
+            </div>
+          </Tile>
         </div>
       </div>
     </section>

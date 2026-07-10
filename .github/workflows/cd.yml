@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        service: [orchestrator, mcp-ledger, mcp-payments]
+        service: [orchestrator, mcp-ledger, mcp-payments, mcp-tally]
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4

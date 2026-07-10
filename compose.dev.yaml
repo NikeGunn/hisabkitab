@@ -29,6 +29,13 @@ services:
     ports:
       - '8802:8080'
 
+  tally:
+    environment:
+      TALLY_MCP_TOKEN: ${TALLY_MCP_TOKEN:-dev-tally-token}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:-dev-signing-secret-please-change}
+    ports:
+      - '8803:8080'
+
   orchestrator:
     environment:
       TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:-dev-signing-secret-please-change}

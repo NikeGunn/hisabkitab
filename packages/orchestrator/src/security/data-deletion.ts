@@ -36,6 +36,9 @@ const {
   deletionLog,
   usageCounters,
   openingBalances,
+  tallyJobs,
+  tallyCompanies,
+  tallyConnectors,
 } = schema;
 
 export interface DeletionReport {
@@ -165,6 +168,35 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
           .delete(openingBalances)
           .where(eq(openingBalances.tenantId, tenantId))
           .returning({ id: openingBalances.id })
+      ).length,
+    );
+
+    // Tally integration rows (FK order: jobs → companies → connectors).
+    await n(
+      'tally_jobs',
+      (
+        await tx
+          .delete(tallyJobs)
+          .where(eq(tallyJobs.tenantId, tenantId))
+          .returning({ id: tallyJobs.id })
+      ).length,
+    );
+    await n(
+      'tally_companies',
+      (
+        await tx
+          .delete(tallyCompanies)
+          .where(eq(tallyCompanies.tenantId, tenantId))
+          .returning({ id: tallyCompanies.id })
+      ).length,
+    );
+    await n(
+      'tally_connectors',
+      (
+        await tx
+          .delete(tallyConnectors)
+          .where(eq(tallyConnectors.tenantId, tenantId))
+          .returning({ id: tallyConnectors.id })
       ).length,
     );
 

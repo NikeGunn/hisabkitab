@@ -43,11 +43,12 @@ export async function ensureEnvironment(client: Anthropic): Promise<string> {
 
 export async function ensureAgent(
   client: Anthropic,
-  input: { ledgerMcpUrl: string; paymentsMcpUrl?: string; skillIds: SkillRefs; update?: boolean },
+  input: { ledgerMcpUrl: string; paymentsMcpUrl?: string; tallyMcpUrl?: string; skillIds: SkillRefs; update?: boolean },
 ): Promise<{ agentId: string; agentVersion: number }> {
   const config = buildAgentConfig({
     ledgerMcpUrl: input.ledgerMcpUrl,
     ...(input.paymentsMcpUrl ? { paymentsMcpUrl: input.paymentsMcpUrl } : {}),
+    ...(input.tallyMcpUrl ? { tallyMcpUrl: input.tallyMcpUrl } : {}),
     skillIds: input.skillIds,
   });
   for await (const agent of client.beta.agents.list()) {
@@ -66,13 +67,14 @@ export async function ensureAgent(
 
 export async function setup(
   client: Anthropic,
-  opts: { ledgerMcpUrl: string; paymentsMcpUrl?: string; update?: boolean; forceSkills?: boolean },
+  opts: { ledgerMcpUrl: string; paymentsMcpUrl?: string; tallyMcpUrl?: string; update?: boolean; forceSkills?: boolean },
 ): Promise<SetupResult> {
   const skillIds = await syncSkills(client, SKILLS_ROOT, { forceNewVersion: opts.forceSkills });
   const environmentId = await ensureEnvironment(client);
   const agent = await ensureAgent(client, {
     ledgerMcpUrl: opts.ledgerMcpUrl,
     ...(opts.paymentsMcpUrl ? { paymentsMcpUrl: opts.paymentsMcpUrl } : {}),
+    ...(opts.tallyMcpUrl ? { tallyMcpUrl: opts.tallyMcpUrl } : {}),
     skillIds,
     update: opts.update,
   });
@@ -92,10 +94,15 @@ if (isDirectRun) {
   if (!paymentsMcpUrl) {
     console.warn('PAYMENTS_MCP_URL not set — agent built WITHOUT the payments MCP (fine pre-Phase-5).');
   }
+  const tallyMcpUrl = process.env['TALLY_MCP_URL'];
+  if (!tallyMcpUrl) {
+    console.warn('TALLY_MCP_URL not set — agent built WITHOUT the Tally MCP (fine for non-Tally pilots).');
+  }
   const client = new Anthropic();
   const result = await setup(client, {
     ledgerMcpUrl,
     ...(paymentsMcpUrl ? { paymentsMcpUrl } : {}),
+    ...(tallyMcpUrl ? { tallyMcpUrl } : {}),
     update: process.argv.includes('--update'),
     forceSkills: process.argv.includes('--force-skills'),
   });

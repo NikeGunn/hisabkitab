@@ -584,3 +584,96 @@ export const openingBalances = pgTable(
     index('opening_balances_party_idx').on(t.tenantId, t.partyId),
   ],
 );
+
+// ----- Phase T1: TallyPrime read-only integration (mirrors 0018_tally.sql) -----
+
+/**
+ * One customer-side connector installation, bound to ONE tenant. Registration is a
+ * short-lived `setupCode` the owner types into the connector once; it is consumed
+ * and swapped for a device token whose SHA-256 hex lands in `tokenHash` (the token
+ * itself is shown once and never stored).
+ */
+export const tallyConnectors = pgTable(
+  'tally_connectors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    name: text('name').notNull().default('TallyPrime connector'),
+    status: text('status', { enum: ['pending', 'active', 'revoked'] })
+      .notNull()
+      .default('pending'),
+    setupCode: text('setup_code').unique(),
+    setupCodeExpiresAt: timestamp('setup_code_expires_at', { withTimezone: true }),
+    tokenHash: text('token_hash').unique(),
+    connectorVersion: text('connector_version'),
+    capabilities: jsonb('capabilities'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('tally_connectors_tenant_idx').on(t.tenantId)],
+);
+
+/**
+ * Company catalog: every Tally company a connector reported, with stable source
+ * identity ((connectorId, sourceId) — datasets are never merged by name) and
+ * freshness. `isBound` marks the company the owner confirmed for queries.
+ */
+export const tallyCompanies = pgTable(
+  'tally_companies',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connectorId: uuid('connector_id')
+      .notNull()
+      .references(() => tallyConnectors.id),
+    sourceId: text('source_id').notNull(),
+    name: text('name').notNull(),
+    booksFrom: date('books_from'),
+    lastVoucherOn: date('last_voucher_on'),
+    currency: text('currency').notNull().default('NPR'),
+    isBound: boolean('is_bound').notNull().default(false),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('tally_companies_connector_id_source_id_key').on(t.connectorId, t.sourceId),
+    index('tally_companies_tenant_idx').on(t.tenantId),
+  ],
+);
+
+/**
+ * Request/response job queue between the tally MCP tools (producer, hisab_app under
+ * RLS) and the connector API (consumer, hisab_orch). `operation` repeats the
+ * read-only allowlist as a DB CHECK — defense in depth with the tool layer and the
+ * connector itself.
+ */
+export const tallyJobs = pgTable(
+  'tally_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    connectorId: uuid('connector_id')
+      .notNull()
+      .references(() => tallyConnectors.id),
+    operation: text('operation', {
+      enum: ['health', 'list_companies', 'search_ledgers', 'get_ledger_balance', 'get_receivables'],
+    }).notNull(),
+    params: jsonb('params').notNull().default({}),
+    status: text('status', { enum: ['queued', 'running', 'done', 'failed', 'expired'] })
+      .notNull()
+      .default('queued'),
+    result: jsonb('result'),
+    error: text('error'),
+    correlationId: text('correlation_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [index('tally_jobs_connector_status_idx').on(t.connectorId, t.status, t.createdAt)],
+);

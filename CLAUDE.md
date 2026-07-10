@@ -421,6 +421,27 @@ retries — yet the `wa_events` dedupe row was claimed BEFORE processing, so any
   unbounded over a long-running orchestrator. Probes: crash-before-reply releases claim + apologizes +
   same-id redelivery is NOT false-deduped; pre-agent crash path same; queue-drain leak probe.
 
+**✅ TallyPrime read-only integration (Phase T1) — DONE (2026-07-10; simulator-verified):**
+"ask your Tally over WhatsApp" — pull-only, no writes possible by construction. New
+`@hisab/shared/tally` (digit-exact paisa parse, negative-is-debit sign convention, payload
+schemas, independent reconciliation opening+credits−debits=closing & Σbills=total, deterministic
+ledger-ambiguity resolver), migration **0018** (`tally_connectors`/`tally_companies`/`tally_jobs`
++ RLS + allowlist CHECK), new service **`packages/mcp-tally`** (:8803 — 7 typed tools:
+tally_connect/status/list_companies/bind_company/search_ledgers/get_ledger_balance/
+get_receivables; reads = `generate_report` so owner/accountant/viewer may ask, staff denied;
+connect/bind owner-only; trust contract verified|verified_with_warnings|ambiguous|partial|stale|
+unavailable|failed — figures render ONLY from verified±warnings; Postgres job queue + long-poll
+connector API `/connector/register|claim|result`, device token SHA-256-at-rest, setup-code
+pairing like WhatsApp onboarding), new **`packages/tally-connector`** (customer Windows box,
+outbound-only, official Tally XML Envelope/Collection on localhost:9000, deterministic SIMULATOR
+whose results production REJECTS). Agent: 6th skill `tally-accounts`, TALLY system-prompt ¶,
+optional `TALLY_MCP_URL` (same pattern as payments). GDPR purge covers the 3 tables. Compose
+`tally` service + CI/CD matrices + Dockerfile updated. Tests: shared+13, connector 15,
+mcp-tally 26 (incl. worst-case probes: lying Tally caught, forged cross-connector result,
+double-claim race, revoked/expired/replayed codes, prompt-injection-as-data, prod-rejects-
+simulator). **Real-TallyPrime verification pending** (docs/TALLY-INTEGRATION.md §10); Caddy
+`/tally/*` route + agent re-publish are deploy-time steps (DEPLOY.md §5a). Tracker: PROGRESS.md.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.

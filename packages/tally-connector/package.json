@@ -1,0 +1,27 @@
+{
+  "name": "@hisab/tally-connector",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/main.ts",
+    "simulate": "tsx src/run-simulator.ts"
+  },
+  "dependencies": {
+    "@hisab/shared": "workspace:*",
+    "fast-xml-parser": "^5.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  }
+}

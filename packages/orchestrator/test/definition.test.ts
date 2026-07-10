@@ -10,6 +10,7 @@ import {
   HISAB_MODEL,
   LEDGER_MCP_NAME,
   PAYMENTS_MCP_NAME,
+  TALLY_MCP_NAME,
 } from '../src/agent/definition.js';
 import { SYSTEM_PROMPT, PRODUCT_NAME } from '../src/agent/system-prompt.js';
 
@@ -19,6 +20,7 @@ const skillIds = {
   billExtraction: 'skill_c',
   nepalPayments: 'skill_d',
   accountsReports: 'skill_e',
+  tallyAccounts: 'skill_f',
 };
 
 describe('model is config, not a literal (dev = cheap, prod = Opus)', () => {
@@ -53,7 +55,7 @@ describe('buildAgentConfig', () => {
     expect(cfg.mcp_servers).toEqual([
       { type: 'url', name: LEDGER_MCP_NAME, url: 'https://ledger.example/mcp' },
     ]);
-    expect(cfg.skills.map((s) => s.skill_id)).toEqual(['skill_a', 'skill_b', 'skill_c', 'skill_d', 'skill_e']);
+    expect(cfg.skills.map((s) => s.skill_id)).toEqual(['skill_a', 'skill_b', 'skill_c', 'skill_d', 'skill_e', 'skill_f']);
     expect(cfg.tools).toContainEqual({
       type: 'mcp_toolset',
       mcp_server_name: LEDGER_MCP_NAME,
@@ -86,6 +88,36 @@ describe('buildAgentConfig', () => {
       mcp_server_name: PAYMENTS_MCP_NAME,
       default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
     });
+  });
+
+  it('omits the tally MCP when no tallyMcpUrl; wires it (always_allow) when given', () => {
+    const without = buildAgentConfig({ ledgerMcpUrl: 'https://ledger.example/mcp', skillIds });
+    expect(without.mcp_servers.some((s) => s.name === TALLY_MCP_NAME)).toBe(false);
+    const cfg = buildAgentConfig({
+      ledgerMcpUrl: 'https://ledger.example/mcp',
+      tallyMcpUrl: 'https://api.example/tally/mcp',
+      skillIds,
+    });
+    expect(cfg.mcp_servers).toContainEqual({
+      type: 'url',
+      name: TALLY_MCP_NAME,
+      url: 'https://api.example/tally/mcp',
+    });
+    expect(cfg.tools).toContainEqual({
+      type: 'mcp_toolset',
+      mcp_server_name: TALLY_MCP_NAME,
+      default_config: { enabled: true, permission_policy: { type: 'always_allow' } },
+    });
+  });
+
+  it('PROBE: rejects an http:// tally URL (tokens travel on it)', () => {
+    expect(() =>
+      buildAgentConfig({
+        ledgerMcpUrl: 'https://ledger.example/mcp',
+        tallyMcpUrl: 'http://api.example/tally/mcp',
+        skillIds,
+      }),
+    ).toThrow(/https/);
   });
 
   it('PROBE: rejects an http:// ledger URL (bearer tokens travel on it)', () => {

@@ -11,6 +11,7 @@
 #   migrate    one-shot: applies packages/db/migrations on the admin connection.
 #   ledger     tenant-scoped Ledger MCP   (:8080 /mcp + /healthz)
 #   payments   tenant-scoped Payments MCP (:8080 /mcp + /payments/khalti/return)
+#   tally      tenant-scoped Tally MCP + connector API (:8080 /mcp + /connector/*)
 #   orchestrator  Fastify webhook + scheduler (:8080 /webhook + /healthz)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,30 @@ services:
       KHALTI_ORIGIN: ${KHALTI_ORIGIN:-https://dev.khalti.com}
       PAYMENTS_PUBLIC_BASE_URL: ${PAYMENTS_PUBLIC_BASE_URL:-http://localhost:8802}
       WEBSITE_URL: ${WEBSITE_URL:-https://hisabkitab.pro}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  tally:
+    build:
+      <<: *app-build
+      args:
+        SERVICE: mcp-tally
+    environment:
+      PORT: 8080
+      # Tool side: tenant-scoped RLS role. Connector side: cross-tenant (device-token
+      # auth finds the tenant), same split as payments' CALLBACK_DATABASE_URL.
+      DATABASE_URL: postgres://hisab_app:${HISAB_APP_PASSWORD:-hisab_app_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      CONNECTOR_DATABASE_URL: postgres://hisab_orch:${HISAB_ORCH_PASSWORD:-hisab_orch_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      TALLY_MCP_TOKEN: ${TALLY_MCP_TOKEN:?set TALLY_MCP_TOKEN}
+      TENANT_SIGNING_SECRET: ${TENANT_SIGNING_SECRET:?set TENANT_SIGNING_SECRET}
     depends_on:
       migrate:
         condition: service_completed_successfully

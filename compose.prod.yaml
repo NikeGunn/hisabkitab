@@ -52,6 +52,16 @@ services:
       resources:
         limits: { cpus: '0.75', memory: 512m }
 
+  tally:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-mcp-tally:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+    ports:
+      - '127.0.0.1:8803:8080'
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 384m }
+
   orchestrator:
     image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-orchestrator:${IMAGE_TAG:-latest}
     build: !reset null

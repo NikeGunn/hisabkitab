@@ -94,6 +94,21 @@ export default function PlatformPage() {
         </p>
       </Section>
 
+      <Section id="tally" title="Ask your TallyPrime">
+        <p>
+          Already keep your books in TallyPrime? Connect it once, no IT person needed: HisabKitab
+          sends you a short code on WhatsApp, you type it into a small connector on the computer
+          that runs Tally, and you are done. From then on you can simply ask: a ledger balance,
+          who owes you, outstanding bills. <strong>Every figure is fetched live from your own
+          Tally and independently cross-checked before it reaches you</strong>; if the numbers do
+          not tie, you are told so instead of shown a wrong figure. And it is strictly
+          <strong> read-only</strong>: HisabKitab can ask your Tally questions, but nothing can
+          ever create, change, or delete an entry in your Tally. Your decades of records stay
+          exactly where they are, on your machine, and nothing about Tally is ever exposed to the
+          internet.
+        </p>
+      </Section>
+
       <Section id="reminders" title="Reminders">
         <p>
           Before the 25th of each Nepali month, the IRD filing deadline, the agent prepares your

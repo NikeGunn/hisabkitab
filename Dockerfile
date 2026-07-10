@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────────────────────
-# HisabKitab backend services — one parameterized multi-stage build for all three
-# (orchestrator / mcp-ledger / mcp-payments). Pick the service at build time:
+# HisabKitab backend services — one parameterized multi-stage build for all four
+# (orchestrator / mcp-ledger / mcp-payments / mcp-tally). Pick the service at build time:
 #   docker build --build-arg SERVICE=mcp-ledger -t ghcr.io/<owner>/hisab-mcp-ledger .
 #
 # Design (FAANG-grade, justified):
@@ -30,6 +30,8 @@ COPY packages/shared/package.json        packages/shared/package.json
 COPY packages/db/package.json            packages/db/package.json
 COPY packages/mcp-ledger/package.json    packages/mcp-ledger/package.json
 COPY packages/mcp-payments/package.json  packages/mcp-payments/package.json
+COPY packages/mcp-tally/package.json     packages/mcp-tally/package.json
+COPY packages/tally-connector/package.json packages/tally-connector/package.json
 COPY packages/orchestrator/package.json  packages/orchestrator/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
