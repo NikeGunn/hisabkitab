@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { handleVerifyHandshake, verifyWebhookSignature } from '../src/whatsapp/signature.js';
 
 const SECRET = 'meta-app-secret';
-const sign = (body: string) => `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`;
+const sign = (body: Buffer | string) =>
+  `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`;
 
 describe('verifyWebhookSignature', () => {
   it('accepts a correctly signed raw body', () => {
@@ -16,10 +17,28 @@ describe('verifyWebhookSignature', () => {
     expect(verifyWebhookSignature(Buffer.from('{"x":2}'), sign('{"x":1}'), SECRET)).toBe(false);
   });
 
+  it('treats BOM, CRLF, trailing newline, and JSON ordering as significant raw bytes', () => {
+    const compact = Buffer.from('{"object":"whatsapp_business_account","entry":[]}');
+    const trailingLf = Buffer.concat([compact, Buffer.from('\n')]);
+    const trailingCrlf = Buffer.concat([compact, Buffer.from('\r\n')]);
+    const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), compact]);
+    const reordered = Buffer.from('{"entry":[],"object":"whatsapp_business_account"}');
+
+    for (const exactBody of [compact, trailingLf, trailingCrlf, bom, reordered]) {
+      expect(verifyWebhookSignature(exactBody, sign(exactBody), SECRET)).toBe(true);
+    }
+
+    for (const changedBody of [trailingLf, trailingCrlf, bom, reordered]) {
+      expect(verifyWebhookSignature(changedBody, sign(compact), SECRET)).toBe(false);
+    }
+  });
+
   it('PROBE: rejects missing/malformed headers', () => {
     expect(verifyWebhookSignature('body', undefined, SECRET)).toBe(false);
     expect(verifyWebhookSignature('body', 'sha1=abcd', SECRET)).toBe(false);
     expect(verifyWebhookSignature('body', 'sha256=zz-not-hex', SECRET)).toBe(false);
+    expect(verifyWebhookSignature('body', 'sha256=' + '0'.repeat(62), SECRET)).toBe(false);
+    expect(verifyWebhookSignature('body', 'sha256=' + '0'.repeat(66), SECRET)).toBe(false);
   });
 });
 

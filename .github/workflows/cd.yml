@@ -1,6 +1,6 @@
 name: CD
 
-# On push to main: build + push the three service images to GHCR (always), then
+# On push to main: build + push the four service images to GHCR (always), then
 # deploy them to the single production VM over SSH using compose.prod.yaml.
 #
 # DESIGN: the deploy step is DORMANT until you add the server secrets. With no
@@ -126,15 +126,17 @@ jobs:
             set -e
             # containers report healthy ~30-60s after `up -d`; poll instead of
             # failing on the first probe (the deploy itself already succeeded)
-            for port in 8801 8802 8810; do
+            for target in ledger:8801 payments:8802 tally:8803 orchestrator:8810; do
+              service="${target%%:*}"
+              port="${target##*:}"
               ok=""
               for i in $(seq 1 30); do
                 if curl -fsS -m 3 "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
-                  ok=1; echo ":${port} healthy"; break
+                  ok=1; echo "${service} :${port} healthy"; break
                 fi
                 sleep 2
               done
               if [ -z "$ok" ]; then
-                echo ":${port} NEVER became healthy"; exit 1
+                echo "${service} :${port} NEVER became healthy"; exit 1
               fi
             done

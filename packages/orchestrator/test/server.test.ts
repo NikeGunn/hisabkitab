@@ -13,7 +13,8 @@ const { processInbound } = await import('../src/whatsapp/router.js');
 
 const SECRET = 'app-secret-123';
 const VERIFY = 'verify-token-123';
-const sign = (body: string) => `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`;
+const sign = (body: Buffer | string) =>
+  `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`;
 
 const PAYLOAD = JSON.stringify({
   object: 'whatsapp_business_account',
@@ -91,7 +92,7 @@ describe('GET /webhook (handshake)', () => {
 });
 
 describe('POST /webhook', () => {
-  const post = (body: string, signature?: string) =>
+  const post = (body: Buffer | string, signature?: string) =>
     app.inject({
       method: 'POST',
       url: '/webhook',
@@ -117,6 +118,30 @@ describe('POST /webhook', () => {
   it('PROBE: 401 on a missing or forged signature — body never parsed', async () => {
     expect((await post(PAYLOAD)).statusCode).toBe(401);
     expect((await post(PAYLOAD, 'sha256=' + '0'.repeat(64))).statusCode).toBe(401);
+    expect((await post(PAYLOAD, 'sha256=not-hex')).statusCode).toBe(401);
+  });
+
+  it('PROBE: authenticates the exact transmitted bytes without normalizing JSON whitespace', async () => {
+    const compact = Buffer.from('{"object":"whatsapp_business_account","entry":[]}');
+    const trailingLf = Buffer.concat([compact, Buffer.from('\n')]);
+    const trailingCrlf = Buffer.concat([compact, Buffer.from('\r\n')]);
+    const reordered = Buffer.from('{"entry":[],"object":"whatsapp_business_account"}');
+
+    expect((await post(trailingLf, sign(compact))).statusCode).toBe(401);
+    expect((await post(trailingCrlf, sign(compact))).statusCode).toBe(401);
+    expect((await post(reordered, sign(compact))).statusCode).toBe(401);
+
+    expect((await post(trailingLf, sign(trailingLf))).statusCode).toBe(200);
+    expect((await post(trailingCrlf, sign(trailingCrlf))).statusCode).toBe(200);
+    expect((await post(reordered, sign(reordered))).statusCode).toBe(200);
+  });
+
+  it('PROBE: a correctly signed UTF-8 BOM reaches parsing but is never normalized away', async () => {
+    const compact = Buffer.from('{"object":"whatsapp_business_account","entry":[]}');
+    const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), compact]);
+    const res = await post(bom, sign(bom));
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'malformed payload' });
   });
 
   it('PROBE: 400 on signed-but-malformed JSON', async () => {
