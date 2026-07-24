@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@hisab/shared": "workspace:*",
-    "fast-xml-parser": "^5.3.0",
+    "fast-xml-parser": "^5.10.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
