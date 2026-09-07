@@ -27,11 +27,11 @@
     "down": "docker compose -f compose.yaml -f compose.dev.yaml down"
   },
   "devDependencies": {
-    "concurrently": "^10.0.3",
+    "concurrently": "^10.0.5",
     "eslint": "^9.39.0",
-    "prettier": "^3.6.2",
+    "prettier": "^3.9.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.61.1"
+    "typescript-eslint": "^8.69.0"
   },
   "pnpm": {
     "overrides": {
