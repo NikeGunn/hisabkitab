@@ -1,42 +1,76 @@
 version: 2
-updates:
-  # Keep GitHub Actions pinned versions current (security + Node20→24 deprecations).
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: weekly
-    labels: ["type: chore", "type: security"]
-    commit-message:
-      prefix: "ci"
 
-  # npm/pnpm dependencies across the monorepo root.
+# Dependency policy (one batched, quiet, safe stream — not a PR per package):
+# - ONE weekly window (Mon 06:00 NPT). Routine bumps are grouped into a single PR
+#   per ecosystem; majors stay separate because they need a human migration.
+# - Cooldown: a release must be N days old before we take it. Most malicious npm
+#   releases (account takeovers, worm-style publishes) are pulled within days, so
+#   waiting is cheap supply-chain protection. Security updates bypass cooldown.
+# - Security fixes for a DIRECT dep arrive as one grouped PR. TRANSITIVE vulns
+#   that Dependabot can't bump (parent pins the range → "security_update_not_possible",
+#   which shows up as a red run on main) are fixed by us with a same-major
+#   `pnpm.overrides` entry in the root package.json. CI's `pnpm audit` gate
+#   (ci.yml → deps-audit) makes sure a new one can't sit unnoticed.
+# - Patch/minor PRs auto-merge once the required CI checks pass
+#   (dependabot-auto-merge.yml). Majors always wait for review.
+updates:
   - package-ecosystem: npm
-    directory: "/"
+    directories: ['/', '/landing']
     schedule:
       interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Kathmandu
     open-pull-requests-limit: 5
-    labels: ["type: chore"]
+    labels: ['type: chore']
     commit-message:
-      prefix: "deps"
+      prefix: 'deps'
+    cooldown:
+      default-days: 3
+      semver-patch-days: 3
+      semver-minor-days: 7
+      semver-major-days: 30
     groups:
-      # one PR for routine minor/patch bumps; majors stay separate for review.
+      security:
+        applies-to: security-updates
+        patterns: ['*']
       minor-and-patch:
-        update-types: ["minor", "patch"]
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: ['minor', 'patch']
     ignore:
       # MAJOR bumps of toolchain/runtime deps need a deliberate migration PR, not an
       # automated bump — they break the strict build / lint / pinned runtime.
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "typescript-eslint"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript-eslint'
+        update-types: ['version-update:semver-major']
       # @types/node MUST track the Node major we actually run (Node 20).
-      - dependency-name: "@types/node"
-        versions: [">=21"]
+      - dependency-name: '@types/node'
+        versions: ['>=21']
       # pdfmake 0.2 API is hand-tuned in the reports renderer; drizzle-kit 0.3x and
       # these 0.x "minors" are effectively breaking — bump them deliberately.
-      - dependency-name: "pdfmake"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
-      - dependency-name: "drizzle-kit"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      - dependency-name: 'pdfmake'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'drizzle-kit'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+
+  # GitHub Actions: one grouped PR a week (security + Node runtime deprecations).
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Kathmandu
+    open-pull-requests-limit: 2
+    labels: ['type: chore', 'type: security']
+    commit-message:
+      prefix: 'ci'
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']
