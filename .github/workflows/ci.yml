@@ -1,15 +1,22 @@
 name: CI
 
-# Full gate (test + docker-build + landing) runs on PRs only. Branch protection is
-# strict (PR must be up to date with main) and merges are squash, so the commit that
-# lands on main has exactly the tree the PR run already verified; re-running the
-# gate on the main push was pure duplication. The main push runs only `scan`, so the
-# Security tab tracks main. CD's image builds keep the docker layer cache warm.
-# Works identically whether the repo is public or private.
+# Change-aware PR gate with ONE required check (`ci-ok`).
+#
+# - `changes` decides which parts of the repo a PR touched; each job runs only when
+#   its inputs changed (a landing-only PR never boots Postgres; a backend-only PR never
+#   builds the website). Editing this workflow runs everything.
+# - `ci-ok` aggregates every job: it fails if any job failed or was cancelled and
+#   passes when the rest succeeded or were skipped as irrelevant. Branch protection
+#   requires ONLY `ci-ok`, so adding/renaming/matrixing jobs never strands a PR on a
+#   "required check expected" that will never report.
+# - Branch protection is strict + squash merges, so main receives exactly the tree a
+#   PR run verified; the push to main runs only `scan` (Security tab tracks main).
+# - Run everything on demand: Actions → CI → Run workflow (any branch).
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,10 +26,51 @@ permissions:
   contents: read
 
 jobs:
+  # ── which parts changed? (workflow_dispatch = everything) ──
+  changes:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.all.outputs.run || steps.filter.outputs.backend }}
+      landing: ${{ steps.all.outputs.run || steps.filter.outputs.landing }}
+    steps:
+      - id: all
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "run=true" >> "$GITHUB_OUTPUT"
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            backend:
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'tsconfig*.json'
+              - 'eslint.config.*'
+              - '.prettierrc*'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'compose*.yaml'
+              - 'infra/**'
+              - '.github/scripts/**'
+              - '.github/workflows/ci.yml'
+            landing:
+              - 'landing/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/landing-pages.yml'
+
   # ── quality gate: typecheck + lint + the full vitest suite against real PG+Redis ──
   test:
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -82,10 +130,12 @@ jobs:
       - name: Test (sequential, shared test DB)
         run: pnpm test
 
-  # ── build all three service images (no push); proves the Dockerfile is green ──
+  # ── build all service images (no push); proves the Dockerfile is green ──
   docker-build:
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -121,10 +171,13 @@ jobs:
           done
           echo "healthz never came up"; docker logs smoke; exit 1
 
-  # ── landing: its own lockfile, so verify it installs frozen + builds before merge ──
+  # ── landing: own pnpm workspace + lockfile; must install frozen and build ──
+  # Fonts are self-hosted (next/font/local), so the build needs no network.
   landing:
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: landing
@@ -141,8 +194,8 @@ jobs:
   # Google OSV-Scanner reads OSV, which includes the GitHub advisory DB (the same data
   # behind Dependabot alerts; `pnpm audit` uses npm's feed and missed landing vulns).
   # Diff-aware: it scans base vs head and fails only on vulns this PR adds, so a
-  # freshly published advisory never turns unrelated PRs red. Existing ones are fixed
-  # with a same-major `pnpm.overrides` entry. Not a required check.
+  # freshly published advisory never turns unrelated PRs red. Vulns already on main
+  # are tracked by the weekly dependency dashboard (deps-dashboard.yml).
   deps-audit:
     if: github.event_name == 'pull_request'
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.6.0
@@ -153,6 +206,25 @@ jobs:
     with:
       upload-sarif: false
 
+  # ── the ONE required check: green iff nothing that ran failed ──
+  ci-ok:
+    if: always() && github.event_name != 'push'
+    needs: [changes, test, docker-build, landing, deps-audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All required jobs succeeded or were skipped as unaffected
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad=$(echo "$NEEDS" | jq -r '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key] | join(", ")')
+          if [ -n "$bad" ]; then echo "::error title=CI failed::$bad"; exit 1; fi
+          # `changes` decides what runs; if it did not succeed nothing was verified.
+          if [ "$(echo "$NEEDS" | jq -r '.changes.result')" != "success" ]; then
+            echo "::error title=CI failed::change detection did not succeed"; exit 1
+          fi
+
   # ── security: filesystem + dependency vulnerability scan (advisory) ──
   # Marked continue-on-error: the Trivy binary install / DB download is
   # occasionally flaky on the runner (GitHub API rate limits), and an advisory
@@ -160,6 +232,7 @@ jobs:
   # surface in the Security tab when the scan runs.
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     continue-on-error: true
     permissions:
       contents: read

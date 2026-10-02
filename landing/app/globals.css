@@ -1,6 +1,146 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-primary: #f68b1f;
+  --color-accent: #fdb813;
+  --color-cream: #f2ead3;
+  --color-surface: #ffffff;
+  --color-ink: #111827;
+  --color-muted: #4b5563;
+  --color-hairline: #e5e7eb;
+
+  --color-wa-bg: #e7decb;
+  --color-wa-out: #dcf8c6;
+  --color-wa-in: #ffffff;
+  --color-wa-header: #075e54;
+  --color-wa-tick: #34b7f1;
+  --color-wa-green: #25d366;
+
+  --font-serif: var(--font-newsreader), Georgia, Times New Roman, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --radius-card: 16px;
+  --radius-control: 8px;
+  --radius-pill: 9999px;
+
+  --container-content: 1200px;
+
+  /* v3 line-heights. v4 made text-* line-heights unitless ratios, which children
+     with a different font size (e.g. text-[10.5px] inside text-sm) inherit as a
+     ratio, so they shrank (20px -> 15px). Absolute rems inherit like v3. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+
+  --shadow-card:
+    0 1px 2px rgba(17, 24, 39, 0.04), 0 8px 24px rgba(17, 24, 39, 0.06);
+  --shadow-lift: 0 12px 40px rgba(246, 139, 31, 0.18);
+  --shadow-device: 0 30px 80px -20px rgba(17, 24, 39, 0.35);
+
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-marquee-reverse: marqueeReverse 40s linear infinite;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @keyframes marquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes marqueeReverse {
+    0% {
+      transform: translateX(-50%);
+    }
+    100% {
+      transform: translateX(0);
+    }
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+/*
+  Shared component classes. They live in the components layer (NOT @utility) so
+  plain utilities on the element still override them, exactly as in v3:
+  e.g. `display text-2xl` keeps text-2xl's line-height. As @utility (the upgrade
+  tool's output) they sorted after utilities and shrank every heading.
+*/
+@layer components {
+  .label {
+    @apply font-mono text-[12px] font-semibold uppercase tracking-[0.14em] text-muted;
+  }
+
+  .display {
+    @apply font-serif font-medium tracking-tight text-ink;
+    /* plain property, not `leading-[1.04]`: v4's leading-* sets --tw-leading, which
+       text-* utilities read FIRST, so it would override `display text-2xl` headings
+       (v3 let text-2xl's line-height win). This keeps the v3 result. */
+    line-height: 1.04;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-control bg-primary px-6 py-3
+        font-medium text-white shadow-card transition-all duration-200
+        hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-control border border-hairline
+        bg-surface px-6 py-3 font-medium text-ink transition-all duration-200
+        hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card;
+  }
+
+  .card {
+    @apply rounded-card border border-hairline bg-surface shadow-card;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-pill border border-hairline bg-surface/80
+        px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted backdrop-blur-sm;
+  }
+}
 
 @layer base {
   :root {
@@ -15,32 +155,6 @@
   }
   ::selection {
     background: rgba(246, 139, 31, 0.25);
-  }
-}
-
-@layer components {
-  .label {
-    @apply font-mono text-[12px] font-semibold uppercase tracking-[0.14em] text-muted;
-  }
-  .display {
-    @apply font-serif font-medium leading-[1.04] tracking-tight text-ink;
-  }
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-control bg-primary px-6 py-3
-      font-medium text-white shadow-card transition-all duration-200
-      hover:-translate-y-0.5 hover:shadow-lift active:translate-y-0;
-  }
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-control border border-hairline
-      bg-surface px-6 py-3 font-medium text-ink transition-all duration-200
-      hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card;
-  }
-  .card {
-    @apply rounded-card border border-hairline bg-surface shadow-card;
-  }
-  .pill {
-    @apply inline-flex items-center gap-2 rounded-pill border border-hairline bg-surface/80
-      px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted backdrop-blur;
   }
 }
 

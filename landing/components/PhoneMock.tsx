@@ -36,7 +36,7 @@ function Bubble({ children, side, delay }: { children: React.ReactNode; side: 'i
       className={`flex ${side === 'out' ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`max-w-[78%] rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${
+        className={`max-w-[78%] rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-xs ${
           side === 'out' ? 'rounded-br-sm bg-wa-out text-ink' : 'rounded-bl-sm bg-wa-in text-ink'
         }`}
       >
@@ -65,7 +65,7 @@ export function PhoneMock() {
         className="animate-float"
       >
         {/* device frame */}
-        <div className="rounded-[40px] border-[10px] border-ink/90 bg-ink shadow-device">
+        <div className="rounded-[40px] border-10 border-ink/90 bg-ink shadow-device">
           <div className="relative overflow-hidden rounded-[30px] bg-wa-bg">
             {/* notch */}
             <div className="absolute left-1/2 top-0 z-20 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-ink" />
@@ -145,7 +145,7 @@ export function PhoneMock() {
                 transition={{ duration: 1, times: [0, 0.2, 0.8, 1], delay: 0.7 }}
                 className="flex justify-start"
               >
-                <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-wa-in px-3 py-2.5 shadow-sm">
+                <div className="flex gap-1 rounded-2xl rounded-bl-sm bg-wa-in px-3 py-2.5 shadow-xs">
                   {[0, 1, 2].map((d) => (
                     <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted/50" style={{ animationDelay: `${d * 0.15}s` }} />
                   ))}

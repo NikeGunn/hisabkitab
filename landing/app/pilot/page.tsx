@@ -37,7 +37,7 @@ export default function PilotPage() {
         <p>
           Start the conversation on WhatsApp and we&apos;ll set you up. It takes a few minutes.
         </p>
-        <a href="/#start" className="btn-primary mt-2">Start on WhatsApp →</a>
+        <a href="/#start" className="btn-primary first:mt-2">Start on WhatsApp →</a>
       </Section>
     </PageShell>
   );

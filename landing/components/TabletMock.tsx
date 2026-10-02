@@ -39,7 +39,7 @@ export function TabletMock() {
       transition={{ duration: 0.9, ease, delay: 0.15 }}
       className="w-[420px] max-w-full"
     >
-      <div className="rounded-[28px] border-[8px] border-ink/90 bg-ink shadow-device">
+      <div className="rounded-[28px] border-8 border-ink/90 bg-ink shadow-device">
         <div className="overflow-hidden rounded-[20px] bg-surface">
           {/* app chrome */}
           <div className="flex items-center justify-between border-b border-hairline px-5 py-3">
@@ -47,7 +47,7 @@ export function TabletMock() {
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 font-serif text-primary">हि</span>
               <p className="font-serif text-sm font-semibold">This month, Shrawan 2082</p>
             </div>
-            <span className="pill !text-[10px]">Live</span>
+            <span className="pill text-[10px]!">Live</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3 p-5">
@@ -65,7 +65,7 @@ export function TabletMock() {
                   initial={{ height: 0, opacity: 0 }}
                   animate={inView ? { height: h, opacity: 1 } : {}}
                   transition={{ duration: 0.7, ease, delay: 0.5 + i * 0.08 }}
-                  className="w-full rounded-t-md bg-gradient-to-t from-primary to-accent"
+                  className="w-full rounded-t-md bg-linear-to-t from-primary to-accent"
                   style={{ height: h }}
                 />
               ))}
@@ -109,7 +109,7 @@ function Stat({ label, value, tone, delay }: { label: string; value: React.React
       transition={{ duration: 0.5, ease, delay }}
       className="rounded-card border border-hairline bg-surface p-3"
     >
-      <p className="label !text-[10px]">{label}</p>
+      <p className="label text-[10px]!">{label}</p>
       <p className={`mt-1 font-serif text-lg font-semibold ${ring}`}>{value}</p>
     </motion.div>
   );

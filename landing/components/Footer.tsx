@@ -69,7 +69,7 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-4 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
           <div className="col-span-2 sm:col-span-4 lg:col-span-1">
             <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent font-serif text-white">हि</span>
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-linear-to-br from-primary to-accent font-serif text-white">हि</span>
               <span className="font-serif text-xl font-semibold">HisabKitab</span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">

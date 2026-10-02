@@ -1,0 +1,72 @@
+name: Dependency dashboard
+
+# Keeps ONE issue ("Dependency dashboard") current instead of a PR per major:
+#   - known vulnerabilities on main (full OSV scan, root + landing lockfiles)
+#   - available MAJOR upgrades (Dependabot ignores npm majors on purpose)
+# Weekly, right after Dependabot's Monday window, and on demand. Never fails on
+# findings (no red runs on main): a new vulnerability posts a comment on the issue,
+# which notifies watchers. A scan that cannot run is reported as unavailable,
+# never as clean.
+on:
+  schedule:
+    - cron: '45 0 * * 1' # Mon 06:30 Asia/Kathmandu
+  workflow_dispatch:
+
+concurrency:
+  group: deps-dashboard
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 20 }
+
+      - name: Outdated (root + landing)
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          (cd landing && pnpm install --frozen-lockfile --ignore-scripts)
+          # `pnpm outdated` exits 1 when anything is outdated; the JSON is what we want.
+          pnpm outdated -r --format json > "$RUNNER_TEMP/root.json" || true
+          (cd landing && pnpm outdated --format json > "$RUNNER_TEMP/landing.json") || true
+
+      - name: OSV scan (exits non-zero when vulns exist; the report handles that)
+        uses: google/osv-scanner-action/osv-scanner-action@v2.6.0
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --format=json
+            --output=osv.json
+            --lockfile=pnpm-lock.yaml
+            --lockfile=landing/pnpm-lock.yaml
+
+      - name: Render report
+        id: report
+        run: node .github/scripts/deps-dashboard.mjs "$RUNNER_TEMP/root.json" "$RUNNER_TEMP/landing.json" osv.json > "$RUNNER_TEMP/body.md"
+
+      - name: Upsert the dashboard issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VULNS: ${{ steps.report.outputs.vulns }}
+        run: |
+          title="Dependency dashboard"
+          num=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -1)
+          if [ -z "$num" ]; then
+            gh issue create --title "$title" --label dependencies --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue edit "$num" --body-file "$RUNNER_TEMP/body.md"
+            if [ "${VULNS:-0}" -gt 0 ]; then
+              gh issue comment "$num" --body "🔴 $VULNS known vulnerabilit(y/ies) on main. See the table above."
+            fi
+          fi
+          cat "$RUNNER_TEMP/body.md" >> "$GITHUB_STEP_SUMMARY"
