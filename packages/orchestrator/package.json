@@ -32,7 +32,7 @@
     "bullmq": "^5.79.1",
     "drizzle-orm": "0.45.3",
     "fastify": "^5.12.1",
-    "ioredis": "^5.4.2",
+    "ioredis": "^6.0.0",
     "pdfmake": "^0.2.23",
     "zod": "^4.6.5"
   },
