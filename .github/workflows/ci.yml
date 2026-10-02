@@ -137,6 +137,22 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-workspace
       - run: pnpm build
 
+  # ── deps-audit: no known HIGH vuln in shipped (prod) deps, root + landing ──
+  # Transitive vulns Dependabot can't bump are fixed with a same-major
+  # `pnpm.overrides` entry; this job makes a new one visible on the PR instead of
+  # as a red Dependabot run on main. Not a required check: a freshly published
+  # advisory flags PRs without hard-blocking unrelated work.
+  deps-audit:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 10.14.0 }
+      - run: pnpm audit --prod --audit-level=high
+      - run: pnpm audit --prod --audit-level=high
+        working-directory: landing
+
   # ── security: filesystem + dependency vulnerability scan (advisory) ──
   # Marked continue-on-error: the Trivy binary install / DB download is
   # occasionally flaky on the runner (GitHub API rate limits), and an advisory
