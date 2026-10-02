@@ -16,11 +16,11 @@
   "dependencies": {
     "@hisab/shared": "workspace:*",
     "fast-xml-parser": "^5.11.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
-    "tsx": "^4.20.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }
