@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Newsreader, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import { LEGAL_ENTITY } from '@/components/legal-entity';
 
 // A warm editorial serif for display moments + a clean grotesque for body:
 // Newsreader (serif) + Inter (sans) + JetBrains Mono (metadata labels).
@@ -72,8 +73,18 @@ const jsonLd = {
       '@type': 'Organization',
       '@id': `${SITE}/#org`,
       name: 'HisabKitab',
+      legalName: LEGAL_ENTITY.name,
       url: SITE,
       logo: `${SITE}/icon.svg`,
+      telephone: LEGAL_ENTITY.phone,
+      email: LEGAL_ENTITY.email,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Ward No. 7',
+        addressLocality: LEGAL_ENTITY.locality,
+        addressRegion: LEGAL_ENTITY.region,
+        addressCountry: 'NP',
+      },
       areaServed: 'NP',
       description: DESCRIPTION,
     },
