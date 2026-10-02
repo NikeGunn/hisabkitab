@@ -1,7 +1,11 @@
 name: CI
 
-# Runs on every PR and every push to main. Works identically whether the repo is
-# public or private (no external services, GHCR auth uses the built-in token).
+# Full gate (test + docker-build + landing) runs on PRs only. Branch protection is
+# strict (PR must be up to date with main) and merges are squash, so the commit that
+# lands on main has exactly the tree the PR run already verified; re-running the
+# gate on the main push was pure duplication. The main push runs only `scan`, so the
+# Security tab tracks main. CD's image builds keep the docker layer cache warm.
+# Works identically whether the repo is public or private.
 on:
   pull_request:
   push:
@@ -17,6 +21,7 @@ permissions:
 jobs:
   # ── quality gate: typecheck + lint + the full vitest suite against real PG+Redis ──
   test:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -79,6 +84,7 @@ jobs:
 
   # ── build all three service images (no push); proves the Dockerfile is green ──
   docker-build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -114,6 +120,22 @@ jobs:
             sleep 1
           done
           echo "healthz never came up"; docker logs smoke; exit 1
+
+  # ── landing: its own lockfile, so verify it installs frozen + builds before merge ──
+  landing:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: landing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 10.14.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 20, cache: pnpm, cache-dependency-path: landing/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: pnpm build
 
   # ── security: filesystem + dependency vulnerability scan (advisory) ──
   # Marked continue-on-error: the Trivy binary install / DB download is
