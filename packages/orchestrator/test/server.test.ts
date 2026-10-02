@@ -149,3 +149,44 @@ describe('POST /webhook', () => {
     expect((await post(bad, sign(bad))).statusCode).toBe(400);
   });
 });
+
+describe('POST /webhook delivery statuses', () => {
+  it('status-only webhook: 200, nothing routed, failure counted with its Meta error code', async () => {
+    vi.mocked(processInbound).mockClear();
+    const body = JSON.stringify({
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                statuses: [
+                  {
+                    id: 'wamid.out1',
+                    status: 'failed',
+                    recipient_id: '15550001111',
+                    errors: [{ code: 131030 }],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign(body) },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(processInbound).not.toHaveBeenCalled();
+    const m = await app.inject({ url: '/metrics' });
+    expect(m.body).toMatch(
+      /hisab_wa_delivery_total\{[^}]*code="131030"[^}]*status="failed"[^}]*\} 1|hisab_wa_delivery_total\{[^}]*status="failed"[^}]*code="131030"[^}]*\} 1/,
+    );
+    expect(m.body).not.toContain('15550001111');
+  });
+});

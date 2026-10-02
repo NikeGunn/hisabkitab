@@ -197,6 +197,7 @@ export const METRIC = {
   gatewayTotal: 'hisab_gateway_calls_total',
   schedulerPassTotal: 'hisab_scheduler_pass_total',
   errorTotal: 'hisab_errors_total',
+  waDeliveryTotal: 'hisab_wa_delivery_total',
 } as const;
 
 /**
@@ -220,6 +221,10 @@ export function bindMetrics(reg: MetricsRegistry) {
   );
   const schedulerPass = reg.counter(METRIC.schedulerPassTotal, 'scheduler passes by kind + result');
   const errors = reg.counter(METRIC.errorTotal, 'errors by component');
+  const waDelivery = reg.counter(
+    METRIC.waDeliveryTotal,
+    'outbound WhatsApp delivery outcomes from Meta status webhooks (sent|delivered|read|failed) by error code',
+  );
   return {
     registry: reg,
     inbound: (labels?: Labels) => inbound.inc(labels),
@@ -230,6 +235,7 @@ export function bindMetrics(reg: MetricsRegistry) {
     gateway: (labels: { target: string; result: 'ok' | 'error' }) => gateway.inc(labels),
     schedulerPass: (labels: { kind: string; result: 'ok' | 'error' }) => schedulerPass.inc(labels),
     error: (labels: { component: string }) => errors.inc(labels),
+    waDelivery: (labels: { status: string; code: string }) => waDelivery.inc(labels),
     render: () => reg.render(),
   };
 }
