@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageShell, Section } from '@/components/PageShell';
+import { LEGAL_ENTITY } from '@/components/legal-entity';
 
 export const metadata: Metadata = {
   title: 'Terms',
@@ -12,8 +13,16 @@ export default function TermsPage() {
     <PageShell
       eyebrow="Legal"
       title="Terms of use"
-      lede="The agreement between you and HisabKitab, kept as short as honesty allows."
+      lede={`The agreement between you and HisabKitab (operated by ${LEGAL_ENTITY.name}), kept as short as honesty allows.`}
     >
+      <Section title="Who we are">
+        <p>
+          HisabKitab is operated by <strong>{LEGAL_ENTITY.name}</strong>, a private limited company
+          registered with the {LEGAL_ENTITY.registrar} (Reg. No. {LEGAL_ENTITY.registrationNo}).
+          Registered office: {LEGAL_ENTITY.address}. Phone:{' '}
+          <a className="text-primary underline-offset-4 hover:underline" href={LEGAL_ENTITY.phoneHref}>{LEGAL_ENTITY.phone}</a>.
+        </p>
+      </Section>
       <Section title="What HisabKitab is">
         <p>
           A bookkeeping assistant. It prepares figures and shows its work. <strong>It does not file your

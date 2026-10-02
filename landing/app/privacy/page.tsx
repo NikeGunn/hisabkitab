@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageShell, Section } from '@/components/PageShell';
+import { LEGAL_ENTITY } from '@/components/legal-entity';
 
 export const metadata: Metadata = {
   title: 'Privacy',
@@ -14,6 +15,14 @@ export default function PrivacyPage() {
       title="Privacy policy"
       lede="Plain language, no surprises. The short version: we keep what bookkeeping requires, and nothing more."
     >
+      <Section title="Who we are">
+        <p>
+          HisabKitab is operated by <strong>{LEGAL_ENTITY.name}</strong>, a private limited company
+          registered with the {LEGAL_ENTITY.registrar} (Reg. No. {LEGAL_ENTITY.registrationNo}).
+          Registered office: {LEGAL_ENTITY.address}. Phone:{' '}
+          <a className="text-primary underline-offset-4 hover:underline" href={LEGAL_ENTITY.phoneHref}>{LEGAL_ENTITY.phone}</a>.
+        </p>
+      </Section>
       <Section title="What we collect">
         <p>
           The bills, messages, and figures you send the agent on WhatsApp, your WhatsApp number, and
