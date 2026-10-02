@@ -9,8 +9,11 @@ version: 2
 # - Security fixes for a DIRECT dep arrive as one grouped PR. TRANSITIVE vulns
 #   that Dependabot can't bump (parent pins the range → "security_update_not_possible",
 #   which shows up as a red run on main) are fixed by us with a same-major
-#   `pnpm.overrides` entry in the root package.json. CI's `pnpm audit` gate
-#   (ci.yml → deps-audit) makes sure a new one can't sit unnoticed.
+#   `pnpm.overrides` entry (root or landing package.json). CI's diff-aware
+#   OSV-Scanner gate (ci.yml → deps-audit) flags any PR that introduces one.
+# - landing/ is its OWN pnpm workspace (landing/pnpm-workspace.yaml). Without that
+#   file pnpm walked up to the monorepo root, so Dependabot bumped
+#   landing/package.json but never landing/pnpm-lock.yaml → frozen installs failed.
 # - Patch/minor PRs auto-merge once the required CI checks pass
 #   (dependabot-auto-merge.yml). Majors always wait for review.
 updates:
@@ -55,6 +58,11 @@ updates:
       - dependency-name: 'pdfmake'
         update-types: ['version-update:semver-minor', 'version-update:semver-major']
       - dependency-name: 'drizzle-kit'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      # 0.x SDK for the BETA Managed Agents API: its "minors" change types (0.105 →
+      # 0.128 removed BetaSkill.display_title and broke typecheck). Upgrade it
+      # deliberately alongside a re-verified agent, never in the routine group.
+      - dependency-name: '@anthropic-ai/sdk'
         update-types: ['version-update:semver-minor', 'version-update:semver-major']
 
   # GitHub Actions: one grouped PR a week (security + Node runtime deprecations).

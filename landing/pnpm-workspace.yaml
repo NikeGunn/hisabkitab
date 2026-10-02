@@ -1,0 +1,7 @@
+# The landing site is a standalone pnpm project (own lockfile), NOT a member of the
+# root monorepo workspace. This file makes landing/ its own workspace root so pnpm
+# and Dependabot stop walking up to ../pnpm-workspace.yaml and actually maintain
+# landing/pnpm-lock.yaml (without it, Dependabot bumped package.json only → stale
+# lockfile → frozen install fails on PRs and the Pages deploy).
+packages:
+  - '.'
