@@ -465,11 +465,10 @@ deployed sha-12652a4 green. Agent v11 already targets `https://api.hisabkitab.pr
 Meta status (Graph-checked): ALL templates APPROVED, WABA APPROVED; business verification still in
 Meta review — NO public API exists to submit/expedite; resubmit only offered after a REJECTION.
 
-**🌐 EXTERNAL (remaining, not code):** ① Namecheap DNS: `api` A record → **43.152.239.105** (apex/www
-stay on GitHub Pages). ② After ①: `gh workflow run wa-webhook-register.yml -f
-callback_url=https://api.hisabkitab.pro/webhook`. ③ Lighthouse console: enable automatic snapshots
-(off-box backup). ④ Meta test number: add pilot phone to allowed recipients (manual). ⑤ Khalti
-merchant onboarding for live payments.
+**🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
+✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
+Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② Meta test number: add
+pilot phone to allowed recipients (manual). ③ Khalti merchant onboarding for live payments.
 
 ## 6. How to work with me
 - Before each phase, **propose a short plan and the file list**, then wait for my OK. Don't build
