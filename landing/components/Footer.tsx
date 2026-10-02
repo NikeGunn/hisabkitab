@@ -2,6 +2,8 @@
  * Footer: multi column navigation (Platform / Company / Resources / Connect)
  * plus legal pathways. Static (server component, no client JS).
  */
+import { LEGAL_ENTITY } from './legal-entity';
+
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Platform',
@@ -76,7 +78,14 @@ export function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-hairline pt-7 text-sm text-muted sm:flex-row">
-          <p>© {new Date().getFullYear()} HisabKitab. Made in Nepal 🇳🇵</p>
+          <div className="text-center sm:text-left">
+            <p>© {new Date().getFullYear()} {LEGAL_ENTITY.name}. HisabKitab is a product of {LEGAL_ENTITY.name}. Made in Nepal 🇳🇵</p>
+            <p className="mt-1 text-xs">
+              Company Reg. No. {LEGAL_ENTITY.registrationNo} · {LEGAL_ENTITY.address} ·{' '}
+              <a href={LEGAL_ENTITY.phoneHref} className="hover:text-ink">{LEGAL_ENTITY.phone}</a> ·{' '}
+              <a href={`mailto:${LEGAL_ENTITY.email}`} className="hover:text-ink">{LEGAL_ENTITY.email}</a>
+            </p>
+          </div>
           <div className="flex gap-6">
             <a href="/privacy" className="transition-colors hover:text-ink">Privacy</a>
             <a href="/terms" className="transition-colors hover:text-ink">Terms</a>
