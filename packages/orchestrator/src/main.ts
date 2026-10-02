@@ -45,6 +45,11 @@ const app = buildServer({
     agentId: config.AGENT_ID,
     environmentId: config.ENVIRONMENT_ID,
     ledgerMcpUrl: config.LEDGER_MCP_URL,
+    mcpServerUrls: [
+      config.LEDGER_MCP_URL,
+      ...(config.PAYMENTS_MCP_URL ? [config.PAYMENTS_MCP_URL] : []),
+      ...(config.TALLY_MCP_URL ? [config.TALLY_MCP_URL] : []),
+    ],
     signingSecret: config.TENANT_SIGNING_SECRET,
     // Module C: render+reconcile+deliver PDF reports the agent requested this turn.
     dispatchReport: (tenantId, toE164, req) =>
