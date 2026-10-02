@@ -3,10 +3,17 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { IDS_FILE } from './agent/setup.js';
 
+const optionalUrl = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
 const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1),
   DATABASE_URL: z.string().min(1), // hisab_orch connection
   LEDGER_MCP_URL: z.string().url(),
+  PAYMENTS_MCP_URL: optionalUrl,
+  TALLY_MCP_URL: optionalUrl,
   TENANT_SIGNING_SECRET: z.string().min(8),
   AGENT_ID: z.string().optional(),
   ENVIRONMENT_ID: z.string().optional(),

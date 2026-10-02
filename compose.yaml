@@ -156,6 +156,10 @@ services:
       # P15: same PAN/VAT field key as the ledger (orchestrator decrypts tenant PAN for reports).
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
       LEDGER_MCP_URL: ${LEDGER_MCP_URL:-http://ledger:8080/mcp}
+      # Managed Agents vault credentials are scoped to exact MCP URLs. In prod
+      # these are the public HTTPS URLs configured on the persisted agent.
+      PAYMENTS_MCP_URL: ${PAYMENTS_MCP_URL:-}
+      TALLY_MCP_URL: ${TALLY_MCP_URL:-}
       WA_PHONE_NUMBER_ID: ${WA_PHONE_NUMBER_ID:-dev-phone-id}
       WA_ACCESS_TOKEN: ${WA_ACCESS_TOKEN:-dev-wa-token}
       WA_WEBHOOK_VERIFY_TOKEN: ${WA_WEBHOOK_VERIFY_TOKEN:-dev-verify-token}
