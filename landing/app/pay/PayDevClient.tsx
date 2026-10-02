@@ -151,8 +151,8 @@ export function PayDevClient() {
             We will switch this on after the pilot.
           </p>
           <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-muted">
-            <span className="rounded bg-cream px-2 py-1 font-mono">eSewa coming soon</span>
-            <span className="rounded bg-cream px-2 py-1 font-mono">Fonepay coming soon</span>
+            <span className="rounded-sm bg-cream px-2 py-1 font-mono">eSewa coming soon</span>
+            <span className="rounded-sm bg-cream px-2 py-1 font-mono">Fonepay coming soon</span>
           </div>
         </motion.div>
 

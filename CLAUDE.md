@@ -84,6 +84,12 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
   is-direct-run check. The old hand-built `file:///${path}` produced four slashes on Linux, so the server
   silently never started in a container (exit 0, no logs). Never reintroduce that pattern.
 - Full deploy runbook + secrets list: `docs/DEPLOY.md`.
+- **CI/CD contract:** branch protection requires ONLY the aggregate `ci-ok` check (ci.yml); jobs are
+  change-aware (`changes` → backend/landing) so never add per-job required checks. Dependabot: weekly
+  grouped minor/patch + grouped security PRs auto-merge on green; npm MAJORS are not opened — they're
+  listed (with a full OSV vuln scan) on the weekly "Dependency dashboard" issue and upgraded by hand.
+  Transitive vulns: fix with a same-major `pnpm.overrides` entry. `landing/` is its own pnpm
+  workspace (landing/pnpm-workspace.yaml) with self-hosted fonts (no network at build).
 
 ## 5. Build order (follow phases; details in the PRDs)
 - **Phase 0** (v1.1): monorepo + `shared` (Money/paisa, VAT/TDS pure fns, BS-date) + **Validation Engine**,

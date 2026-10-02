@@ -1,18 +1,31 @@
 import type { Metadata } from 'next';
-import { Inter, Newsreader, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import './globals.css';
 import { LEGAL_ENTITY } from '@/components/legal-entity';
 
 // A warm editorial serif for display moments + a clean grotesque for body:
 // Newsreader (serif) + Inter (sans) + JetBrains Mono (metadata labels).
-const serif = Newsreader({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  variable: '--font-serif',
+// Self-hosted (the exact Google Fonts latin variable files, vendored in ./fonts):
+// next/font/google downloads fonts at BUILD time, so any network blip failed the
+// build ("An error occurred in `next/font`") in CI and the Pages deploy.
+const serif = localFont({
+  src: './fonts/newsreader-latin-wght.woff2',
+  weight: '400 600',
+  variable: '--font-newsreader',
   display: 'swap',
 });
-const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '600'], variable: '--font-mono', display: 'swap' });
+const sans = localFont({
+  src: './fonts/inter-latin-wght.woff2',
+  weight: '100 900',
+  variable: '--font-inter',
+  display: 'swap',
+});
+const mono = localFont({
+  src: './fonts/jetbrains-mono-latin-wght.woff2',
+  weight: '500 600',
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+});
 
 const SITE = 'https://hisabkitab.pro';
 const TITLE = 'HisabKitab · WhatsApp bookkeeping and VAT for Nepali businesses';

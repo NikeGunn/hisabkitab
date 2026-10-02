@@ -14,8 +14,9 @@ version: 2
 # - landing/ is its OWN pnpm workspace (landing/pnpm-workspace.yaml). Without that
 #   file pnpm walked up to the monorepo root, so Dependabot bumped
 #   landing/package.json but never landing/pnpm-lock.yaml → frozen installs failed.
-# - Patch/minor PRs auto-merge once the required CI checks pass
-#   (dependabot-auto-merge.yml). Majors always wait for review.
+# - Patch/minor PRs auto-merge once the required `ci-ok` check passes
+#   (dependabot-auto-merge.yml). npm majors are not opened at all: they are listed
+#   on the weekly dependency dashboard issue and upgraded deliberately.
 updates:
   - package-ecosystem: npm
     directories: ['/', '/landing']
@@ -42,28 +43,26 @@ updates:
         patterns: ['*']
         update-types: ['minor', 'patch']
     ignore:
-      # MAJOR bumps of toolchain/runtime deps need a deliberate migration PR, not an
-      # automated bump — they break the strict build / lint / pinned runtime.
-      - dependency-name: 'typescript'
-        update-types: ['version-update:semver-major']
-      - dependency-name: 'eslint'
-        update-types: ['version-update:semver-major']
-      - dependency-name: 'typescript-eslint'
+      # MAJOR bumps are planned migrations (run-time verified, one PR each), not bot
+      # PRs: they used to sit red, re-run full CI on every rebase, and pile up. The
+      # weekly dependency dashboard (deps-dashboard.yml) lists every available major
+      # AND runs a full OSV scan, because `ignore` also suppresses security updates
+      # (a vuln only fixable by a major would otherwise go unseen).
+      - dependency-name: '*'
         update-types: ['version-update:semver-major']
       # @types/node MUST track the Node major we actually run (Node 20).
       - dependency-name: '@types/node'
         versions: ['>=21']
-      # pdfmake 0.2 API is hand-tuned in the reports renderer; drizzle-kit 0.3x and
-      # these 0.x "minors" are effectively breaking — bump them deliberately.
+      # 0.x packages whose "minors" are breaking: bump deliberately.
+      # pdfmake 0.2 API is hand-tuned in the reports renderer.
       - dependency-name: 'pdfmake'
-        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+        update-types: ['version-update:semver-minor']
       - dependency-name: 'drizzle-kit'
-        update-types: ['version-update:semver-minor', 'version-update:semver-major']
-      # 0.x SDK for the BETA Managed Agents API: its "minors" change types (0.105 →
-      # 0.128 removed BetaSkill.display_title and broke typecheck). Upgrade it
-      # deliberately alongside a re-verified agent, never in the routine group.
+        update-types: ['version-update:semver-minor']
+      # Beta Managed Agents SDK: 0.105 -> 0.128 removed BetaSkill.display_title and
+      # broke typecheck. Upgrade alongside a re-verified agent, never in the group.
       - dependency-name: '@anthropic-ai/sdk'
-        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+        update-types: ['version-update:semver-minor']
 
   # GitHub Actions: one grouped PR a week (security + Node runtime deprecations).
   - package-ecosystem: github-actions

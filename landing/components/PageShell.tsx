@@ -63,7 +63,7 @@ export function Section({
 /** Definition-style card grid for feature/spec lists. */
 export function CardGrid({ items }: { items: { title: string; body: string; emoji?: string }[] }) {
   return (
-    <div className="mt-6 grid gap-5 sm:grid-cols-2">
+    <div className="grid gap-5 first:mt-6 sm:grid-cols-2">
       {items.map((it) => (
         <div key={it.title} className="card p-6">
           {it.emoji ? (

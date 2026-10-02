@@ -12,7 +12,7 @@ export function Nav() {
     >
       <nav className="mx-auto mt-4 flex max-w-content items-center justify-between rounded-pill border border-hairline bg-surface/80 px-4 py-2.5 shadow-card backdrop-blur-md sm:px-5">
         <a href="/" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent font-serif text-white">हि</span>
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-linear-to-br from-primary to-accent font-serif text-white">हि</span>
           <span className="font-serif text-lg font-semibold">HisabKitab</span>
         </a>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
@@ -22,7 +22,7 @@ export function Nav() {
           <a href="/pay" className="transition-colors hover:text-ink">Pricing</a>
           <a href="#trust" className="transition-colors hover:text-ink">Trust</a>
         </div>
-        <a href="#start" className="btn-primary !px-4 !py-2 text-sm">Start free</a>
+        <a href="#start" className="btn-primary px-4! py-2! text-sm">Start free</a>
       </nav>
     </motion.header>
   );

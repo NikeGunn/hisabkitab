@@ -34,7 +34,7 @@ export function Features() {
             overflows a fixed tile height. */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:auto-rows-fr lg:grid-cols-4">
           {/* big tile: VAT — spans 2x2 only where there's room for it */}
-          <Tile className="flex flex-col justify-between gap-6 bg-gradient-to-br from-surface to-cream/50 sm:col-span-2 sm:row-span-2">
+          <Tile className="flex flex-col justify-between gap-6 bg-linear-to-br from-surface to-cream/50 sm:col-span-2 sm:row-span-2">
             <div>
               <span className="label">Nepal VAT &amp; TDS</span>
               <h3 className="display mt-3 text-2xl">Tax math, done right</h3>

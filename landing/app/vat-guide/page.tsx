@@ -32,7 +32,7 @@ export default function VatGuidePage() {
             { title: 'NPR 30 lakh', body: 'For services, or for mixed goods-and-services.', emoji: '🧾' },
           ]}
         />
-        <p className="mt-4">
+        <p className="first:mt-4">
           Below the threshold you can still register voluntarily. This is useful if your customers want VAT
           bills. Some categories must register regardless of turnover.
         </p>
@@ -56,7 +56,7 @@ export default function VatGuidePage() {
             },
           ]}
         />
-        <p className="mt-4">
+        <p className="first:mt-4">
           Either way, <strong>the deadline is the 25th of the Nepali month following the period.</strong> Returns are filed
           on the IRD portal. Note: alternate reporting periods for brick, hotel, tourism, and film
           industries were withdrawn, so those sectors now follow the standard monthly cycle.

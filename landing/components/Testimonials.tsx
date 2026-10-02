@@ -28,7 +28,7 @@ function Card({ q }: { q: Scenario }) {
   return (
     <figure className="card mx-3 w-[340px] shrink-0 p-6">
       <figcaption className="mb-3 flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-lg text-white">
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-linear-to-br from-primary to-accent text-lg text-white">
           {q.icon}
         </span>
         <p className="font-serif text-sm font-semibold text-ink">{q.title}</p>
@@ -41,7 +41,7 @@ function Card({ q }: { q: Scenario }) {
 function Marquee({ items, reverse }: { items: Scenario[]; reverse?: boolean }) {
   const track = [...items, ...items]; // duplicate for a seamless -50% loop
   return (
-    <div className="group relative flex overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
+    <div className="group relative flex overflow-hidden mask-[linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]">
       <div className={`flex shrink-0 ${reverse ? 'animate-marquee-reverse' : 'animate-marquee'} group-hover:[animation-play-state:paused]`}>
         {track.map((q, i) => (
           <Card key={`${q.title}-${i}`} q={q} />

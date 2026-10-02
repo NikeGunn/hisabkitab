@@ -74,7 +74,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.8, duration: 0.6 }}
-            className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 rounded-pill border border-hairline bg-surface/90 px-4 py-2 font-mono text-[11px] text-muted shadow-card backdrop-blur"
+            className="absolute bottom-0 left-1/2 z-20 -translate-x-1/2 rounded-pill border border-hairline bg-surface/90 px-4 py-2 font-mono text-[11px] text-muted shadow-card backdrop-blur-sm"
           >
             <span className="mr-2 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             agent: extracted → validated → awaiting your ✅

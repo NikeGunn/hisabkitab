@@ -15,7 +15,7 @@ export function CTA() {
         {/* ambient orange glow */}
         <div className="pointer-events-none absolute -right-20 -top-20 h-72 w-72 rounded-full bg-primary/30 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-24 -left-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
-        <span className="label !text-accent">Ready when you are</span>
+        <span className="label text-accent!">Ready when you are</span>
         <h2 className="display mx-auto mt-4 max-w-2xl text-[36px] text-white sm:text-[48px]">
           Keep your books on WhatsApp, and approve every entry.
         </h2>
@@ -24,7 +24,7 @@ export function CTA() {
           Every entry waits for your approval before it is saved.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <a href="/pilot" className="btn-primary !bg-primary">Start on WhatsApp →</a>
+          <a href="/pilot" className="btn-primary bg-primary!">Start on WhatsApp →</a>
           <a href="#how" className="rounded-control border border-white/20 px-6 py-3 font-medium text-white transition-colors hover:bg-white/10">
             See how it works
           </a>
