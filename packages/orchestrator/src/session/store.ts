@@ -17,6 +17,8 @@ export interface SessionStoreDeps {
   agentId: string;
   environmentId: string;
   ledgerMcpUrl: string;
+  /** Exact public URLs configured on the agent; each needs its own vault credential. */
+  mcpServerUrls?: readonly string[];
   signingSecret: string;
 }
 
@@ -34,6 +36,7 @@ export async function getOrCreateTenantSession(
   const vaultOpts: TenantVaultOptions = {
     tenantId,
     ledgerMcpUrl: deps.ledgerMcpUrl,
+    ...(deps.mcpServerUrls !== undefined ? { mcpServerUrls: deps.mcpServerUrls } : {}),
     signingSecret: deps.signingSecret,
     role: caller.role,
     ...(caller.userId !== undefined ? { userId: caller.userId } : {}),

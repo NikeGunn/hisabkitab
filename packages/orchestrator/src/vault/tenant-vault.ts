@@ -1,5 +1,5 @@
 /**
- * Per-tenant Managed Agents vault holding the Ledger MCP bearer credential.
+ * Per-tenant Managed Agents vault holding role-scoped MCP bearer credentials.
  *
  * The bearer IS the HMAC-signed tenant token (mcp-ledger verifies it and derives
  * tenant_id from it — never from tool arguments). One session = one tenant = one
@@ -12,6 +12,12 @@ import type { Role } from '@hisab/shared';
 export interface TenantVaultOptions {
   tenantId: string;
   ledgerMcpUrl: string;
+  /**
+   * Exact MCP URLs configured on the agent. Managed Agents credentials are bound
+   * to one immutable `mcp_server_url`, so every URL needs its own credential.
+   * The ledger URL is always included for backward compatibility.
+   */
+  mcpServerUrls?: readonly string[];
   /** TENANT_SIGNING_SECRET shared with the Ledger MCP server. */
   signingSecret: string;
   /** Token lifetime; default 24h (a WhatsApp conversation day). */
@@ -38,14 +44,14 @@ export function mintLedgerBearer(opts: TenantVaultOptions): string {
 }
 
 /**
- * Idempotent: find-or-create the tenant's vault, then rotate-or-create the
- * static_bearer credential for the Ledger MCP URL with a freshly minted token.
+ * Idempotent: find-or-create the tenant's vault, then rotate-or-create one
+ * static_bearer credential per exact MCP URL with a freshly minted token.
  * Call before each session so the session never starts with an expired bearer.
  */
 export async function ensureTenantVault(
   client: Anthropic,
   opts: TenantVaultOptions,
-): Promise<{ vaultId: string; credentialId: string }> {
+): Promise<{ vaultId: string; credentialId: string; credentialIds: string[] }> {
   const name = tenantVaultName(opts.tenantId);
 
   let vaultId: string | undefined;
@@ -64,20 +70,35 @@ export async function ensureTenantVault(
   }
 
   const token = mintLedgerBearer(opts);
+  const mcpServerUrls = [...new Set([opts.ledgerMcpUrl, ...(opts.mcpServerUrls ?? [])])];
+  const credentialsByUrl = new Map<string, string>();
 
   for await (const cred of client.beta.vaults.credentials.list(vaultId)) {
-    if (cred.auth.type === 'static_bearer' && cred.auth.mcp_server_url === opts.ledgerMcpUrl) {
-      await client.beta.vaults.credentials.update(cred.id, {
-        vault_id: vaultId,
-        auth: { type: 'static_bearer', token },
-      });
-      return { vaultId, credentialId: cred.id };
+    if (cred.auth.type === 'static_bearer') {
+      credentialsByUrl.set(cred.auth.mcp_server_url, cred.id);
     }
   }
 
-  const created = await client.beta.vaults.credentials.create(vaultId, {
-    display_name: `ledger bearer (${opts.tenantId})`,
-    auth: { type: 'static_bearer', mcp_server_url: opts.ledgerMcpUrl, token },
-  });
-  return { vaultId, credentialId: created.id };
+  const credentialIds: string[] = [];
+  for (const mcpServerUrl of mcpServerUrls) {
+    const existingId = credentialsByUrl.get(mcpServerUrl);
+    if (existingId) {
+      await client.beta.vaults.credentials.update(existingId, {
+        vault_id: vaultId,
+        auth: { type: 'static_bearer', token },
+      });
+      credentialIds.push(existingId);
+      continue;
+    }
+
+    const created = await client.beta.vaults.credentials.create(vaultId, {
+      display_name: `tenant bearer (${opts.tenantId})`,
+      auth: { type: 'static_bearer', mcp_server_url: mcpServerUrl, token },
+    });
+    credentialIds.push(created.id);
+  }
+
+  // ledgerMcpUrl is always first, so this remains the ledger credential id for
+  // callers compiled against the original single-MCP return contract.
+  return { vaultId, credentialId: credentialIds[0]!, credentialIds };
 }

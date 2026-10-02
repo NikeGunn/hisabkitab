@@ -20,3 +20,7 @@ docs/
 context-manual.txt
 
 Kribaat.pem
+
+# Private local files — never publish (repo is PUBLIC)
+company legal docs/
+jev-prd.md
