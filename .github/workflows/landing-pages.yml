@@ -39,8 +39,9 @@ jobs:
           cache: pnpm
           cache-dependency-path: landing/pnpm-lock.yaml
 
-      # The landing has its own lockfile (standalone from the monorepo workspace).
-      - run: pnpm install --frozen-lockfile --ignore-workspace
+      # landing/ is its own pnpm workspace root (landing/pnpm-workspace.yaml), so this
+      # installs from landing/pnpm-lock.yaml, never the monorepo lockfile.
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
 
