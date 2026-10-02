@@ -1,0 +1,51 @@
+{
+	email knewboy.nykhil@gmail.com
+}
+
+(hisab_api) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	# ops-internal: never public
+	@metrics path /metrics /ledger/metrics /payments/metrics /tally/metrics
+	handle @metrics {
+		respond 403
+	}
+
+	handle_path /ledger/* {
+		reverse_proxy 127.0.0.1:8801
+	}
+	handle_path /payments/* {
+		reverse_proxy 127.0.0.1:8802
+	}
+	handle_path /tally/* {
+		reverse_proxy 127.0.0.1:8803 {
+			# connector long-poll
+			transport http {
+				read_timeout 120s
+			}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8810
+	}
+	log {
+		output file /var/log/caddy/hisab-access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+	}
+}
+
+api.hisabkitab.pro {
+	import hisab_api
+}
+
+# DNS-independent fallback host (bootstrap.sh renders <ip-with-dashes>.sslip.io) — ops/verification.
+__SSLIP_HOST__ {
+	import hisab_api
+}
