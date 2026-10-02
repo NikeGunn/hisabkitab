@@ -20,6 +20,7 @@ docs/
 context-manual.txt
 
 Kribaat.pem
+hisab.pem
 
 # Private local files — never publish (repo is PUBLIC)
 company legal docs/

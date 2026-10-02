@@ -451,22 +451,24 @@ simulator). **Real-TallyPrime verification pending** (docs/TALLY-INTEGRATION.md 
   Tier 3 canary/SLO-paging deferred to deploy), ⬜ P17 growth, ⬜ P18 support/admin,
   ⬜ P19 accountant channel.
 
-**✅ PRODUCTION DEPLOY — LIVE on Tencent Cloud (2026-07-06):** full stack running on Lighthouse VM
-`43.128.216.245` (`lhins-6x0axg71`, ubuntu, key `Kribaat.pem` — VM runs ONLY hisabkitab; kribaat.com
-is a DIFFERENT server, 43.152.233.234, never touch). `/opt/hisabkitab` + prod `.env` (fresh secrets,
-600) + host-level Caddy (`/etc/caddy/Caddyfile`: api.hisabkitab.pro → 8810; /ledger/* → 8801;
-/payments/* → 8802; /metrics 403) + ufw 22/80/443. CD deploy job LIVE end-to-end green
-(`DEPLOY_HOST/USER/SSH_KEY` secrets set; fixed lowercase GHCR_OWNER + retrying health check +
-dropped invalid `script_stop`). All 17 migrations applied; 3 services healthy behind localhost
-ports. Runbook: `docs/DEPLOY.md` (§5 = the after-DNS one-time checklist: re-publish agent with
-public MCP URLs, register webhook via `wa-webhook-register.yml`).
+**✅ PRODUCTION DEPLOY — LIVE on Tencent Cloud (re-provisioned 2026-10-02):** Lighthouse VM `hisab`
+`43.152.239.105` (`lhins-o9qb5zjn`, Bangkok, Ubuntu 26.04, 2 vCPU/3.6 GB, ubuntu, key `hisab.pem` —
+VM runs ONLY hisabkitab; kribaat.com is a DIFFERENT server, 43.152.233.234, never touch). The old VM
+(43.128.216.245) was deleted with its data; the new one started from an empty DB. **The host is now
+infra-as-code: `infra/vm/bootstrap.sh`** (idempotent: swap, Docker, Caddy, ufw 22/80/443, fail2ban,
+unattended-upgrades, nightly `pg_dump` backup 14d, 5-min health watchdog, clone + compose up) +
+`infra/vm/Caddyfile` (api.hisabkitab.pro + `<ip>.sslip.io` fallback; /ledger /payments /tally prefix
+routes; **/metrics 403 via a `handle` block — a bare `respond` loses to `handle_path` and leaked
+metrics**). Rebuild a lost VM = prod `.env` + `bootstrap.sh` (runbook `docs/DEPLOY.md §1`). All 18
+migrations applied; 4 services healthy; cold reboot self-heals <90s. CD (`DEPLOY_*` secrets → new VM)
+deployed sha-12652a4 green. Agent v11 already targets `https://api.hisabkitab.pro/{ledger,payments}/mcp`.
 Meta status (Graph-checked): ALL templates APPROVED, WABA APPROVED; business verification still in
 Meta review — NO public API exists to submit/expedite; resubmit only offered after a REJECTION.
 
-**🌐 EXTERNAL (remaining, not code):** ① Namecheap DNS: add `api` A record → 43.128.216.245
-(apex/www stay on GitHub Pages). ② Tencent Lighthouse console firewall: allow TCP 443 (80/22 already
-open; ufw on the VM is ready). ③ After ①+②: run `docs/DEPLOY.md §5` checklist. ④ Meta test number:
-add pilot phone to allowed recipients (manual). ⑤ Khalti merchant onboarding for live payments.
+**🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
+✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
+Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② Meta test number: add
+pilot phone to allowed recipients (manual). ③ Khalti merchant onboarding for live payments.
 
 ## 6. How to work with me
 - Before each phase, **propose a short plan and the file list**, then wait for my OK. Don't build
