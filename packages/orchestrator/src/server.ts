@@ -8,9 +8,9 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { metricsResponse } from '@hisab/shared';
 import { handleVerifyHandshake, verifyWebhookSignature } from './whatsapp/signature.js';
-import { parseInboundWebhook } from './whatsapp/inbound.js';
+import { parseDeliveryStatuses, parseInboundWebhook } from './whatsapp/inbound.js';
 import { processInbound, type RouterDeps } from './whatsapp/router.js';
-import { metricsRegistry, inboundCtx } from './obs.js';
+import { metrics, metricsRegistry, inboundCtx, rootLogger } from './obs.js';
 
 export interface ServerOptions {
   verifyToken: string;
@@ -54,10 +54,27 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     }
 
     let messages;
+    let payload: unknown;
     try {
-      messages = parseInboundWebhook(JSON.parse(raw.toString('utf8')));
+      payload = JSON.parse(raw.toString('utf8'));
+      messages = parseInboundWebhook(payload);
     } catch {
       return reply.code(400).send({ error: 'malformed payload' });
+    }
+
+    // Outbound delivery outcomes: log + count every one; a failure is a WARN with
+    // Meta's error code so an undelivered reminder/reply is never silent.
+    for (const st of parseDeliveryStatuses(payload)) {
+      const code = st.errors[0] ? String(st.errors[0].code) : 'none';
+      metrics.waDelivery({ status: st.status, code });
+      const fields = {
+        correlation_id: st.waMessageId,
+        status: st.status,
+        recipient_tail: st.recipientTail,
+        ...(st.errors.length ? { errors: st.errors } : {}),
+      };
+      if (st.status === 'failed') rootLogger.warn('whatsapp delivery failed', fields);
+      else rootLogger.info('whatsapp delivery status', fields);
     }
 
     const work = Promise.allSettled(

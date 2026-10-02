@@ -1,7 +1,8 @@
 /**
  * Inbound webhook payload parsing — zod on every external input (CLAUDE.md §4).
- * Normalizes Meta's envelope into flat InboundMessage records; status updates
- * (delivered/read) and unknown change fields are ignored, never errors.
+ * Normalizes Meta's envelope into flat InboundMessage records. Delivery status
+ * updates (sent/delivered/read/failed) are parsed separately by
+ * parseDeliveryStatuses; unknown change fields are ignored, never errors.
  */
 import { z } from 'zod';
 
@@ -84,7 +85,11 @@ export function parseInboundWebhook(payload: unknown): InboundMessage[] {
             ...base,
             kind: 'image',
             text: m.image.caption,
-            media: { mediaId: m.image.id, mimeType: m.image.mime_type ?? 'image/jpeg', caption: m.image.caption },
+            media: {
+              mediaId: m.image.id,
+              mimeType: m.image.mime_type ?? 'image/jpeg',
+              caption: m.image.caption,
+            },
           });
         } else if (m.type === 'document' && m.document) {
           out.push({
@@ -100,10 +105,71 @@ export function parseInboundWebhook(payload: unknown): InboundMessage[] {
           });
         } else if (m.type === 'audio' && m.audio) {
           // voice is v2.0 P12 — surfaced as "coming soon" by the router
-          out.push({ ...base, kind: 'audio', media: { mediaId: m.audio.id, mimeType: m.audio.mime_type ?? 'audio/ogg' } });
+          out.push({
+            ...base,
+            kind: 'audio',
+            media: { mediaId: m.audio.id, mimeType: m.audio.mime_type ?? 'audio/ogg' },
+          });
         } else {
           out.push({ ...base, kind: 'unsupported' });
         }
+      }
+    }
+  }
+  return out;
+}
+
+// ── Delivery statuses ────────────────────────────────────────────────────────
+// Meta reports the fate of every OUTBOUND message asynchronously here: an
+// "accepted" send can still fail later (131030 recipient not allowed, 131047
+// 24h window closed, template errors). Without this, those failures were silent.
+
+const statusSchema = z
+  .object({
+    id: z.string(),
+    status: z.string(),
+    recipient_id: z.string().optional(),
+    errors: z
+      .array(z.object({ code: z.number(), title: z.string().optional() }).loose())
+      .optional(),
+  })
+  .loose();
+
+export interface DeliveryStatus {
+  waMessageId: string;
+  status: string;
+  /** Last 4 digits only: a phone number is PII and must not reach the logs. */
+  recipientTail?: string;
+  errors: { code: number; title?: string }[];
+}
+
+/**
+ * Tolerant by design: each status entry is validated on its own and a malformed
+ * one is skipped, so a status we don't understand can never 400 the webhook or
+ * disturb processing of the messages that arrived in the same envelope.
+ */
+export function parseDeliveryStatuses(payload: unknown): DeliveryStatus[] {
+  const out: DeliveryStatus[] = [];
+  const entries = (payload as { entry?: unknown })?.entry;
+  if (!Array.isArray(entries)) return out;
+  for (const entry of entries) {
+    const changes = (entry as { changes?: unknown })?.changes;
+    if (!Array.isArray(changes)) continue;
+    for (const change of changes) {
+      const statuses = (change as { value?: { statuses?: unknown } })?.value?.statuses;
+      if (!Array.isArray(statuses)) continue;
+      for (const raw of statuses) {
+        const st = statusSchema.safeParse(raw);
+        if (!st.success) continue;
+        out.push({
+          waMessageId: st.data.id,
+          status: st.data.status,
+          ...(st.data.recipient_id ? { recipientTail: st.data.recipient_id.slice(-4) } : {}),
+          errors: (st.data.errors ?? []).map((e) => ({
+            code: e.code,
+            ...(e.title ? { title: e.title } : {}),
+          })),
+        });
       }
     }
   }
