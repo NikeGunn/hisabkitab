@@ -44,12 +44,30 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
+const LEGAL_FACTS: { label: string; value: string; href?: string }[] = [
+  { label: 'Company Reg. No.', value: LEGAL_ENTITY.registrationNo },
+  { label: 'Registered office', value: LEGAL_ENTITY.address },
+  { label: 'Phone', value: LEGAL_ENTITY.phone, href: LEGAL_ENTITY.phoneHref },
+  { label: 'Email', value: LEGAL_ENTITY.email, href: `mailto:${LEGAL_ENTITY.email}` },
+];
+
+/** Inline flag: the 🇳🇵 emoji renders as letters "NP" on Windows. */
+function NepalFlag() {
+  return (
+    <svg viewBox="0 0 40 49" className="h-4 w-auto" role="img" aria-label="Nepal flag">
+      <path d="M1 1 L37 22 H14 L37 48 H1 Z" fill="#DC143C" stroke="#003893" strokeWidth="2.5" strokeLinejoin="miter" />
+      <circle cx="11" cy="15" r="3.2" fill="#fff" />
+      <circle cx="11" cy="37" r="4.2" fill="#fff" />
+    </svg>
+  );
+}
+
 export function Footer() {
   return (
     <footer id="trust" className="border-t border-hairline bg-surface">
       <div className="mx-auto max-w-content px-6 py-16">
-        <div className="grid gap-10 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
-          <div>
+        <div className="grid grid-cols-2 gap-10 sm:grid-cols-4 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
+          <div className="col-span-2 sm:col-span-4 lg:col-span-1">
             <div className="flex items-center gap-2">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent font-serif text-white">हि</span>
               <span className="font-serif text-xl font-semibold">HisabKitab</span>
@@ -77,20 +95,40 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-hairline pt-7 text-sm text-muted sm:flex-row">
-          <div className="text-center sm:text-left">
-            <p>© {new Date().getFullYear()} {LEGAL_ENTITY.name}. HisabKitab is a product of {LEGAL_ENTITY.name}. Made in Nepal 🇳🇵</p>
-            <p className="mt-1 text-xs">
-              Company Reg. No. {LEGAL_ENTITY.registrationNo} · {LEGAL_ENTITY.address} ·{' '}
-              <a href={LEGAL_ENTITY.phoneHref} className="hover:text-ink">{LEGAL_ENTITY.phone}</a> ·{' '}
-              <a href={`mailto:${LEGAL_ENTITY.email}`} className="hover:text-ink">{LEGAL_ENTITY.email}</a>
+        <div className="mt-14 border-t border-hairline pt-8">
+          <div className="flex flex-col gap-4 text-sm text-muted md:flex-row md:items-center md:justify-between">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span>© {new Date().getFullYear()} HisabKitab.</span>
+              <span>
+                A product of <span className="font-medium text-ink">{LEGAL_ENTITY.name}</span>
+              </span>
             </p>
+            <nav aria-label="Legal" className="flex shrink-0 gap-6 whitespace-nowrap">
+              <a href="/privacy" className="transition-colors hover:text-ink">Privacy</a>
+              <a href="/terms" className="transition-colors hover:text-ink">Terms</a>
+              <a href="/data-deletion" className="transition-colors hover:text-ink">Data deletion</a>
+            </nav>
           </div>
-          <div className="flex gap-6">
-            <a href="/privacy" className="transition-colors hover:text-ink">Privacy</a>
-            <a href="/terms" className="transition-colors hover:text-ink">Terms</a>
-            <a href="/data-deletion" className="transition-colors hover:text-ink">Data deletion</a>
-          </div>
+
+          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1.5fr)_auto_auto]">
+            {LEGAL_FACTS.map((f) => (
+              <div key={f.label} className="min-w-0">
+                <dt className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{f.label}</dt>
+                <dd className="mt-1 text-ink">
+                  {f.href ? (
+                    <a href={f.href} className="transition-colors hover:text-primary">{f.value}</a>
+                  ) : (
+                    f.value
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          <p className="mt-6 flex items-center gap-2 text-xs text-muted">
+            <NepalFlag />
+            Proudly built in Nepal, for Nepal&apos;s businesses
+          </p>
         </div>
       </div>
     </footer>
