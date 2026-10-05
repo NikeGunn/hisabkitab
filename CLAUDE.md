@@ -496,6 +496,15 @@ Private" 573614351160243, `verified`); ALL 12 templates APPROVED incl. `pairing_
   it (delete WhatsApp on that SIM), then add+OTP+register via the Meta MCP and switch in the admin panel.
 - Khalti merchant email: `docs/KHALTI-MERCHANT-EMAIL.md` (local).
 
+**✅ Signup + admin incident fix — DONE (2026-10-05, PR #89, migration 0020):** undelivered pairing codes
+(`send_failed_at`) never count toward the 3/number/24h or daily limits (a #131030 test-number refusal had
+locked a real owner out); send failures classified recipient vs service (`WaError.metaCode`), logged to
+`admin_events` `signup.send_failed`. Admin POSTs were ALL 403 in real browsers (Referrer-Policy no-referrer ⇒
+Chrome sends `Origin: null`): gate is now `isSameOriginPost` (Fetch Metadata) + CSRF; admin sends
+`Referrer-Policy: same-origin`, Caddy's is `?`-default. Suspended business ⇒ "account paused" reply (was a
+signup loop); own sender number refused at signup/admin create. **Open decision:** billing-suspended
+subscriptions still get full agent access (PRD says read-only + renew prompt).
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
