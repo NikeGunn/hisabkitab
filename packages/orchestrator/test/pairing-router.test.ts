@@ -3,7 +3,7 @@
  * role from migration 0002). PROBES: wrong/expired/reused codes, webhook retry.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import { createDb, schema, type DbHandle } from '@hisab/db';
 import type Anthropic from '@anthropic-ai/sdk';
 import {
@@ -11,6 +11,7 @@ import {
   handleUnknownSender,
   issuePairingCode,
   ONBOARDING_PROMPT,
+  SUSPENDED_ACCOUNT_REPLY,
 } from '../src/onboarding/pairing.js';
 import {
   processInbound,
@@ -271,5 +272,60 @@ describe('SerialQueues', () => {
     expect(order).toEqual(['b1', 'a1', 'a2']); // b ran while a1 was in flight; a2 after a1
     expect(results[1]?.status).toBe('rejected'); // failure surfaced, queue kept going
     expect(results[2]).toEqual({ status: 'fulfilled', value: 'a2' });
+  });
+});
+
+describe('operator-suspended business (admin panel → Suspend)', () => {
+  it('PROBE: the owner is told the account is paused: no agent turn, no signup-loop prompt; reactivation restores routing', async () => {
+    const [t] = await admin.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Paused Pasal', panOrVatNo: '600000077' })
+      .returning({ id: schema.tenants.id });
+    const owner = '+9779807777001';
+    const code = await issuePairingCode(orch.db, t!.id);
+    expect((await handleUnknownSender(orch.db, owner, `START ${code}`)).kind).toBe('paired');
+    await admin.db.update(schema.tenants).set({ status: 'suspended' }).where(eq(schema.tenants.id, t!.id));
+
+    const sent: { to: string; body: string }[] = [];
+    // anthropic is {} in makeDeps: reaching the agent would crash → PROCESSING_FAILURE_REPLY
+    await processInbound(makeDeps(sent), textMsg('wamid.susp1', owner, 'sales today 5000'));
+    expect(sent).toEqual([{ to: owner, body: SUSPENDED_ACCOUNT_REPLY }]);
+    // a START from the paused owner must not re-pair or reveal anything else
+    await processInbound(makeDeps(sent), textMsg('wamid.susp2', owner, 'START 1234'));
+    expect(sent.at(-1)?.body).toBe(SUSPENDED_ACCOUNT_REPLY);
+    const [after] = await admin.db.select().from(schema.tenants).where(eq(schema.tenants.id, t!.id));
+    expect(after?.status).toBe('suspended');
+  });
+
+  it('PROBE: a stranger still gets the onboarding prompt (the paused reply leaks no business to others)', async () => {
+    const sent: { to: string; body: string }[] = [];
+    await processInbound(makeDeps(sent), textMsg('wamid.susp3', '+9779807777999', 'hello'));
+    expect(sent[0]?.body).toBe(ONBOARDING_PROMPT);
+  });
+});
+
+describe('issuePairingCode revoke', () => {
+  it('PROBE: a resend revokes only LIVE codes; an already-dead code keeps the moment it died', async () => {
+    const [t] = await admin.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Revoke Probe', panOrVatNo: '600000078' })
+      .returning({ id: schema.tenants.id });
+    const dead = await issuePairingCode(orch.db, t!.id, { phoneE164: '+9779807777002', digits: 6 });
+    await admin.db
+      .update(schema.pairingCodes)
+      .set({ expiresAt: sql`now() - interval '1 hour'` })
+      .where(eq(schema.pairingCodes.code, dead));
+    const [before] = await admin.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.code, dead));
+    const live = await issuePairingCode(orch.db, t!.id, { phoneE164: '+9779807777002', digits: 6 });
+    await issuePairingCode(orch.db, t!.id, { phoneE164: '+9779807777002', digits: 6 });
+    const [deadAfter] = await admin.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.code, dead));
+    expect(deadAfter!.expiresAt.getTime()).toBe(before!.expiresAt.getTime());
+    const [liveAfter] = await admin.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.code, live));
+    expect(liveAfter!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 1000); // revoked
+    const stillLive = await admin.db
+      .select()
+      .from(schema.pairingCodes)
+      .where(and(eq(schema.pairingCodes.tenantId, t!.id), isNull(schema.pairingCodes.consumedAt), gt(schema.pairingCodes.expiresAt, sql`now()`)));
+    expect(stillLive).toHaveLength(1);
   });
 });

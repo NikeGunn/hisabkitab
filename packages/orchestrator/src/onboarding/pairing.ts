@@ -30,11 +30,18 @@ export async function issuePairingCode(db: Db | Tx, tenantId: string, opts: Issu
   const digits = opts.digits ?? 4;
   const lo = 10 ** (digits - 1);
   if (opts.phoneE164) {
-    // one live code per tenant: re-sending revokes the previous one
+    // one live code per tenant: re-sending revokes the previous one. Only LIVE
+    // codes: re-expiring an already-dead code would rewrite when it died.
     await db
       .update(schema.pairingCodes)
       .set({ expiresAt: sql`now()` })
-      .where(and(eq(schema.pairingCodes.tenantId, tenantId), isNull(schema.pairingCodes.consumedAt)));
+      .where(
+        and(
+          eq(schema.pairingCodes.tenantId, tenantId),
+          isNull(schema.pairingCodes.consumedAt),
+          gt(schema.pairingCodes.expiresAt, sql`now()`),
+        ),
+      );
   }
   // retry on the (unlikely) PK collision; ON CONFLICT (not try/catch) so this is
   // also safe inside a caller's transaction (a failed INSERT would abort it).
@@ -185,6 +192,11 @@ export async function findTenantBySender(
     .limit(1);
   return rows[0] ?? null;
 }
+
+/** Reply to the member of a business the operator suspended (no agent turn, no signup loop). */
+export const SUSPENDED_ACCOUNT_REPLY =
+  'Your HisabKitab account is paused right now, so we cannot record or answer anything. ' +
+  'Your data is safe and kept. Please contact us at hello@hisabkitab.pro to reactivate it.';
 
 export const ONBOARDING_PROMPT =
   'Namaste! 🙏 This is HisabKitab, a bookkeeping assistant for VAT-registered businesses. ' +

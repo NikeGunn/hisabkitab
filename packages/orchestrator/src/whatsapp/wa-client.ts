@@ -42,9 +42,21 @@ export class WaError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Meta's `error.code` (e.g. 131030, 131026) when the Graph body carried one. */
+    readonly metaCode?: number,
   ) {
     super(message);
     this.name = 'WaError';
+  }
+}
+
+/** Meta's numeric `error.code` from a Graph error body, or undefined. */
+export function parseMetaErrorCode(body: string): number | undefined {
+  try {
+    const code = (JSON.parse(body) as { error?: { code?: unknown } }).error?.code;
+    return typeof code === 'number' ? code : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -82,7 +94,8 @@ export class WaClient {
           },
         });
         if (!res.ok) {
-          throw new WaError(`graph ${path} → ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status);
+          const body = await res.text();
+          throw new WaError(`graph ${path} → ${res.status}: ${body.slice(0, 300)}`, res.status, parseMetaErrorCode(body));
         }
         return res.json();
       },

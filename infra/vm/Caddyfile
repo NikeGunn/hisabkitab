@@ -7,7 +7,9 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
-		Referrer-Policy no-referrer
+		# default only: the admin panel sets same-origin so browsers send a real
+		# Origin on its form POSTs (no-referrer made Chrome send Origin: null)
+		?Referrer-Policy no-referrer
 		-Server
 	}
 	# ops-internal: never public

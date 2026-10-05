@@ -47,6 +47,8 @@ export const pairingCodes = pgTable('pairing_codes', {
   phoneE164: text('phone_e164'),
   failedAttempts: integer('failed_attempts').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  // 0020: the template never reached the owner; excluded from the signup limits
+  sendFailedAt: timestamp('send_failed_at', { withTimezone: true }),
 });
 
 // ----- P8: identity & RBAC (mirrors 0010_identity_rbac.sql) -----

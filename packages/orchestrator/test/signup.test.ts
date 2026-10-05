@@ -5,9 +5,10 @@
  * already-registered numbers, and the trial created on verification.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import { createDb, schema, type DbHandle } from '@hisab/db';
-import { handleSignup, type SignupDeps } from '../src/signup/signup.js';
+import { classifySendFailure, handleSignup, isOwnSender, type SignupDeps } from '../src/signup/signup.js';
+import { WaError, parseMetaErrorCode } from '../src/whatsapp/wa-client.js';
 import { handleUnknownSender } from '../src/onboarding/pairing.js';
 import { ORCH_URL } from './urls.js';
 
@@ -186,7 +187,7 @@ describe('POST /signup core (handleSignup)', () => {
         throw new Error('131026 receiver incapable');
       }),
     });
-    expect(await handleSignup(d, form(phone))).toEqual({ status: 'send_failed' });
+    expect(await handleSignup(d, form(phone))).toEqual({ status: 'send_failed', reason: 'service' });
     // judged by the DB clock (the same clock pairing uses)
     const live = await orch.db
       .select()
@@ -199,6 +200,80 @@ describe('POST /signup core (handleSignup)', () => {
         ),
       );
     expect(live).toHaveLength(0);
+  });
+
+  const metaFail = (code: number) =>
+    vi.fn(async () => {
+      throw new WaError(`graph /x/messages → 400: {"error":{"code":${code}}}`, 400, code);
+    });
+
+  it('PROBE: undelivered codes (#131030 test-number allow-list) never lock the owner out', async () => {
+    // the 2026-10-05 prod incident: 3 refused sends => "Too many attempts" for 24h
+    const phone = freshPhone();
+    const failing = deps({ sendAuthCode: metaFail(131030) }).d;
+    for (let i = 0; i < 5; i += 1) {
+      expect(await handleSignup(failing, form(phone))).toEqual({ status: 'send_failed', reason: 'service' });
+    }
+    // once the sender is fixed, the SAME number gets a code straight away...
+    const { d, sent } = deps();
+    expect((await handleSignup(d, form(phone))).status).toBe('code_sent');
+    const code = sent.find((s) => s.template === 'pairing_code')!.code!;
+    // ...still tied to ONE pending business (retries never orphan businesses)
+    const rows = await orch.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.phoneE164, e164(phone)));
+    expect(rows).toHaveLength(6);
+    expect(new Set(rows.map((r) => r.tenantId)).size).toBe(1);
+    expect(rows.filter((r) => r.sendFailedAt !== null)).toHaveLength(5);
+    // the failed codes are dead; only the delivered one pairs (2 probes: 5 wrong
+    // tries would trip the brute-force burn, which is separately tested)
+    for (const r of rows.filter((x) => x.sendFailedAt !== null).slice(0, 2)) {
+      expect(await handleUnknownSender(orch.db, e164(phone), `START ${r.code}`)).toEqual({ kind: 'invalid_code' });
+    }
+    expect((await handleUnknownSender(orch.db, e164(phone), `START ${code}`)).kind).toBe('paired');
+    // the failures are visible to the operator
+    const events = await orch.db
+      .select()
+      .from(schema.adminEvents)
+      .where(and(eq(schema.adminEvents.action, 'signup.send_failed'), sql`${schema.adminEvents.detail}->>'phone_tail' = ${phone.slice(-4)}`));
+    expect(events.length).toBeGreaterThanOrEqual(5);
+    expect(events[0]!.detail).toMatchObject({ reason: 'service', meta_code: 131030 });
+  });
+
+  it('PROBE: delivered codes still hit the 3/24h limit even after earlier failures', async () => {
+    const phone = freshPhone();
+    await handleSignup(deps({ sendAuthCode: metaFail(131030) }).d, form(phone));
+    const { d } = deps();
+    for (let i = 0; i < 3; i += 1) expect((await handleSignup(d, form(phone))).status).toBe('code_sent');
+    expect(await handleSignup(d, form(phone))).toEqual({ status: 'rate_limited' });
+  });
+
+  it('PROBE: undelivered codes do not consume the global daily cap', async () => {
+    const before = await orch.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.pairingCodes)
+      .where(and(isNotNull(schema.pairingCodes.phoneE164), isNull(schema.pairingCodes.sendFailedAt), sql`${schema.pairingCodes.createdAt} > now() - interval '1 day'`));
+    const cap = before[0]!.n + 1; // exactly one delivered code left today
+    const settings = { enabled: () => true, dailyCap: () => cap, senderE164: () => undefined, alertE164: () => undefined };
+    for (let i = 0; i < 3; i += 1) {
+      expect((await handleSignup(deps({ settings, sendAuthCode: metaFail(131030) }).d, form(freshPhone()))).status).toBe('send_failed');
+    }
+    expect((await handleSignup(deps({ settings }).d, form(freshPhone()))).status).toBe('code_sent');
+    expect(await handleSignup(deps({ settings }).d, form(freshPhone()))).toEqual({ status: 'busy' });
+  });
+
+  it('a number that cannot receive WhatsApp is reported as the recipient, not our fault', async () => {
+    expect(await handleSignup(deps({ sendAuthCode: metaFail(131026) }).d, form(freshPhone()))).toEqual({
+      status: 'send_failed',
+      reason: 'recipient',
+    });
+    expect(classifySendFailure(new WaError('x', 400, 131021))).toBe('recipient');
+  });
+
+  it('PROBE: unknown / token / network failures are classified as OUR problem (never blame the owner)', () => {
+    expect(classifySendFailure(new WaError('x', 400, 131030))).toBe('service');
+    expect(classifySendFailure(new WaError('x', 401, 190))).toBe('service');
+    expect(classifySendFailure(new WaError('x', 500))).toBe('service');
+    expect(classifySendFailure(new Error('ECONNRESET'))).toBe('service');
+    expect(classifySendFailure('131026')).toBe('service'); // a string is not a Meta verdict
   });
 
   it('an already-active number is told to just message us (no new business)', async () => {
@@ -219,5 +294,38 @@ describe('POST /signup core (handleSignup)', () => {
     expect(results.filter((r) => r.status === 'rate_limited')).toHaveLength(3);
     const rows = await orch.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.phoneE164, e164(phone)));
     expect(new Set(rows.map((r) => r.tenantId)).size).toBe(1);
+  });
+});
+
+describe('parseMetaErrorCode', () => {
+  it('reads error.code from a real Graph body', () => {
+    expect(
+      parseMetaErrorCode('{"error":{"message":"(#131030) Recipient phone number not in allowed list","code":131030}}'),
+    ).toBe(131030);
+  });
+  it('PROBE: garbage / truncated / non-numeric bodies yield undefined, never a wrong code', () => {
+    expect(parseMetaErrorCode('<html>502</html>')).toBeUndefined();
+    expect(parseMetaErrorCode('{"error":{"code":"131026"}}')).toBeUndefined();
+    expect(parseMetaErrorCode('{"error":{"message":"x","code":1310')).toBeUndefined();
+    expect(parseMetaErrorCode('')).toBeUndefined();
+  });
+});
+
+describe('own-sender guard', () => {
+  it("PROBE: signing up with HisabKitab's own sender number is refused, in any format, with no code sent", async () => {
+    for (const n of ['9745861381', '+977 974-586-1381', '+9779745861381']) {
+      const { d, sent } = deps();
+      const r = await handleSignup(d, form(n));
+      expect(r.status, n).toBe('invalid');
+      expect((r as { errors: Record<string, string> }).errors.whatsapp).toMatch(/own WhatsApp number/);
+      expect(sent).toHaveLength(0);
+    }
+  });
+
+  it('isOwnSender: digit-exact, and never true when no sender is configured', () => {
+    expect(isOwnSender('+9779745861381', '+977 9745861381')).toBe(true);
+    expect(isOwnSender('+9779745861382', '+9779745861381')).toBe(false);
+    expect(isOwnSender('+9779745861381', undefined)).toBe(false);
+    expect(isOwnSender('', '')).toBe(false);
   });
 });
