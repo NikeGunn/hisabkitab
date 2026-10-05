@@ -2,7 +2,7 @@
  * Footer: multi column navigation (Platform / Company / Resources / Connect)
  * plus legal pathways. Static (server component, no client JS).
  */
-import { LEGAL_ENTITY } from './legal-entity';
+import { LEGAL_ENTITY, PARTNER_COMPANY } from './legal-entity';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -45,12 +45,12 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
 ];
 
 const LEGAL_FACTS: { label: string; value: string; href?: string }[] = [
-  { label: 'Company', value: 'Atomberg Technologies Private' },
+  { label: 'Partner company', value: PARTNER_COMPANY.name },
   {
     label: 'Principal place of business and registered office',
-    value: '3rd Floor, Tower B, 247 Embassy Park, Lbs Marg, Vikhroli West, Mumbai, Maharashtra, India, 400083',
+    value: PARTNER_COMPANY.address,
   },
-  { label: 'Phone', value: '+917740573268', href: 'tel:+917740573268' },
+  { label: 'Phone', value: PARTNER_COMPANY.phone, href: PARTNER_COMPANY.phoneHref },
   { label: 'Email', value: LEGAL_ENTITY.email, href: `mailto:${LEGAL_ENTITY.email}` },
 ];
 

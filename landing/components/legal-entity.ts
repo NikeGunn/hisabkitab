@@ -15,3 +15,10 @@ export const LEGAL_ENTITY = {
   phoneHref: 'tel:+9779705651002',
   email: 'hello@hisabkitab.pro',
 } as const;
+
+export const PARTNER_COMPANY = {
+  name: 'Atomberg Technologies Private',
+  address: '3rd Floor, Tower B, 247 Embassy Park, Lbs Marg, Vikhroli West, Mumbai, Maharashtra, India, 400083',
+  phone: '+917740573268',
+  phoneHref: 'tel:+917740573268',
+} as const;
