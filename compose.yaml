@@ -176,6 +176,13 @@ services:
       # Unset = panel disabled.
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
       PAYMENTS_INTERNAL_MCP_URL: ${PAYMENTS_INTERNAL_MCP_URL:-http://payments:8080/mcp}
+      # Same payment defaults the payments service sees, so the admin panel shows the
+      # effective values (it reads the shared app_settings + these env defaults).
+      KHALTI_SECRET_KEY: ${KHALTI_SECRET_KEY:-dev-khalti-key}
+      KHALTI_ORIGIN: ${KHALTI_ORIGIN:-https://dev.khalti.com}
+      PAYMENTS_LIVE: ${PAYMENTS_LIVE:-0}
+      # The model the persisted agent runs; prices each turn for the P11 budget.
+      HISAB_MODEL: ${HISAB_MODEL:-}
       AGENT_ID: ${AGENT_ID:-}
       ENVIRONMENT_ID: ${ENVIRONMENT_ID:-}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-1}

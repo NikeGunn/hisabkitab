@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageShell, Section } from '@/components/PageShell';
+import { NepalCompanyCard } from '@/components/NepalCompanyCard';
 
 export const metadata: Metadata = {
   title: 'About',
@@ -46,6 +47,9 @@ export default function AboutPage() {
           Built in Kathmandu for Nepali businesses, with Nepal&apos;s VAT, TDS, and Bikram Sambat calendar
           treated as first-class, not bolted onto a foreign template.
         </p>
+        <div className="mt-6">
+          <NepalCompanyCard />
+        </div>
       </Section>
     </PageShell>
   );
