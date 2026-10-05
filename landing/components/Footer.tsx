@@ -45,8 +45,6 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
 ];
 
 const LEGAL_FACTS: { label: string; value: string; href?: string }[] = [
-  { label: 'Company Reg. No.', value: LEGAL_ENTITY.registrationNo },
-  { label: 'Registered office', value: LEGAL_ENTITY.address },
   { label: 'Phone', value: LEGAL_ENTITY.phone, href: LEGAL_ENTITY.phoneHref },
   { label: 'Email', value: LEGAL_ENTITY.email, href: `mailto:${LEGAL_ENTITY.email}` },
 ];
@@ -99,9 +97,6 @@ export function Footer() {
           <div className="flex flex-col gap-4 text-sm text-muted md:flex-row md:items-center md:justify-between">
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span>© {new Date().getFullYear()} HisabKitab.</span>
-              <span>
-                A product of <span className="font-medium text-ink">{LEGAL_ENTITY.name}</span>
-              </span>
             </p>
             <nav aria-label="Legal" className="flex shrink-0 gap-6 whitespace-nowrap">
               <a href="/privacy" className="transition-colors hover:text-ink">Privacy</a>
@@ -110,7 +105,7 @@ export function Footer() {
             </nav>
           </div>
 
-          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-[auto_minmax(0,1.5fr)_auto_auto]">
+          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-[auto_auto]">
             {LEGAL_FACTS.map((f) => (
               <div key={f.label} className="min-w-0">
                 <dt className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{f.label}</dt>
