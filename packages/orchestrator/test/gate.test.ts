@@ -112,3 +112,20 @@ describe('hold messaging', () => {
     expect(extractMoneyFigures(HELD_FALLBACK_MESSAGE)).toEqual([]);
   });
 });
+
+describe('owner figures + whole-turn evidence (live regression 2026-10-05)', () => {
+  it('the total the OWNER typed may be echoed; derived figures still need a tool', async () => {
+    const { addOwnerFigures } = await import('../src/audit/gate.js');
+    const ev = newTurnEvidence();
+    addOwnerFigures(ev, 'Aaja cash sale bhayo: Rs 11,300 including VAT, invoice 101');
+    expect(auditOutbound('Total (VAT incl.): Rs 11,300.00', ev)).toEqual({ action: 'deliver' });
+    // PROBE: VAT the owner never typed and no tool returned is still HELD
+    expect(auditOutbound('VAT: Rs 1,300.00', ev).action).toBe('hold');
+    addToolResultEvidence(ev, '{"excl_paisa":1000000,"vat_paisa":130000,"total_paisa":1130000}');
+    expect(auditOutbound('Taxable Rs 10,000.00, VAT Rs 1,300.00, total Rs 11,300.00', ev)).toEqual({
+      action: 'deliver',
+    });
+    // PROBE: an invented figure is still caught even with owner + tool evidence present
+    expect(auditOutbound('Your net payable is Rs 4,567.00', ev).action).toBe('hold');
+  });
+});
