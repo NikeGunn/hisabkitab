@@ -57,8 +57,16 @@ anything it's unsure about, and never guesses." We do NOT claim "zero mistakes."
   Pro **Rs 4,999** / Business **Rs 7,999** per month (prepaid). Prices are config in ONE place
   (`packages/mcp-payments/src/plans.ts`, integer paisa); the landing `/pay` page mirrors them. Tools
   `list_subscription_plans` + `initiate_subscription` (price comes from the plan, never the caller; same
-  `owner_approved` consent gate). **Default DEV mode = no charge / no Khalti call**; set `PAYMENTS_LIVE=1`
-  (real merchant key) to enable live charging after deploy.
+  `owner_approved` consent gate). **Default DEV mode = no charge / no Khalti call**. Going live is a
+  **runtime setting, not a deploy**: admin panel → Settings → Payments (Khalti key, environment
+  `https://khalti.com`, billing live = true). `PAYMENTS_LIVE`/`KHALTI_*` env are only defaults.
+- **Runtime settings (0019):** WhatsApp sender/token/secrets, Khalti key/env/live, signup controls live in
+  `app_settings` (secrets AES-GCM via `FIELD_ENCRYPTION_KEY`), resolved admin → env → default by the pure
+  registry `@hisab/shared/settings/registry.ts` (add new operator-editable config THERE, one place).
+  Orchestrator + payments hot-reload within 10s. Never read these via `process.env` in new code.
+- **Model (pilot):** `claude-sonnet-4-6` at effort **low** (`HISAB_MODEL`, `HISAB_EFFORT`), user decision
+  2026-10-05 to keep pilot cost down. Correctness never depends on the model: figures come from ledger
+  tools + the Audit Gate.
 - Secrets: Managed Agents **vaults**; nothing secret in the repo or system prompt.
 - `tsc --strict` clean, eslint + prettier, `vitest`. Write **tests first** for all money/VAT/TDS,
   inclusive-math rounding, aging buckets, and allocation logic — these are the highest-risk code.
@@ -116,7 +124,7 @@ The whole backend runs in Docker Compose. **Do not run services by hand** for an
 > just say a phase number/name. Always propose the plan + file list first (§6), build small, test, and
 > run the suite before calling it done. Update this checklist when a phase lands.
 
-**✅ DONE (committed; 276 tests green, real-API verified on Sonnet incl. Module C live 8/8):**
+**✅ DONE (committed; 720 tests green as of 2026-10-05; real-API verified on Sonnet):**
 - ✅ **Phase 0** — `shared`: Money/paisa, VAT/TDS, BS-date, **aging pure fns**, Validation Engine (+ probes).
 - ✅ **Phase 1** — Postgres + RLS + schema; Ledger MCP (record/validate/draft→confirm).
 - ✅ **Phase 2** — agent definition + 3 skills + system prompt; session client; Pre-delivery Audit Gate.
@@ -448,6 +456,46 @@ double-claim race, revoked/expired/replayed codes, prompt-injection-as-data, pro
 simulator). **Real-TallyPrime verification pending** (docs/TALLY-INTEGRATION.md §10); Caddy
 `/tally/*` route + agent re-publish are deploy-time steps (DEPLOY.md §5a). Tracker: PROGRESS.md.
 
+**✅ PILOT LAUNCH — signup, admin panel, runtime config, live E2E — DONE (2026-10-05; 720 tests):**
+PRs #85 #86 #87 (+ follow-up). Meta business verification is DONE (portfolio "Atomberg Technologies
+Private" 573614351160243, `verified`); ALL 12 templates APPROVED incl. `pairing_code` (AUTHENTICATION).
+- **Self-serve signup:** hisabkitab.pro/pilot form → `POST /signup` (CORS: hisabkitab.pro) → pending
+  tenant + 6-digit code BOUND to the claimed number, sent via `pairing_code` → owner sends `START <code>`
+  (or pastes the 6 digits) FROM that number → active + 14-day trial (`signup.trial_plan`). Honeypot,
+  per-IP (trustProxy), 3 codes/number/24h, daily cap, advisory lock, 5 wrong tries burn the code, code
+  expiry on the DB clock. `src/signup/*`, pairing.ts.
+- **Admin panel** `https://api.hisabkitab.pro/admin` (orchestrator, encapsulated Fastify plugin): scrypt
+  `ADMIN_PASSWORD_HASH` (`pnpm --filter @hisab/orchestrator admin:hash`; unset = 404), failed-login
+  lockout, Strict cookie + CSRF + Origin, CSP/noindex, `admin_events` audit. Overview (live Meta number/
+  templates/subscription, Khalti mode, counts), Settings, Businesses (setup + code, resend, suspend,
+  Khalti payment link), Subscribe webhooks / Submit missing templates. `src/admin/*`.
+- **Inbound sender filter:** the HISABKITAB Meta app is ALSO subscribed to the Chatbot-Platform account
+  (a different product of the same owner). Messages whose `metadata.phone_number_id` ≠ `wa.phone_number_id`
+  are dropped (fail closed). Never remove this.
+- **New templates:** `team_invite` (invitee notified), `payment_link` (URL button →
+  `/payments/go/<pidx>` redirect, Khalti-host allowlist, works behind Caddy's /payments strip),
+  `payment_received` (transactional **outbox** `outbound_notifications`, written in the settlement tx,
+  dedupe per pidx, drained every 15s), `admin_account_update` (signup alert; Meta rejected 3 wordings
+  that carried owner name/number as INCORRECT_CATEGORY — keep alert templates PII-free).
+- **Fixes found live/by review:** GDPR purge skipped subscriptions/billing_payments (any trial tenant was
+  undeletable); Audit Gate reset evidence after each hold + never saw the inclusive total → correct drafts
+  held 3x (now whole-turn evidence, owner-typed figures are evidence, tools return `total_paisa`,
+  `confirm_entry` returns amounts); agent had no clock (recorded 2025) → every turn prefixed with Nepal
+  AD+BS date (`todayContext`); admin gate raw-URL bypass (`/%61dmin`) → route-bound plugin; XFF spoofing
+  → `trustProxy` private hops; PAYMENTS_LIVE never reached the payments container.
+- **Landing:** Kritrim Baudhikata Anusandhan Kendra Nepal Pvt. Ltd. (Reg 354368/81/82, PAN 621236859) as
+  the Nepal company + Khalti merchant of record (`NEPAL_COMPANY`, `NepalCompanyCard`) in footer/About/
+  Terms/Privacy/Pay; Atomberg stays "Operated by" (Meta). CTAs → `/pilot#signup`.
+- **Live verification 2026-10-05 (prod, real Meta + Anthropic, total spend ≈ Rs 5):** real OTP delivered to
+  +977 970-5651002, owner replied START from WhatsApp → paired + welcome; draft→confirm sale; gate 0 holds
+  after fix; forged signature 401; password-in-chat blocked before the agent; foreign-number message
+  ignored; replayed message id deduped. Prod DB browse: read-only role `hisab_readonly` over SSH tunnel
+  (`docs/secrets/prod-db-tunnel.sh`). **All creds: `docs/secrets/HISABKITAB-CREDENTIALS.txt` (local only).**
+- **Sender number:** temporary live test used +977 981-4344114 (Chatbot-Platform's number, owner-approved,
+  then restored). Target pilot sender (the owner's chosen SIM, see the local credentials file) is still registered on the WhatsApp app — free
+  it (delete WhatsApp on that SIM), then add+OTP+register via the Meta MCP and switch in the admin panel.
+- Khalti merchant email: `docs/KHALTI-MERCHANT-EMAIL.md` (local).
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.
@@ -473,8 +521,11 @@ Meta review — NO public API exists to submit/expedite; resubmit only offered a
 
 **🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
 ✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
-Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② Meta test number: add
-pilot phone to allowed recipients (manual). ③ Khalti merchant onboarding for live payments.
+Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② Dedicated sender:
+free the chosen sender SIM from the WhatsApp app, then register it (new WABA "HisabKitab", vertical FINANCE),
+switch in admin Settings, Subscribe webhooks + Submit missing templates. ③ Khalti merchant onboarding
+(email ready; needs tax clearance cert) → paste live key in admin Settings. ④ Pause the chatbot-platform
+app subscription if both products must ever share one number again (no token for it locally).
 
 ## 6. How to work with me
 - Before each phase, **propose a short plan and the file list**, then wait for my OK. Don't build
