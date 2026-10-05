@@ -93,10 +93,11 @@ const jsonLd = {
       email: LEGAL_ENTITY.email,
       address: {
         '@type': 'PostalAddress',
-        streetAddress: 'Ward No. 7',
+        streetAddress: LEGAL_ENTITY.streetAddress,
         addressLocality: LEGAL_ENTITY.locality,
         addressRegion: LEGAL_ENTITY.region,
-        addressCountry: 'NP',
+        addressCountry: LEGAL_ENTITY.country,
+        postalCode: LEGAL_ENTITY.postalCode,
       },
       areaServed: 'NP',
       description: DESCRIPTION,
