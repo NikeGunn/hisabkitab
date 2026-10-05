@@ -25,7 +25,7 @@ import { attachInboundMedia } from './media.js';
 import { scanForCredentials, CREDENTIAL_REFUSAL } from '../security/credential-guard.js';
 import { TenantRateLimiter, RATE_LIMITED_REPLY } from '../resilience/rate-limit.js';
 import { checkBudget, recordTurnUsage, latchWarn } from '../resilience/cost-guard.js';
-import { routeTurn, BUDGET_THROTTLED_REPLY, BUDGET_WARN_NOTE } from '@hisab/shared';
+import { routeTurn, BUDGET_THROTTLED_REPLY, BUDGET_WARN_NOTE, type PlanCode } from '@hisab/shared';
 import type { InboundMessage } from './inbound.js';
 import type { WaClient } from './wa-client.js';
 import { inboundCtx, type ObsCtx } from '../obs.js';
@@ -83,6 +83,8 @@ export interface RouterDeps extends SessionStoreDeps {
    * document arrives on the open 24h window. Omitted = reports disabled.
    */
   dispatchReport?: (tenantId: string, toE164: string, req: CapturedReportRequest) => Promise<void>;
+  /** Plan a newly paired business starts its free trial on (runtime setting). Omitted = no trial row. */
+  trialPlan?: () => PlanCode;
 }
 
 export const UNSUPPORTED_REPLY =
@@ -103,8 +105,8 @@ function inviteReply(
   switch (res.kind) {
     case 'invited':
       return (
-        `Invite sent to ${res.inviteE164} as ${res.role}. 🙌 Ask them to message me ` +
-        `"JOIN" from that number to accept. They'll get ${res.role} access only.`
+        `Invite sent to ${res.inviteE164} as ${res.role}. 🙌 They'll get a WhatsApp message from me; ` +
+        `they reply "JOIN" from that number to accept. They'll get ${res.role} access only.`
       );
     case 'already_member':
       return `That number is already on your team (as ${res.role}). Nothing to do.`;
@@ -212,7 +214,12 @@ async function handleClaimed(
           return true;
         }
       }
-      const outcome = await handleUnknownSender(deps.db, msg.fromE164, msg.text);
+      const outcome = await handleUnknownSender(
+        deps.db,
+        msg.fromE164,
+        msg.text,
+        deps.trialPlan ? { trialPlan: deps.trialPlan() } : {},
+      );
       if (outcome.kind === 'paired') {
         await send(msg.fromE164, pairedWelcome(outcome.businessName));
       } else if (outcome.kind === 'invalid_code') {
@@ -237,6 +244,13 @@ async function handleClaimed(
     const invite = parseInviteCommand(msg.text);
     if (invite) {
       const res = await inviteMember(deps.db, member, invite.e164, invite.role);
+      if (res.kind === 'invited') {
+        // The invitee has never messaged us, so only an approved template reaches
+        // them. Best-effort: the invite row exists either way and JOIN still works.
+        await deps.wa
+          .sendTemplate(res.inviteE164, 'team_invite', [member.businessName, res.role])
+          .catch((err) => tlog.warn('team_invite send failed', { error: String(err) }));
+      }
       await send(msg.fromE164, inviteReply(res));
       return true;
     }

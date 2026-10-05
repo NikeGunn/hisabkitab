@@ -33,6 +33,10 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
   await adminSql`INSERT INTO reminder_log (tenant_id, bs_year, bs_month, kind, verdict) VALUES (${id}, 2082, 1, 'return_prepared', 'PASS')`;
   await adminSql`INSERT INTO tenant_sessions (tenant_id, session_id, vault_id) VALUES (${id}, ${'sesn_' + id.slice(0, 8)}, ${'vault_' + id.slice(0, 8)})`;
   await adminSql`INSERT INTO usage_counters (tenant_id, period, turns, cost_paisa) VALUES (${id}, '2026-06', 3, 1500)`;
+  // P10 + 0019: trial subscription, a billing payment, a queued receipt.
+  await adminSql`INSERT INTO subscriptions (tenant_id, plan_code, status, current_period_end) VALUES (${id}, 'pro', 'trial', '2026-12-31')`;
+  await adminSql`INSERT INTO billing_payments (tenant_id, plan_code, pidx, purchase_order_id, amount_paisa) VALUES (${id}, 'pro', ${'del-' + id}, 'po', 499900)`;
+  await adminSql`INSERT INTO outbound_notifications (tenant_id, to_e164, template, dedupe_key) VALUES (${id}, ${e164}, 'payment_received', ${'del:' + id})`;
   // P8: an owner user + membership for this tenant.
   const [u] = await adminSql`INSERT INTO users (whatsapp_e164) VALUES (${e164}) RETURNING id`;
   await adminSql`INSERT INTO memberships (user_id, tenant_id, role, status) VALUES (${u!['id']}, ${id}, 'owner', 'active')`;
@@ -42,7 +46,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
 const TENANT_TABLES = [
   'sales', 'expenses', 'vendors', 'vat_returns', 'validation_events',
   'audit_log', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
-  'usage_counters', 'memberships',
+  'usage_counters', 'memberships', 'subscriptions', 'billing_payments', 'outbound_notifications',
 ];
 
 async function rowCount(table: string, tenantId: string): Promise<number> {
@@ -77,7 +81,7 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   // memberships (in TENANT_TABLES) before users before tenants (FK order).
-  for (const t of ['deletion_log', ...TENANT_TABLES, 'users', 'tenants']) {
+  for (const t of ['deletion_log', 'outbound_notifications', 'billing_payments', 'subscriptions', ...TENANT_TABLES, 'users', 'tenants']) {
     await adminSql.unsafe(`DELETE FROM ${t}`);
   }
 });

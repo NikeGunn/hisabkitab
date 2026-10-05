@@ -40,7 +40,7 @@ export function Hero() {
           </motion.p>
 
           <motion.div variants={rise} className="mt-8 flex flex-wrap items-center gap-3">
-            <a href="#start" className="btn-primary">
+            <a href="/pilot#signup" className="btn-primary">
               Start on WhatsApp
               <span aria-hidden>→</span>
             </a>

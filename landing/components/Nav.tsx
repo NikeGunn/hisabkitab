@@ -22,7 +22,7 @@ export function Nav() {
           <a href="/pay" className="transition-colors hover:text-ink">Pricing</a>
           <a href="#trust" className="transition-colors hover:text-ink">Trust</a>
         </div>
-        <a href="#start" className="btn-primary px-4! py-2! text-sm">Start free</a>
+        <a href="/pilot#signup" className="btn-primary px-4! py-2! text-sm">Start free</a>
       </nav>
     </motion.header>
   );

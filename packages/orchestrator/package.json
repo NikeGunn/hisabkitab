@@ -21,7 +21,8 @@
     "verify:scheduler": "tsx src/scheduler/verify-scheduler.ts",
     "verify:reports": "tsx src/verify-reports.ts",
     "verify:reports-live": "tsx --env-file-if-exists=../../.env src/verify-reports-live.ts",
-    "reports:sample": "tsx src/reports/sample.ts"
+    "reports:sample": "tsx src/reports/sample.ts",
+    "admin:hash": "tsx src/admin/hash-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",

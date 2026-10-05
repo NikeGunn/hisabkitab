@@ -24,7 +24,7 @@ export function CTA() {
           Every entry waits for your approval before it is saved.
         </p>
         <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-          <a href="/pilot" className="btn-primary bg-primary!">Start on WhatsApp →</a>
+          <a href="/pilot#signup" className="btn-primary bg-primary!">Start free pilot →</a>
           <a href="#how" className="rounded-control border border-white/20 px-6 py-3 font-medium text-white transition-colors hover:bg-white/10">
             See how it works
           </a>

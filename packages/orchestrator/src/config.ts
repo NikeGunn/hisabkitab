@@ -17,10 +17,17 @@ const envSchema = z.object({
   TENANT_SIGNING_SECRET: z.string().min(8),
   AGENT_ID: z.string().optional(),
   ENVIRONMENT_ID: z.string().optional(),
-  WA_PHONE_NUMBER_ID: z.string().min(1),
-  WA_ACCESS_TOKEN: z.string().min(1),
-  WA_WEBHOOK_VERIFY_TOKEN: z.string().min(8),
-  WA_APP_SECRET: z.string().min(8),
+  // WhatsApp credentials seed the runtime settings (admin panel overrides them).
+  WA_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  WA_ACCESS_TOKEN: z.string().min(1).optional(),
+  WA_WEBHOOK_VERIFY_TOKEN: z.string().min(8).optional(),
+  WA_APP_SECRET: z.string().min(8).optional(),
+  WA_APP_ID: z.string().optional(),
+  // Admin panel: scrypt hash from `pnpm --filter @hisab/orchestrator admin:hash`.
+  // Unset = panel disabled (404).
+  ADMIN_PASSWORD_HASH: z.string().startsWith('scrypt:').optional(),
+  // Payments MCP as reachable from THIS container (admin payment links).
+  PAYMENTS_INTERNAL_MCP_URL: optionalUrl,
   WA_GRAPH_BASE_URL: z.string().url().optional(), // stub override for verification
   PORT: z.coerce.number().int().positive().default(8810),
   // ---- Phase 6: reminder scheduler ----

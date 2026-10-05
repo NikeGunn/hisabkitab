@@ -10,8 +10,8 @@
  * Period math + lifecycle transitions are the pure @hisab/shared/billing module.
  */
 import { and, eq } from 'drizzle-orm';
-import { appendAudit, schema, type Tx } from '@hisab/db';
-import { renew, startTrial, type SubscriptionState } from '@hisab/shared';
+import { appendAudit, enqueueNotification, schema, type Tx } from '@hisab/db';
+import { formatNpr, renew, startTrial, type SubscriptionState } from '@hisab/shared';
 import type { KhaltiClient } from './khalti.js';
 import { getPlan, rupees } from './plans.js';
 
@@ -120,6 +120,28 @@ export async function settleSubscriptionPayment(
       period_end: next.currentPeriodEnd,
     });
     const plan = getPlan(row.planCode);
+
+    // WhatsApp receipt, queued in THIS transaction (outbox): it exists iff the
+    // period was extended, and the pidx dedupe key makes a replay queue nothing.
+    const [owner] = await tx
+      .select({ e164: schema.tenants.whatsappE164 })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.id, row.tenantId));
+    if (owner?.e164) {
+      await enqueueNotification(tx, {
+        tenantId: row.tenantId,
+        toE164: owner.e164,
+        template: 'payment_received',
+        bodyParams: [
+          formatNpr(row.amountPaisa).replace(/^Rs\s*/, ''), // integer-paisa formatter, no floats
+          plan?.name ?? row.planCode,
+          lookup.transaction_id ?? row.pidx,
+          next.currentPeriodEnd,
+        ],
+        dedupeKey: `payment_received:${row.pidx}`,
+      });
+    }
+
     return {
       ok: true,
       pidx: row.pidx,

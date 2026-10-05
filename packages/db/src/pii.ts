@@ -30,3 +30,8 @@ export function decPII(value: string | null | undefined): string | null {
 export function __setPiiKeyForTests(k: Buffer | null): void {
   cachedKey = k;
 }
+
+/** True when a field-encryption key is configured (secrets may be stored). */
+export function hasPiiKey(): boolean {
+  return key() !== null;
+}
