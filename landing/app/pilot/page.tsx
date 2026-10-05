@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { PageShell, Section, CardGrid } from '@/components/PageShell';
+import { SignupForm } from './SignupForm';
 
 export const metadata: Metadata = {
   title: 'Pilot program',
@@ -33,11 +34,14 @@ export default function PilotPage() {
         </p>
       </Section>
 
-      <Section title="How to join">
+      <Section title="Join in one minute">
         <p>
-          Start the conversation on WhatsApp and we&apos;ll set you up. It takes a few minutes.
+          Tell us about your business. We send a one-time code to your WhatsApp, you send it back
+          to HisabKitab, and you are in. Your 14-day free trial starts right away.
         </p>
-        <a href="/#start" className="btn-primary first:mt-2">Start on WhatsApp →</a>
+        <div id="signup" className="mt-6">
+          <SignupForm />
+        </div>
       </Section>
     </PageShell>
   );

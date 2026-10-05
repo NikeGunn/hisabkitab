@@ -119,3 +119,67 @@ describe('GET /payments/khalti/return', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('subscription receipt + payment-link redirect', () => {
+  it('a settled subscription queues ONE WhatsApp receipt, even when the callback is replayed', async () => {
+    const tenantId = await createTenant('Receipt Pasal');
+    await adminSql`UPDATE tenants SET whatsapp_e164 = '+9779811112222', status = 'active' WHERE id = ${tenantId}`;
+    const live = await openSession(appHandle, tenantId, stub, { live: true });
+    try {
+      const init = await live.callTool<{ pidx: string }>('initiate_subscription', {
+        plan_code: 'pro',
+        owner_approved: true,
+      });
+      stub.completePayment(init.pidx);
+      for (let i = 0; i < 3; i += 1) expect((await hitCallback(`pidx=${init.pidx}`)).status).toBe(200);
+      // verify after the callback must not queue a second receipt either
+      await live.callTool('verify_subscription', { pidx: init.pidx });
+      const rows = await adminSql`
+        SELECT template, to_e164, body_params FROM outbound_notifications
+        WHERE dedupe_key = ${'payment_received:' + init.pidx}`;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ template: 'payment_received', to_e164: '+9779811112222' });
+      expect((rows[0]!['body_params'] as string[])[0]).toBe('4,999.00');
+    } finally {
+      await live.close();
+    }
+  });
+
+  it('PROBE: an unpaid (forged) callback queues NO receipt', async () => {
+    const tenantId = await createTenant('Forged Receipt Pasal');
+    await adminSql`UPDATE tenants SET whatsapp_e164 = '+9779811113333', status = 'active' WHERE id = ${tenantId}`;
+    const live = await openSession(appHandle, tenantId, stub, { live: true });
+    try {
+      const init = await live.callTool<{ pidx: string }>('initiate_subscription', { plan_code: 'starter', owner_approved: true });
+      await hitCallback(`pidx=${init.pidx}&status=Completed`);
+      const rows = await adminSql`SELECT 1 FROM outbound_notifications WHERE dedupe_key = ${'payment_received:' + init.pidx}`;
+      expect(rows).toHaveLength(0);
+    } finally {
+      await live.close();
+    }
+  });
+
+  it('/payments/go/<pidx> redirects an initiated payment to its Khalti checkout only', async () => {
+    const tenantId = await createTenant('Redirect Pasal');
+    await adminSql`INSERT INTO billing_payments (tenant_id, plan_code, pidx, purchase_order_id, amount_paisa, payment_url)
+      VALUES (${tenantId}, 'pro', 'GoPidxOk123', 'po-1', 499900, 'https://test-pay.khalti.com/?pidx=GoPidxOk123'),
+             (${tenantId}, 'pro', 'GoPidxEvil123', 'po-2', 499900, 'https://evil.example/phish'),
+             (${tenantId}, 'pro', 'GoPidxDone123', 'po-3', 499900, 'https://pay.khalti.com/?pidx=GoPidxDone123')`;
+    await adminSql`UPDATE billing_payments SET status = 'completed' WHERE pidx = 'GoPidxDone123'`;
+    const ok = await fetch(`${base}/payments/go/GoPidxOk123`, { redirect: 'manual' });
+    expect(ok.status).toBe(302);
+    expect(ok.headers.get('location')).toBe('https://test-pay.khalti.com/?pidx=GoPidxOk123');
+    // PROBE: a tampered row never becomes an open redirect / phishing hop
+    const evil = await fetch(`${base}/payments/go/GoPidxEvil123`, { redirect: 'manual' });
+    expect(evil.status).toBe(410);
+    expect(evil.headers.get('location')).toBeNull();
+    const done = await fetch(`${base}/payments/go/GoPidxDone123`, { redirect: 'manual' });
+    expect(done.status).toBe(410);
+    expect(await done.text()).toContain('already complete');
+    const unknown = await fetch(`${base}/payments/go/NoSuchPidx999`, { redirect: 'manual' });
+    expect(unknown.status).toBe(404);
+    // PROBE: path injection is not even routed
+    const inj = await fetch(`${base}/payments/go/..%2F..%2Fadmin`, { redirect: 'manual' });
+    expect(inj.status).toBe(404);
+  });
+});

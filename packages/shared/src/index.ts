@@ -28,3 +28,5 @@ export * from './tally/resolve.js';
 export * from './validation/engine.js';
 export * from './verification/verdict.js';
 export { checks as verificationChecks } from './verification/checks.js';
+export * from './settings/registry.js';
+export * from './signup/signup.js';

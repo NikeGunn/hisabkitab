@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 
 export interface TemplateDefinition {
   name: string;
-  category: 'UTILITY' | 'AUTHENTICATION';
+  category: 'UTILITY' | 'AUTHENTICATION' | 'MARKETING';
   language: string;
   components: unknown[];
 }
@@ -136,7 +136,79 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  // ---- team, payments, signup (proactive sends that happen OUTSIDE the 24h window) ----
+  // The invitee has never messaged us, so a free-form "you were invited" would be
+  // rejected by Meta (131047). Only a template can reach them.
+  {
+    name: 'team_invite',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Namaste! {{1}} has invited you to their HisabKitab books as {{2}}. Reply JOIN to accept. If you were not expecting this, you can ignore this message.',
+        example: { body_text: [['Karki Hardware', 'accountant']] },
+      },
+    ],
+  },
+  // Payment link with a URL button. The button points at OUR redirect
+  // (/payments/go/<pidx>), never at Khalti directly, so the same approved template
+  // works for sandbox and production Khalti without re-approval.
+  {
+    name: 'payment_link',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Your HisabKitab {{1}} plan payment of Rs {{2}} is ready. Tap the button below to pay securely with Khalti. Your plan activates as soon as the payment is confirmed.',
+        example: { body_text: [['Pro', '4,999.00']] },
+      },
+      {
+        type: 'BUTTONS',
+        buttons: [
+          {
+            type: 'URL',
+            text: 'Pay with Khalti',
+            url: 'https://api.hisabkitab.pro/payments/go/{{1}}',
+            example: ['https://api.hisabkitab.pro/payments/go/HT6o6PEZRWFJ5ygavzHWd5'],
+          },
+        ],
+      },
+    ],
+  },
+  // Receipt, queued in the same transaction that settles the Khalti payment (outbox).
+  {
+    name: 'payment_received',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Payment received: Rs {{1}} for your HisabKitab {{2}} plan (Khalti transaction {{3}}). Your plan is active until {{4}}. Thank you!',
+        example: { body_text: [['4,999.00', 'Pro', 'GFq9PFS7b2iYvL8Lir9oXe', '2026-11-05']] },
+      },
+    ],
+  },
+  // Operator alert: a business just signed up on the website. Three wordings that
+  // carried the owner's name + number were rejected INCORRECT_CATEGORY; this one
+  // reports only the update to the operator's own HisabKitab admin account.
+  {
+    name: 'admin_account_update',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Your HisabKitab admin account has a new signup request from {{1}}. Open the admin panel to review it.',
+        example: { body_text: [['Karki Hardware']] },
+      },
+    ],
+  },
 ];
+
+/** Every template the running product sends. The admin panel checks each is APPROVED. */
+export const REQUIRED_TEMPLATES: readonly string[] = TEMPLATES.map((t) => t.name);
 
 /**
  * Delete a template by NAME (removes ALL language/version rows for that name).

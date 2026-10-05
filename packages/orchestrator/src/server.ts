@@ -12,12 +12,26 @@ import { parseDeliveryStatuses, parseInboundWebhook } from './whatsapp/inbound.j
 import { processInbound, type RouterDeps } from './whatsapp/router.js';
 import { metrics, metricsRegistry, inboundCtx, rootLogger } from './obs.js';
 
+/** A static value, or a getter re-read per request (runtime settings). */
+type Live<T> = T | (() => T);
+const read = <T,>(v: Live<T>): T => (typeof v === 'function' ? (v as () => T)() : v);
+
 export interface ServerOptions {
-  verifyToken: string;
-  appSecret: string;
+  verifyToken: Live<string>;
+  appSecret: Live<string>;
   deps: RouterDeps;
   /** Awaited in tests for determinism; fire-and-forget in production. */
   awaitProcessing?: boolean;
+  /**
+   * Which business number(s) this deployment answers for. The Meta app can be
+   * subscribed to several WhatsApp accounts (other products share it); a message
+   * addressed to any other number is dropped, never answered. When set, a message
+   * WITHOUT recipient metadata is also dropped (fail closed). Omitted = accept all
+   * (unit tests only).
+   */
+  acceptsPhoneNumberId?: (phoneNumberId: string) => boolean;
+  /** Mount extra routes (signup API, admin panel) on the same Fastify instance. */
+  register?: (app: FastifyInstance) => void;
 }
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
@@ -41,7 +55,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   });
 
   app.get('/webhook', (req, reply) => {
-    const challenge = handleVerifyHandshake(req.query as Record<string, unknown>, opts.verifyToken);
+    const challenge = handleVerifyHandshake(req.query as Record<string, unknown>, read(opts.verifyToken));
     if (challenge === null) return reply.code(403).send('forbidden');
     return reply.code(200).send(challenge);
   });
@@ -49,7 +63,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.post('/webhook', async (req, reply) => {
     const raw = req.body as Buffer;
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
-    if (!verifyWebhookSignature(raw, signature, opts.appSecret)) {
+    if (!verifyWebhookSignature(raw, signature, read(opts.appSecret))) {
       return reply.code(401).send({ error: 'bad signature' });
     }
 
@@ -60,6 +74,17 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       messages = parseInboundWebhook(payload);
     } catch {
       return reply.code(400).send({ error: 'malformed payload' });
+    }
+
+    if (opts.acceptsPhoneNumberId) {
+      const accepts = opts.acceptsPhoneNumberId;
+      const ours = messages.filter((m) => m.toPhoneNumberId !== undefined && accepts(m.toPhoneNumberId));
+      const foreign = messages.length - ours.length;
+      if (foreign > 0) {
+        metrics.error({ component: 'inbound-foreign-number' });
+        rootLogger.info('ignored messages addressed to another business number', { count: foreign });
+      }
+      messages = ours;
     }
 
     // Outbound delivery outcomes: log + count every one; a failure is a WARN with
@@ -93,5 +118,6 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     return reply.code(200).send({ received: messages.length });
   });
 
+  opts.register?.(app);
   return app;
 }

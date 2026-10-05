@@ -160,6 +160,36 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
           .returning({ tenantId: usageCounters.tenantId })
       ).length,
     );
+    // P10 billing rows (FK → tenants). Without these a business that ever had a
+    // trial/subscription could not be deleted at all (the purge rolled back).
+    await n(
+      'billing_payments',
+      (
+        await tx
+          .delete(schema.billingPayments)
+          .where(eq(schema.billingPayments.tenantId, tenantId))
+          .returning({ id: schema.billingPayments.id })
+      ).length,
+    );
+    await n(
+      'subscriptions',
+      (
+        await tx
+          .delete(schema.subscriptions)
+          .where(eq(schema.subscriptions.tenantId, tenantId))
+          .returning({ id: schema.subscriptions.id })
+      ).length,
+    );
+    // 0019: queued WhatsApp notifications (FK → tenants; contain a phone number).
+    await n(
+      'outbound_notifications',
+      (
+        await tx
+          .delete(schema.outboundNotifications)
+          .where(eq(schema.outboundNotifications.tenantId, tenantId))
+          .returning({ id: schema.outboundNotifications.id })
+      ).length,
+    );
     // P13: opening balances (FK → parties, tenants) — purge before tenants.
     await n(
       'opening_balances',

@@ -29,6 +29,10 @@ export const tenants = pgTable('tenants', {
   status: text('status', { enum: ['pending', 'active', 'suspended'] })
     .notNull()
     .default('pending'),
+  // 0019: signup metadata
+  ownerName: text('owner_name'),
+  contactEmail: text('contact_email'),
+  signupSource: text('signup_source', { enum: ['admin', 'web'] }).notNull().default('admin'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -39,6 +43,10 @@ export const pairingCodes = pgTable('pairing_codes', {
     .references(() => tenants.id),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  // 0019: a signup code is bound to the number it was sent to
+  phoneE164: text('phone_e164'),
+  failedAttempts: integer('failed_attempts').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ----- P8: identity & RBAC (mirrors 0010_identity_rbac.sql) -----
@@ -677,3 +685,40 @@ export const tallyJobs = pgTable(
   },
   (t) => [index('tally_jobs_connector_status_idx').on(t.connectorId, t.status, t.createdAt)],
 );
+
+// ----- 0019: runtime settings, admin audit, notification outbox -----
+
+/** Operator-editable runtime config. Secret values are enc:v1 ciphertext. */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  isSecret: boolean('is_secret').notNull().default(false),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Append-only admin action log (never contains secret values). */
+export const adminEvents = pgTable('admin_events', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  actor: text('actor').notNull(),
+  action: text('action').notNull(),
+  detail: jsonb('detail').notNull().default({}),
+  ip: text('ip'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Transactional WhatsApp template outbox (exactly-once via dedupe_key). */
+export const outboundNotifications = pgTable('outbound_notifications', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  tenantId: uuid('tenant_id').references(() => tenants.id),
+  toE164: text('to_e164').notNull(),
+  template: text('template').notNull(),
+  bodyParams: jsonb('body_params').$type<string[]>().notNull().default([]),
+  buttonParam: text('button_param'),
+  dedupeKey: text('dedupe_key').notNull().unique(),
+  status: text('status', { enum: ['pending', 'sent', 'failed'] }).notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  sentAt: timestamp('sent_at', { withTimezone: true }),
+});

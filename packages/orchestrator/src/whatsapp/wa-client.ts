@@ -11,9 +11,19 @@
  */
 import { withRetry } from '../resilience/retry.js';
 
-export interface WaClientOptions {
+export interface WaCredentials {
   phoneNumberId: string;
   accessToken: string;
+}
+
+export interface WaClientOptions {
+  phoneNumberId?: string;
+  accessToken?: string;
+  /**
+   * Resolve the sender + token per request (runtime settings: an admin can swap the
+   * WhatsApp number or rotate the token without a restart). Wins over the static pair.
+   */
+  credentials?: () => WaCredentials;
   /** Graph API version; bump deliberately, not implicitly. */
   graphVersion?: string;
   baseUrl?: string;
@@ -49,6 +59,15 @@ export class WaClient {
     this.fetch = opts.fetchImpl ?? fetch;
   }
 
+  /** The sender + token for THIS call (static, or resolved from runtime settings). */
+  creds(): WaCredentials {
+    if (this.opts.credentials) return this.opts.credentials();
+    if (!this.opts.phoneNumberId || !this.opts.accessToken) {
+      throw new WaError('WhatsApp sender is not configured (phone number id / access token)', 0);
+    }
+    return { phoneNumberId: this.opts.phoneNumberId, accessToken: this.opts.accessToken };
+  }
+
   private async request(path: string, init: RequestInit): Promise<unknown> {
     // Retry only transient failures (429/5xx/network). A WaError carries .status,
     // so a 4xx (bad token / bad payload) fails fast instead of burning retries.
@@ -57,7 +76,7 @@ export class WaClient {
         const res = await this.fetch(`${this.base}/${this.version}${path}`, {
           ...init,
           headers: {
-            authorization: `Bearer ${this.opts.accessToken}`,
+            authorization: `Bearer ${this.creds().accessToken}`,
             'content-type': 'application/json',
             ...(init.headers ?? {}),
           },
@@ -73,7 +92,7 @@ export class WaClient {
 
   /** Free-form text inside the 24h service window. `to` is E.164 (with or without '+'). */
   async sendText(to: string, body: string): Promise<void> {
-    await this.request(`/${this.opts.phoneNumberId}/messages`, {
+    await this.request(`/${this.creds().phoneNumberId}/messages`, {
       method: 'POST',
       body: JSON.stringify({
         messaging_product: 'whatsapp',
@@ -85,23 +104,44 @@ export class WaClient {
     });
   }
 
-  /** Pre-approved Utility template (the only legal proactive send). */
-  async sendTemplate(to: string, templateName: string, bodyParams: string[], lang = 'en'): Promise<void> {
-    await this.request(`/${this.opts.phoneNumberId}/messages`, {
+  /**
+   * Pre-approved template (the only legal proactive send). `button` fills a dynamic
+   * URL button's {{1}} suffix (sub_type url) or an AUTHENTICATION template's
+   * copy-code button (sub_type url carries the code, per Meta's auth-template spec).
+   */
+  async sendTemplate(
+    to: string,
+    templateName: string,
+    bodyParams: string[],
+    lang = 'en',
+    button?: { index?: number; param: string },
+  ): Promise<void> {
+    const components: unknown[] = [];
+    if (bodyParams.length) {
+      components.push({ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) });
+    }
+    if (button) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: String(button.index ?? 0),
+        parameters: [{ type: 'text', text: button.param }],
+      });
+    }
+    await this.request(`/${this.creds().phoneNumberId}/messages`, {
       method: 'POST',
       body: JSON.stringify({
         messaging_product: 'whatsapp',
         to: to.replace(/^\+/, ''),
         type: 'template',
-        template: {
-          name: templateName,
-          language: { code: lang },
-          components: bodyParams.length
-            ? [{ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) }]
-            : [],
-        },
+        template: { name: templateName, language: { code: lang }, components },
       }),
     });
+  }
+
+  /** One-time verification code via the AUTHENTICATION template (body + copy-code button). */
+  async sendAuthCode(to: string, templateName: string, code: string, lang = 'en'): Promise<void> {
+    await this.sendTemplate(to, templateName, [code], lang, { index: 0, param: code });
   }
 
   /**
@@ -115,9 +155,10 @@ export class WaClient {
         form.append('messaging_product', 'whatsapp');
         form.append('type', mimeType);
         form.append('file', new Blob([new Uint8Array(bytes)], { type: mimeType }), filename);
-        const res = await this.fetch(`${this.base}/${this.version}/${this.opts.phoneNumberId}/media`, {
+        const { phoneNumberId, accessToken } = this.creds();
+        const res = await this.fetch(`${this.base}/${this.version}/${phoneNumberId}/media`, {
           method: 'POST',
-          headers: { authorization: `Bearer ${this.opts.accessToken}` },
+          headers: { authorization: `Bearer ${accessToken}` },
           body: form,
         });
         if (!res.ok) throw new WaError(`media upload → ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status);
@@ -133,7 +174,7 @@ export class WaClient {
    */
   async sendDocument(to: string, bytes: Buffer, filename: string, caption: string, mimeType = 'application/pdf'): Promise<void> {
     const mediaId = await this.uploadMedia(bytes, mimeType, filename);
-    await this.request(`/${this.opts.phoneNumberId}/messages`, {
+    await this.request(`/${this.creds().phoneNumberId}/messages`, {
       method: 'POST',
       body: JSON.stringify({
         messaging_product: 'whatsapp',
@@ -158,7 +199,7 @@ export class WaClient {
   /** Step 2: download the bytes (same bearer; URL is NOT under /vXX.X). */
   async downloadMedia(meta: WaMediaMeta): Promise<Buffer> {
     const res = await this.fetch(meta.url, {
-      headers: { authorization: `Bearer ${this.opts.accessToken}` },
+      headers: { authorization: `Bearer ${this.creds().accessToken}` },
     });
     if (!res.ok) throw new WaError(`media download → ${res.status}`, res.status);
     return Buffer.from(await res.arrayBuffer());

@@ -107,6 +107,10 @@ services:
       KHALTI_ORIGIN: ${KHALTI_ORIGIN:-https://dev.khalti.com}
       PAYMENTS_PUBLIC_BASE_URL: ${PAYMENTS_PUBLIC_BASE_URL:-http://localhost:8802}
       WEBSITE_URL: ${WEBSITE_URL:-https://hisabkitab.pro}
+      # Defaults only: the admin panel (Settings → Payments) overrides these at runtime.
+      PAYMENTS_LIVE: ${PAYMENTS_LIVE:-0}
+      # Decrypts the Khalti key saved in the admin panel (same key as ledger/orchestrator).
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -164,6 +168,14 @@ services:
       WA_ACCESS_TOKEN: ${WA_ACCESS_TOKEN:-dev-wa-token}
       WA_WEBHOOK_VERIFY_TOKEN: ${WA_WEBHOOK_VERIFY_TOKEN:-dev-verify-token}
       WA_APP_SECRET: ${WA_APP_SECRET:-dev-app-secret-123}
+      WA_APP_ID: ${WA_APP_ID:-}
+      WA_BUSINESS_ACCOUNT_ID: ${WA_BUSINESS_ACCOUNT_ID:-}
+      WA_SENDER_E164: ${WA_SENDER_E164:-}
+      ADMIN_ALERT_E164: ${ADMIN_ALERT_E164:-}
+      # Admin panel (/admin): scrypt hash from `pnpm --filter @hisab/orchestrator admin:hash`.
+      # Unset = panel disabled.
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
+      PAYMENTS_INTERNAL_MCP_URL: ${PAYMENTS_INTERNAL_MCP_URL:-http://payments:8080/mcp}
       AGENT_ID: ${AGENT_ID:-}
       ENVIRONMENT_ID: ${ENVIRONMENT_ID:-}
       SCHEDULER_ENABLED: ${SCHEDULER_ENABLED:-1}

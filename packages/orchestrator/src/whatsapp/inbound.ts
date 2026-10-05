@@ -36,7 +36,12 @@ const webhookSchema = z
             z
               .object({
                 field: z.string(),
-                value: z.object({ messages: z.array(messageSchema).optional() }).loose(),
+                value: z
+                  .object({
+                    messages: z.array(messageSchema).optional(),
+                    metadata: z.object({ phone_number_id: z.string().optional() }).loose().optional(),
+                  })
+                  .loose(),
               })
               .loose(),
           ),
@@ -57,6 +62,12 @@ export interface InboundMessage {
   waMessageId: string;
   /** E.164 with leading '+', normalized from Meta's bare digits. */
   fromE164: string;
+  /**
+   * The business number the message was SENT TO (Meta metadata.phone_number_id).
+   * One Meta app can serve several products' numbers; the router only answers
+   * messages addressed to HisabKitab's own sender.
+   */
+  toPhoneNumberId?: string;
   timestamp: string;
   kind: 'text' | 'image' | 'document' | 'audio' | 'unsupported';
   text?: string;
@@ -73,10 +84,12 @@ export function parseInboundWebhook(payload: unknown): InboundMessage[] {
     for (const change of entry.changes) {
       if (change.field !== 'messages') continue;
       for (const m of change.value.messages ?? []) {
+        const to = change.value.metadata?.phone_number_id;
         const base = {
           waMessageId: m.id,
           fromE164: m.from.startsWith('+') ? m.from : `+${m.from}`,
           timestamp: m.timestamp,
+          ...(to ? { toPhoneNumberId: to } : {}),
         };
         if (m.type === 'text' && m.text) {
           out.push({ ...base, kind: 'text', text: m.text.body });
