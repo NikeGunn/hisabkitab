@@ -9,6 +9,7 @@
  */
 import type Anthropic from '@anthropic-ai/sdk';
 import {
+  addOwnerFigures,
   addToolResultEvidence,
   auditOutbound,
   correctiveInstruction,
@@ -85,6 +86,8 @@ export interface TurnOptions {
   onToolUse?: (name: string) => void;
   /** Correlation id (the inbound wa_message_id) — forwarded to MCP calls (P14 §8). */
   correlationId?: string;
+  /** The owner's verbatim inbound text: figures they typed may be echoed back (gate evidence). */
+  ownerText?: string;
   /** Shared metrics registry — gate decisions are counted here. Omitted = no metrics. */
   metrics?: BoundMetrics;
 }
@@ -151,7 +154,11 @@ export async function runTurn(
     events: [{ type: 'user.message', content: [{ type: 'text', text: userText }] }],
   });
 
-  let evidence = newTurnEvidence();
+  // Evidence accumulates for the WHOLE turn, across held-and-retried messages: a
+  // ledger result observed earlier in this turn is still true after a hold.
+  // (Resetting it made a correct retry fail when the agent did not re-call tools.)
+  const evidence = newTurnEvidence();
+  addOwnerFigures(evidence, opts.ownerText ?? '');
   let awaitingRetry = false;
 
   // The deadline must fire even when the stream goes SILENT (hung MCP call,
@@ -258,7 +265,6 @@ export async function runTurn(
           result.holds += 1;
           if (result.holds <= MAX_HOLDS_PER_TURN) {
             awaitingRetry = true;
-            evidence = newTurnEvidence(); // the retry must re-derive its evidence
             await client.beta.sessions.events.send(sessionId, {
               events: [
                 {

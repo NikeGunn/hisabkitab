@@ -33,12 +33,12 @@ afterAll(async () => {
 describe('compute_vat (pure)', () => {
   it('splits inclusive 9,040 into 8,000 + 1,040', async () => {
     const r = await session.callTool('compute_vat', { amount_paisa: 904000, inclusive: true });
-    expect(r).toEqual({ excl_paisa: 800000, vat_paisa: 104000 });
+    expect(r).toEqual({ excl_paisa: 800000, vat_paisa: 104000, total_paisa: 904000 });
   });
 
   it('adds 13% to an exclusive amount', async () => {
     const r = await session.callTool('compute_vat', { amount_paisa: 800000, inclusive: false });
-    expect(r).toEqual({ excl_paisa: 800000, vat_paisa: 104000 });
+    expect(r).toEqual({ excl_paisa: 800000, vat_paisa: 104000, total_paisa: 904000 });
   });
 });
 

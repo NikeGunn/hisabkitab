@@ -106,6 +106,19 @@ export function addToolResultEvidence(
   }
 }
 
+/**
+ * Figures the OWNER typed this turn. Repeating the owner's own number back ("you
+ * said Rs 11,300") is not a fabrication, so it is evidence; every DERIVED figure
+ * (VAT, taxable, totals the owner did not type) still has to come from a tool.
+ * Only call this with the owner's verbatim inbound text, never agent output.
+ */
+export function addOwnerFigures(evidence: TurnEvidence, ownerText: string): void {
+  for (const m of ownerText.matchAll(/(?<![\w.])\d[\d,]*(?:\.\d+)?(?![\w])/g)) {
+    const c = canonNumber(m[0]);
+    if (c) evidence.verifiedNumbers.add(c);
+  }
+}
+
 /** The gate itself. Deliver only when every money figure is evidenced and nothing failed. */
 export function auditOutbound(message: string, evidence: TurnEvidence): GateDecision {
   const reasons: string[] = [];

@@ -25,7 +25,14 @@ import { attachInboundMedia } from './media.js';
 import { scanForCredentials, CREDENTIAL_REFUSAL } from '../security/credential-guard.js';
 import { TenantRateLimiter, RATE_LIMITED_REPLY } from '../resilience/rate-limit.js';
 import { checkBudget, recordTurnUsage, latchWarn } from '../resilience/cost-guard.js';
-import { routeTurn, BUDGET_THROTTLED_REPLY, BUDGET_WARN_NOTE, type PlanCode } from '@hisab/shared';
+import {
+  routeTurn,
+  adToBs,
+  BS_MONTH_NAMES,
+  BUDGET_THROTTLED_REPLY,
+  BUDGET_WARN_NOTE,
+  type PlanCode,
+} from '@hisab/shared';
 import type { InboundMessage } from './inbound.js';
 import type { WaClient } from './wa-client.js';
 import { inboundCtx, type ObsCtx } from '../obs.js';
@@ -97,6 +104,24 @@ export const MEDIA_FAILURE_REPLY =
 export const PROCESSING_FAILURE_REPLY =
   'माफ गर्नुहोस् — something went wrong on my side and I could not process that message. ' +
   'Nothing was saved. Please send it again in a moment. 🙏';
+
+/**
+ * One-line date context prepended to every agent turn: today's date in Nepal
+ * (Asia/Kathmandu, UTC+5:45) in AD and BS. Pure; exported for tests.
+ */
+export function todayContext(now: Date): string {
+  const npt = new Date(now.getTime() + (5 * 60 + 45) * 60_000);
+  const ad = npt.toISOString().slice(0, 10);
+  const [y, m, d] = ad.split('-').map(Number) as [number, number, number];
+  let bs = '';
+  try {
+    const b = adToBs(new Date(y, m - 1, d));
+    bs = `, BS ${b.year}-${String(b.month).padStart(2, '0')}-${String(b.day).padStart(2, '0')} (${BS_MONTH_NAMES[b.month - 1]})`;
+  } catch {
+    /* out of converter range: AD only */
+  }
+  return `[Context: today in Nepal is AD ${ad}${bs}. Use it for "today"/"aaja" unless the owner gives another date.]`;
+}
 
 /** Reply to an owner's invite command (PRD v2.0 §3). */
 function inviteReply(
@@ -351,7 +376,10 @@ async function handleClaimed(
     }
 
     const turnStart = Date.now();
-    const turn = await runTurn(deps.anthropic, sessionId, turnText, {
+    // The agent has no clock: without this it guessed "today" a year off and
+    // recorded a sale as backdated. Nepal date, AD + BS, from the server clock.
+    const turn = await runTurn(deps.anthropic, sessionId, `${todayContext(new Date())}\n${turnText}`, {
+      ...(msg.text ? { ownerText: msg.text } : {}),
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,
       deliver: (text) => send(msg.fromE164, text),

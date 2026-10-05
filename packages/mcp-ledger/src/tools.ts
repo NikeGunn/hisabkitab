@@ -394,7 +394,13 @@ export function createToolHandlers(ctx: ToolContext) {
     ...createCalendarToolHandlers(ctx),
     async compute_vat(args: Args<'compute_vat'>) {
       const split = splitAmount(BigInt(args.amount_paisa), args.inclusive, true, ctx.cfg);
-      return { excl_paisa: n(split.exclPaisa), vat_paisa: n(split.vatPaisa) };
+      // total_paisa is returned explicitly so the Audit Gate can verify the VAT-
+      // inclusive total the agent shows the owner (it is evidence only if a tool said it).
+      return {
+        excl_paisa: n(split.exclPaisa),
+        vat_paisa: n(split.vatPaisa),
+        total_paisa: n(split.exclPaisa + split.vatPaisa),
+      };
     },
 
     async record_sale(args: Args<'record_sale'>) {
@@ -470,6 +476,7 @@ export function createToolHandlers(ctx: ToolContext) {
           status: 'draft' as const,
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
+          total_paisa: n(exclPaisa + vatPaisa),
           assumption: args.inclusive
             ? 'amount treated as VAT-INCLUSIVE'
             : 'amount treated as VAT-EXCLUSIVE',
@@ -591,6 +598,7 @@ export function createToolHandlers(ctx: ToolContext) {
           status: 'draft' as const,
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
+          total_paisa: n(exclPaisa + vatPaisa),
           input_vat_paisa: n(inputVatPaisa),
           input_credit_eligible: report.inputCreditEligible,
           input_credit_reasons: report.inputCreditReasons,
