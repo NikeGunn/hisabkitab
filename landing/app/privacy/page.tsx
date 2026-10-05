@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { PageShell, Section } from '@/components/PageShell';
-import { LEGAL_ENTITY } from '@/components/legal-entity';
+import { LEGAL_ENTITY, NEPAL_COMPANY } from '@/components/legal-entity';
+import { NepalCompanyCard } from '@/components/NepalCompanyCard';
 
 export const metadata: Metadata = {
   title: 'Privacy',
@@ -21,6 +22,14 @@ export default function PrivacyPage() {
           Principal place of business and registered office: {LEGAL_ENTITY.address}. Phone:{' '}
           <a className="text-primary underline-offset-4 hover:underline" href={LEGAL_ENTITY.phoneHref}>{LEGAL_ENTITY.phone}</a>.
         </p>
+        <p>
+          HisabKitab is developed in Nepal by <strong>{NEPAL_COMPANY.name}</strong> (Company Reg. No.{' '}
+          {NEPAL_COMPANY.registrationNo}, PAN {NEPAL_COMPANY.pan}), {NEPAL_COMPANY.city}. Subscription fees paid in
+          Nepal, including payments through Khalti, are received by {NEPAL_COMPANY.name}.
+        </p>
+        <div className="not-prose mt-4">
+          <NepalCompanyCard />
+        </div>
       </Section>
       <Section title="What we collect">
         <p>

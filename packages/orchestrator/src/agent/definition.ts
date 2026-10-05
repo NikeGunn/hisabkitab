@@ -16,6 +16,18 @@ import { SYSTEM_PROMPT } from './system-prompt.js';
 export const DEFAULT_HISAB_MODEL = 'claude-opus-4-8';
 export const DEV_HISAB_MODEL = 'claude-sonnet-4-6';
 export const HISAB_MODEL = process.env['HISAB_MODEL']?.trim() || DEFAULT_HISAB_MODEL;
+/**
+ * Reasoning effort for the agent (Managed Agents `model.effort`). The pilot runs
+ * Sonnet at `low` to keep per-turn cost down; correctness does not depend on it —
+ * every figure is computed and re-verified by the deterministic ledger tools and
+ * the Audit Gate, never by the model. Raise via HISAB_EFFORT if quality needs it.
+ */
+export const HISAB_EFFORT = (process.env['HISAB_EFFORT']?.trim() || 'low') as
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max';
 export const LEDGER_MCP_NAME = 'ledger';
 export const PAYMENTS_MCP_NAME = 'payments';
 export const TALLY_MCP_NAME = 'tally';
@@ -64,7 +76,8 @@ export function buildAgentConfig(input: AgentConfigInput) {
     description:
       'WhatsApp-first bookkeeping & VAT/TDS assistant for one small Nepali business per session. ' +
       'Never guesses, never saves without owner confirmation, never files with the government.',
-    model: HISAB_MODEL,
+    // Object form carries effort (the SDK's param type predates `effort`, hence the cast).
+    model: { id: HISAB_MODEL, effort: HISAB_EFFORT } as unknown as typeof HISAB_MODEL,
     system: SYSTEM_PROMPT,
     tools: [
       // bash + file ops (build PDFs, parse files), web_search/web_fetch (confirm IRD deadlines)

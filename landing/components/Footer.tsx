@@ -3,6 +3,7 @@
  * plus legal pathways. Static (server component, no client JS).
  */
 import { LEGAL_ENTITY } from './legal-entity';
+import { NepalCompanyCard } from './NepalCompanyCard';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -110,7 +111,11 @@ export function Footer() {
             </nav>
           </div>
 
-          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2">
+          <div className="mt-6">
+            <NepalCompanyCard compact />
+          </div>
+
+          <dl className="mt-4 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2">
             {LEGAL_FACTS.map((f) => (
               <div key={f.label} className="min-w-0">
                 <dt className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{f.label}</dt>

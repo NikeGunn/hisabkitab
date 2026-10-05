@@ -43,14 +43,23 @@ describe('model is config, not a literal (dev = cheap, prod = Opus)', () => {
     const m = await import('../src/agent/definition.js');
     expect(m.HISAB_MODEL).toBe('claude-sonnet-4-6');
     const cfg = m.buildAgentConfig({ ledgerMcpUrl: 'https://ledger.example/mcp', skillIds });
-    expect(cfg.model).toBe('claude-sonnet-4-6');
+    expect(cfg.model).toEqual({ id: 'claude-sonnet-4-6', effort: 'low' });
+  });
+
+  it('pilot default effort is low (cost); HISAB_EFFORT raises it', async () => {
+    vi.stubEnv('HISAB_MODEL', DEV_HISAB_MODEL);
+    vi.stubEnv('HISAB_EFFORT', 'medium');
+    vi.resetModules();
+    const m = await import('../src/agent/definition.js');
+    const cfg = m.buildAgentConfig({ ledgerMcpUrl: 'https://ledger.example/mcp', skillIds });
+    expect(cfg.model).toEqual({ id: 'claude-sonnet-4-6', effort: 'medium' });
   });
 });
 
 describe('buildAgentConfig', () => {
   it('wires model, prompt, ledger MCP and the five skills', () => {
     const cfg = buildAgentConfig({ ledgerMcpUrl: 'https://ledger.example/mcp', skillIds });
-    expect(cfg.model).toBe(HISAB_MODEL);
+    expect(cfg.model).toEqual({ id: HISAB_MODEL, effort: 'low' });
     expect(cfg.system).toBe(SYSTEM_PROMPT);
     expect(cfg.mcp_servers).toEqual([
       { type: 'url', name: LEDGER_MCP_NAME, url: 'https://ledger.example/mcp' },

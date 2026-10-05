@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { NEPAL_COMPANY } from '@/components/legal-entity';
 
 /**
  * Catchy Khalti checkout, DEVELOPMENT mode. No key, no network call, button
@@ -158,9 +159,13 @@ export function PayDevClient() {
 
         <p className="mx-auto mt-10 max-w-md text-center text-sm text-muted">
           Want to be first in line?{' '}
-          <a href="/#start" className="font-semibold text-primary underline-offset-4 hover:underline">
-            Join the free pilot on WhatsApp
+          <a href="/pilot#signup" className="font-semibold text-primary underline-offset-4 hover:underline">
+            Join the free pilot
           </a>
+        </p>
+        <p className="mx-auto mt-6 max-w-lg text-center text-xs leading-relaxed text-muted">
+          Payments are received by <span className="text-ink">{NEPAL_COMPANY.name}</span>, Company Reg. No.{' '}
+          {NEPAL_COMPANY.registrationNo}, PAN {NEPAL_COMPANY.pan}, {NEPAL_COMPANY.city}.
         </p>
       </div>
     </main>
