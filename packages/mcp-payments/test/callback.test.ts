@@ -169,6 +169,9 @@ describe('subscription receipt + payment-link redirect', () => {
     const ok = await fetch(`${base}/payments/go/GoPidxOk123`, { redirect: 'manual' });
     expect(ok.status).toBe(302);
     expect(ok.headers.get('location')).toBe('https://test-pay.khalti.com/?pidx=GoPidxOk123');
+    // behind Caddy the /payments prefix is stripped
+    const stripped = await fetch(`${base}/go/GoPidxOk123`, { redirect: 'manual' });
+    expect(stripped.status).toBe(302);
     // PROBE: a tampered row never becomes an open redirect / phishing hop
     const evil = await fetch(`${base}/payments/go/GoPidxEvil123`, { redirect: 'manual' });
     expect(evil.status).toBe(410);

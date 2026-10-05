@@ -80,7 +80,9 @@ export function buildPaymentsHttpServer(deps: PaymentsHttpDeps): ReturnType<type
     // The `payment_link` WhatsApp template's button points HERE, not at Khalti, so
     // one approved template works for sandbox and production. Only an `initiated`
     // subscription payment redirects, and only to a Khalti-hosted checkout URL.
-    const go = /^\/payments\/go\/([A-Za-z0-9_-]{6,64})$/.exec(url.pathname);
+    // Public URL is api…/payments/go/<pidx>; Caddy strips the /payments prefix, so
+    // the service sees /go/<pidx> (direct hits keep the prefix).
+    const go = /^(?:\/payments)?\/go\/([A-Za-z0-9_-]{6,64})$/.exec(url.pathname);
     if (req.method === 'GET' && go) {
       const [row] = await deps.orchDb
         .select({ status: schema.billingPayments.status, paymentUrl: schema.billingPayments.paymentUrl })
