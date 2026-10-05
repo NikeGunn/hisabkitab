@@ -73,7 +73,13 @@ describe('draft → confirm lifecycle', () => {
   });
 
   it('confirm_entry flips draft → confirmed; summary now includes it', async () => {
-    const c = await session.callTool<{ ok: boolean }>('confirm_entry', { entry_type: 'sale', entry_id: saleId });
+    const c = await session.callTool<{ ok: boolean; total_paisa?: number; vat_paisa?: number }>('confirm_entry', {
+      entry_type: 'sale',
+      entry_id: saleId,
+    });
+    // the confirmation carries the saved amounts (Audit Gate evidence for the reply)
+    expect(c.total_paisa).toBe((c.vat_paisa ?? 0) + ((c as { amount_excl_vat_paisa?: number }).amount_excl_vat_paisa ?? 0));
+    expect(c.vat_paisa).toBeGreaterThan(0);
     expect(c.ok).toBe(true);
     const r = await session.callTool<{ sale_count: number; output_vat_paisa: number; is_nil: boolean; net_payable_paisa: number }>(
       'generate_return_summary',

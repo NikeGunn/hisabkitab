@@ -683,7 +683,14 @@ export function createToolHandlers(ctx: ToolContext) {
           .update(table)
           .set({ status: 'confirmed' })
           .where(and(eq(table.id, args.entry_id), eq(table.status, 'draft')))
-          .returning({ id: table.id });
+          // Return the saved amounts so the confirmation the owner sees is tool-
+          // verified in THIS turn (the Audit Gate held restated figures otherwise).
+          .returning({
+            id: table.id,
+            exclPaisa: table.amountExclVatPaisa,
+            vatPaisa: table.vatPaisa,
+            occurredOn: table.occurredOn,
+          });
         if (updated.length === 0) {
           return {
             ok: false as const,
@@ -695,7 +702,16 @@ export function createToolHandlers(ctx: ToolContext) {
           action: 'confirm_entry',
           detail: { entry_type: args.entry_type, entry_id: args.entry_id },
         });
-        return { ok: true as const, entry_id: args.entry_id, status: 'confirmed' as const };
+        const row = updated[0]!;
+        return {
+          ok: true as const,
+          entry_id: args.entry_id,
+          status: 'confirmed' as const,
+          amount_excl_vat_paisa: n(row.exclPaisa),
+          vat_paisa: n(row.vatPaisa),
+          total_paisa: n(row.exclPaisa + row.vatPaisa),
+          occurred_on: row.occurredOn,
+        };
       });
     },
 
