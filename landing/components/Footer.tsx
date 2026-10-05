@@ -2,7 +2,7 @@
  * Footer: multi column navigation (Platform / Company / Resources / Connect)
  * plus legal pathways. Static (server component, no client JS).
  */
-import { LEGAL_ENTITY, PARTNER_COMPANY } from './legal-entity';
+import { LEGAL_ENTITY } from './legal-entity';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -45,12 +45,12 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
 ];
 
 const LEGAL_FACTS: { label: string; value: string; href?: string }[] = [
-  { label: 'Partner company', value: PARTNER_COMPANY.name },
+  { label: 'Operated by', value: LEGAL_ENTITY.name },
   {
     label: 'Principal place of business and registered office',
-    value: PARTNER_COMPANY.address,
+    value: LEGAL_ENTITY.address,
   },
-  { label: 'Phone', value: PARTNER_COMPANY.phone, href: PARTNER_COMPANY.phoneHref },
+  { label: 'Phone', value: LEGAL_ENTITY.phone, href: LEGAL_ENTITY.phoneHref },
   { label: 'Email', value: LEGAL_ENTITY.email, href: `mailto:${LEGAL_ENTITY.email}` },
 ];
 

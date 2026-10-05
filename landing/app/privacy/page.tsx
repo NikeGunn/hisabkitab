@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { PageShell, Section } from '@/components/PageShell';
-import { LEGAL_ENTITY, PARTNER_COMPANY } from '@/components/legal-entity';
+import { LEGAL_ENTITY } from '@/components/legal-entity';
 
 export const metadata: Metadata = {
   title: 'Privacy',
@@ -17,17 +17,9 @@ export default function PrivacyPage() {
     >
       <Section title="Who we are">
         <p>
-          HisabKitab is operated by <strong>{LEGAL_ENTITY.name}</strong>, a private limited company
-          registered with the {LEGAL_ENTITY.registrar} (Reg. No. {LEGAL_ENTITY.registrationNo}).
-          Registered office: {LEGAL_ENTITY.address}. Phone:{' '}
+          HisabKitab is operated by <strong>{LEGAL_ENTITY.name}</strong>.
+          Principal place of business and registered office: {LEGAL_ENTITY.address}. Phone:{' '}
           <a className="text-primary underline-offset-4 hover:underline" href={LEGAL_ENTITY.phoneHref}>{LEGAL_ENTITY.phone}</a>.
-        </p>
-      </Section>
-      <Section title="Partner company">
-        <p>
-          Our partner company is <strong>{PARTNER_COMPANY.name}</strong>.
-          Principal place of business and registered office: {PARTNER_COMPANY.address}. Phone:{' '}
-          <a className="text-primary underline-offset-4 hover:underline" href={PARTNER_COMPANY.phoneHref}>{PARTNER_COMPANY.phone}</a>.
         </p>
       </Section>
       <Section title="What we collect">

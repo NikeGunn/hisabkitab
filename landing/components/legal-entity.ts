@@ -5,20 +5,14 @@
  * Verification compares the website against the registration documents.
  */
 export const LEGAL_ENTITY = {
-  name: 'Kritrim Baudhikata Anusandhan Kendra Nepal Pvt. Ltd.',
-  registrationNo: '354368/81/82',
-  registrar: 'Office of the Company Registrar, Government of Nepal',
-  address: 'Kirtipur Municipality, Ward No. 7, Kathmandu, Nepal',
-  locality: 'Kirtipur',
-  region: 'Kathmandu',
-  phone: '+977-9705651002',
-  phoneHref: 'tel:+9779705651002',
-  email: 'hello@hisabkitab.pro',
-} as const;
-
-export const PARTNER_COMPANY = {
   name: 'Atomberg Technologies Private',
   address: '3rd Floor, Tower B, 247 Embassy Park, Lbs Marg, Vikhroli West, Mumbai, Maharashtra, India, 400083',
+  streetAddress: '3rd Floor, Tower B, 247 Embassy Park, Lbs Marg, Vikhroli West',
+  locality: 'Mumbai',
+  region: 'Maharashtra',
+  country: 'IN',
+  postalCode: '400083',
   phone: '+917740573268',
   phoneHref: 'tel:+917740573268',
+  email: 'hello@hisabkitab.pro',
 } as const;
