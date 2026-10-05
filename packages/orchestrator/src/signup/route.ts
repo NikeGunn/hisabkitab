@@ -49,8 +49,7 @@ export function registerSignup(
   app.post('/signup', async (req, reply) => {
     cors(req, reply);
     reply.header('cache-control', 'no-store');
-    const fwd = req.headers['x-forwarded-for'];
-    const ip = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim() || req.ip;
+    const ip = req.ip; // resolved via trustProxy (Caddy hop only)
     if (!limiter.take(`signup:${ip}`).allowed) {
       return reply.code(429).send({ status: 'rate_limited' });
     }

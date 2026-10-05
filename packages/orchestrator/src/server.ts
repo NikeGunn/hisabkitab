@@ -35,7 +35,13 @@ export interface ServerOptions {
 }
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
-  const app = Fastify({ logger: false });
+  // Caddy (host) → container arrives from loopback / the docker bridge. Trust ONLY
+  // those hops for X-Forwarded-For, so req.ip is the real client and a client-sent
+  // XFF header can never spoof an IP-keyed rate limit.
+  const app = Fastify({
+    logger: false,
+    trustProxy: ['127.0.0.0/8', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+  });
 
   // Keep the raw bytes — the HMAC is over them, not the re-serialized JSON.
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) =>

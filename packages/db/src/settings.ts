@@ -121,6 +121,20 @@ export class SettingsCache {
     return this;
   }
 
+  /**
+   * Like start(), but a failed first load does NOT throw: the process stays up
+   * (liveness must not depend on the DB) and keeps retrying. Until a load
+   * succeeds `ready` is false — callers that act on money/credentials must check
+   * it rather than fall back to env defaults that an admin may have overridden.
+   */
+  startLenient(intervalMs = 10_000): this {
+    const tick = () => this.refresh().catch(this.onError);
+    void tick();
+    this.timer = setInterval(tick, intervalMs);
+    this.timer.unref();
+    return this;
+  }
+
   stop(): void {
     if (this.timer) clearInterval(this.timer);
   }

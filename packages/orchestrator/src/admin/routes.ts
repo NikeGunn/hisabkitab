@@ -69,10 +69,9 @@ const GROUP_TITLES: Record<SettingGroup, string> = {
   signup: 'Website signup',
 };
 
+/** Client IP as resolved by Fastify's trustProxy (only the Caddy hop is trusted). */
 function clientIp(req: FastifyRequest): string {
-  const fwd = req.headers['x-forwarded-for'];
-  const first = (Array.isArray(fwd) ? fwd[0] : fwd)?.split(',')[0]?.trim();
-  return first || req.ip;
+  return req.ip;
 }
 
 function securityHeaders(reply: FastifyReply): FastifyReply {
@@ -108,7 +107,15 @@ function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export function registerAdmin(app: FastifyInstance, deps: AdminDeps): void {
+export function registerAdmin(root: FastifyInstance, deps: AdminDeps): void {
+  // Encapsulated plugin: the auth hook below is bound to exactly the routes
+  // registered in here — never to a raw-URL string match (a percent-encoded path
+  // like /%61dmin/settings routes to the same handler but would slip a string
+  // check).
+  root.register(async (app) => adminPlugin(app, deps));
+}
+
+function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
   // Brute-force guard: 5 FAILED logins per IP per 15 minutes (a success clears it).
   const failures = new Map<string, { n: number; until: number }>();
   const LOGIN_MAX_FAILURES = 5;
@@ -140,9 +147,9 @@ export function registerAdmin(app: FastifyInstance, deps: AdminDeps): void {
 
   // ---- auth gate for everything under /admin except the login page ----------
   app.addHook('preHandler', async (req: Req, reply) => {
-    const path = req.url.split('?')[0] ?? '';
-    if (path !== '/admin' && !path.startsWith('/admin/')) return;
-    if (path === '/admin/login') return;
+    // Every route in this plugin is an admin route; only the login page is open.
+    // routeOptions.url is the MATCHED route pattern, not the raw request path.
+    if (req.routeOptions.url === '/admin/login') return;
     const session = deps.auth.verify(parseCookies(req.headers.cookie)[SESSION_COOKIE]);
     if (!session) {
       if (req.method === 'GET') return securityHeaders(reply).redirect('/admin/login', 303);
@@ -198,7 +205,11 @@ export function registerAdmin(app: FastifyInstance, deps: AdminDeps): void {
     return securityHeaders(reply).header('set-cookie', sessionCookieHeader('', 0)).redirect('/admin/login', 303);
   });
 
-  const csrf = (req: Req) => deps.auth.csrfToken(req.admin!);
+  // Defence in depth: a handler can never render/act without a verified session.
+  const csrf = (req: Req) => {
+    if (!req.admin) throw new Error('admin session missing');
+    return deps.auth.csrfToken(req.admin);
+  };
 
   const metaCreds = (): MetaCreds | null => {
     const accessToken = deps.settings.get('wa.access_token');

@@ -93,6 +93,36 @@ describe('admin auth', () => {
     expect(post.statusCode).toBe(401);
   });
 
+  it('PROBE: percent-encoded / dot-segment admin paths never skip the auth gate', async () => {
+    for (const url of ['/%61dmin/settings', '/admin/%73ettings', '/%61dmin', '/admin/settings/', '/ADMIN/settings']) {
+      const res = await app.inject({ url });
+      expect([303, 404]).toContain(res.statusCode); // login redirect or no route — never the page
+      expect(res.body).not.toContain('WhatsApp (Meta Cloud API)');
+    }
+    const post = await app.inject({
+      method: 'POST',
+      url: '/%61dmin/settings',
+      headers: FORM,
+      payload: form({ key: 'payments.live', value: 'true', action: 'save' }),
+    });
+    expect([401, 404]).toContain(post.statusCode);
+    expect(settings.get('payments.live')).toBe('false');
+  });
+
+  it('PROBE: a client-sent X-Forwarded-For cannot dodge the login lockout', async () => {
+    // a direct (untrusted) client: its own XFF header must be ignored
+    const attempt = (i: number) =>
+      app.inject({
+        method: 'POST',
+        url: '/admin/login',
+        remoteAddress: '203.0.113.77',
+        headers: { ...FORM, 'x-forwarded-for': `198.51.100.${i}` },
+        payload: form({ password: 'nope' }),
+      });
+    for (let i = 0; i < 5; i += 1) expect((await attempt(i)).statusCode).toBe(401);
+    expect((await attempt(99)).statusCode).toBe(429);
+  });
+
   it('PROBE: forged cookie is rejected', async () => {
     const res = await app.inject({ url: '/admin', headers: { cookie: 'hk_admin=eyJzdWIiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.forged' } });
     expect(res.statusCode).toBe(303);

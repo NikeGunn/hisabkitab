@@ -246,9 +246,14 @@ if (isDirectRun) {
   // Khalti key / environment / live flag are RUNTIME settings (admin panel), with
   // env as the default — switching sandbox→production is a settings change, not a
   // deploy. The client is rebuilt only when the key or origin actually changes.
-  const settings = await new SettingsCache(orchDb).start(10_000);
+  // Lenient start: /healthz must not depend on the DB, but no Khalti call is made
+  // until the admin settings have actually loaded (never a silent env fallback).
+  const settings = new SettingsCache(orchDb, process.env, (err) =>
+    createLogger('mcp-payments').error('settings refresh failed', { error: String(err) }),
+  ).startLenient(10_000);
   let cached: { sig: string; client: KhaltiClient } | undefined;
   const khaltiFromSettings = (): KhaltiClient => {
+    if (!settings.ready) throw new Error('payment settings are not loaded yet; try again in a few seconds');
     const secretKey = settings.require('khalti.secret_key');
     const origin = settings.require('khalti.origin');
     const sig = `${origin}|${secretKey}`;
@@ -264,7 +269,7 @@ if (isDirectRun) {
     returnUrl: `${publicBase}/payments/khalti/return`,
     websiteUrl: process.env['WEBSITE_URL'] ?? 'https://hisabkitab.example',
     // Subscription billing stays in DEV mode unless switched on (setting payments.live).
-    live: () => settings.bool('payments.live'),
+    live: () => settings.ready && settings.bool('payments.live'),
     log: (m) => console.log(`[payments] ${m}`),
   });
   httpServer.listen(port, () =>
