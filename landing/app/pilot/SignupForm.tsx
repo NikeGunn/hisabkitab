@@ -14,7 +14,8 @@ type Result =
   | { status: 'code_sent'; sender_e164?: string; wa_link?: string; expires_minutes: number }
   | { status: 'already_registered'; sender_e164?: string; wa_link?: string }
   | { status: 'invalid'; errors: Record<string, string> }
-  | { status: 'closed' | 'busy' | 'rate_limited' | 'send_failed' | 'error' };
+  | { status: 'send_failed'; reason?: 'recipient' | 'service' }
+  | { status: 'closed' | 'busy' | 'rate_limited' | 'error' };
 
 const MESSAGES: Record<string, string> = {
   closed: 'New signups are paused for a moment. Please try again later or email hello@hisabkitab.pro.',
@@ -22,6 +23,8 @@ const MESSAGES: Record<string, string> = {
   rate_limited: 'Too many attempts. Please wait a while before requesting another code.',
   send_failed:
     'We could not deliver a WhatsApp message to that number. Check that it is your WhatsApp number and try again.',
+  send_failed_service:
+    'We could not send your code right now because of a problem on our side, not your number. We have been alerted. Please try again later or email hello@hisabkitab.pro.',
   error: 'Something went wrong on our side. Please try again in a minute.',
 };
 
@@ -63,6 +66,14 @@ export function SignupForm() {
       setBusy(false);
     }
   }
+
+  // a failure on OUR side (e.g. sender misconfigured) must never blame the owner's number
+  const notice =
+    result && result.status !== 'invalid'
+      ? result.status === 'send_failed' && result.reason === 'service'
+        ? MESSAGES.send_failed_service
+        : MESSAGES[result.status]
+      : undefined;
 
   if (result && (result.status === 'code_sent' || result.status === 'already_registered')) {
     const sent = result.status === 'code_sent';
@@ -155,10 +166,8 @@ export function SignupForm() {
         </span>
       </label>
       {err('consent')}
-      {result && result.status !== 'invalid' && MESSAGES[result.status] ? (
-        <p className="rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {MESSAGES[result.status]}
-        </p>
+      {notice ? (
+        <p className="rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{notice}</p>
       ) : null}
       <button type="submit" disabled={busy} className="btn-primary w-full justify-center disabled:opacity-60">
         {busy ? 'Sending code…' : 'Send my WhatsApp code →'}

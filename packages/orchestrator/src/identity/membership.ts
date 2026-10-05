@@ -88,6 +88,23 @@ export async function resolveMembership(db: Db, fromE164: string): Promise<Resol
   return row ? { ...row, role: row.role as Role } : null;
 }
 
+/**
+ * The sender has no ACTIVE business, but is an active member of a SUSPENDED one
+ * (the operator paused it). Lets the router answer "your account is paused"
+ * instead of the new-signup prompt — which would send the owner to a signup form
+ * that tells them they are already registered (a loop).
+ */
+export async function isMemberOfSuspendedTenant(db: Db, fromE164: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: tenants.id })
+    .from(users)
+    .innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.status, 'active')))
+    .innerJoin(tenants, and(eq(tenants.id, memberships.tenantId), eq(tenants.status, 'suspended')))
+    .where(eq(users.whatsappE164, fromE164))
+    .limit(1);
+  return rows.length > 0;
+}
+
 /** Find-or-create the global user row for a verified WhatsApp number. */
 async function ensureUser(db: Db, e164: string): Promise<string> {
   // ON CONFLICT DO NOTHING keeps it a single round-trip and race-safe; the

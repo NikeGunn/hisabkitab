@@ -13,9 +13,10 @@ import { appendAudit, schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
-import { handleUnknownSender, ONBOARDING_PROMPT, pairedWelcome } from '../onboarding/pairing.js';
+import { handleUnknownSender, ONBOARDING_PROMPT, pairedWelcome, SUSPENDED_ACCOUNT_REPLY } from '../onboarding/pairing.js';
 import {
   resolveMembership,
+  isMemberOfSuspendedTenant,
   parseInviteCommand,
   isAcceptCommand,
   inviteMember,
@@ -238,6 +239,11 @@ async function handleClaimed(
           await send(msg.fromE164, memberWelcome(accepted.businessName, accepted.role));
           return true;
         }
+      }
+      // A paused business: say so (no agent turn; never the signup prompt).
+      if (await isMemberOfSuspendedTenant(deps.db, msg.fromE164)) {
+        await send(msg.fromE164, SUSPENDED_ACCOUNT_REPLY);
+        return true;
       }
       const outcome = await handleUnknownSender(
         deps.db,

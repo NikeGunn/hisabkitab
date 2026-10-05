@@ -40,7 +40,7 @@ import { csrfField, esc, fmtDate, layout, pill, type Tone } from './html.js';
 import { metaStatus, subscribeApp, syncTemplates, type MetaCreds } from './meta.js';
 import { initiateSubscriptionLink } from './payment-link.js';
 import { issuePairingCode, PAIRING_TTL_MINUTES } from '../onboarding/pairing.js';
-import { PAIRING_TEMPLATE } from '../signup/signup.js';
+import { PAIRING_TEMPLATE, isOwnSender } from '../signup/signup.js';
 
 export interface AdminDeps {
   db: Db; // hisab_orch
@@ -74,12 +74,44 @@ function clientIp(req: FastifyRequest): string {
   return req.ip;
 }
 
+/**
+ * Is this state-changing admin POST from our own pages? (Layer 1 of 2; the CSRF
+ * token is layer 2 and is always required too.)
+ *
+ * Fetch Metadata first: every current browser sends `Sec-Fetch-Site`, and only
+ * `same-origin` is ours (`same-site` would be another hisabkitab.pro subdomain,
+ * `cross-site` an attacker page). `Origin: null` is what Chrome sends on a
+ * same-origin form POST under a strict Referrer-Policy — the 2026-10-05 prod bug
+ * where every admin button answered "Cross-origin request refused" — so `null`
+ * is accepted ONLY when the browser also vouches same-origin (a sandboxed attacker
+ * iframe also sends `null`, but with `cross-site`). A concrete Origin must match
+ * the Host. Non-browser clients (no Origin, no Sec-Fetch-Site) fall through to
+ * the CSRF token, which they cannot obtain without the session.
+ */
+export function isSameOriginPost(headers: {
+  origin?: string | string[] | undefined;
+  host?: string | undefined;
+  'sec-fetch-site'?: string | string[] | undefined;
+}): boolean {
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? (v.length === 1 ? v[0] : 'duplicated-header') : v);
+  const site = one(headers['sec-fetch-site']);
+  const origin = one(headers.origin);
+  if (site !== undefined && site !== 'same-origin') return false;
+  if (origin === undefined) return true;
+  if (origin === 'null') return site === 'same-origin';
+  const host = headers.host;
+  return Boolean(host) && (origin === `https://${host}` || origin === `http://${host}`);
+}
+
 function securityHeaders(reply: FastifyReply): FastifyReply {
   return reply
     .header('cache-control', 'no-store')
     .header('x-frame-options', 'DENY')
     .header('x-robots-tag', 'noindex, nofollow')
-    .header('referrer-policy', 'no-referrer')
+    // same-origin (not no-referrer): the browser then sends a real Origin on our
+    // own form POSTs, and no URL (flash messages can carry a pairing code) ever
+    // leaks to another site.
+    .header('referrer-policy', 'same-origin')
     .header(
       'content-security-policy',
       "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -156,9 +188,7 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       return html(reply, 'Session expired. Please sign in again.', 401);
     }
     if (req.method === 'POST') {
-      const origin = req.headers.origin;
-      const host = req.headers.host;
-      if (origin && host && origin !== `https://${host}` && origin !== `http://${host}`) {
+      if (!isSameOriginPost(req.headers)) {
         return html(reply, 'Cross-origin request refused.', 403);
       }
       if (!deps.auth.checkCsrf(session, (req.body as Form | undefined)?.['_csrf'])) {
@@ -450,6 +480,12 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       await deps.sendAuthCode(phone, PAIRING_TEMPLATE, code);
       return { code, sent: true };
     } catch (err) {
+      // The code stays LIVE (the admin reads it to the owner), but it reached no
+      // one on WhatsApp, so it must not count against the owner's signup limits.
+      await deps.db
+        .update(schema.pairingCodes)
+        .set({ sendFailedAt: sql`now()` })
+        .where(eq(schema.pairingCodes.code, code));
       return { code, sent: false, error: errText(err) };
     }
   }
@@ -461,6 +497,9 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     const name = (f['business_name'] ?? '').replace(/\s+/g, ' ').trim();
     const owner = (f['owner_name'] ?? '').replace(/\s+/g, ' ').trim();
     if (!phone) return back(reply, '/admin/tenants', 'bad', 'Enter a valid WhatsApp mobile number.');
+    if (isOwnSender(phone, deps.settings.get('wa.sender_e164'))) {
+      return back(reply, '/admin/tenants', 'bad', "That is HisabKitab's own WhatsApp number. Use the owner's number.");
+    }
     if (!/^\d{9}$/.test(pan)) return back(reply, '/admin/tenants', 'bad', 'PAN/VAT number must be 9 digits.');
     if (name.length < 2 || name.length > 120 || owner.length < 2 || owner.length > 80) {
       return back(reply, '/admin/tenants', 'bad', 'Business and owner names are required.');
@@ -471,7 +510,13 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id))
       .where(and(eq(schema.users.whatsappE164, phone), eq(schema.memberships.status, 'active')))
       .limit(1);
-    if (taken) return back(reply, '/admin/tenants', 'bad', 'That WhatsApp number is already active on a business.');
+    // same rule as web signup: a number that already owns a business (any status)
+    const [owned] = await deps.db
+      .select({ id: schema.tenants.id })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.whatsappE164, phone))
+      .limit(1);
+    if (taken || owned) return back(reply, '/admin/tenants', 'bad', 'That WhatsApp number is already active on a business.');
 
     const [t] = await deps.db
       .insert(schema.tenants)

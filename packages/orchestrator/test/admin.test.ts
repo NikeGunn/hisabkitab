@@ -7,10 +7,10 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { createDb, schema, SettingsCache, __setPiiKeyForTests, type DbHandle } from '@hisab/db';
 import { buildServer } from '../src/server.js';
-import { registerAdmin } from '../src/admin/routes.js';
+import { isSameOriginPost, registerAdmin } from '../src/admin/routes.js';
 import { AdminAuth, hashPassword } from '../src/admin/auth.js';
 import { drainOutbox, MAX_ATTEMPTS } from '../src/notify/outbox-drain.js';
 import { enqueueNotification } from '@hisab/db';
@@ -29,6 +29,7 @@ let adminDb: DbHandle;
 let app: FastifyInstance;
 let settings: SettingsCache;
 const sentCodes: { to: string; code: string }[] = [];
+let failSend: Error | null = null;
 
 beforeAll(async () => {
   __setPiiKeyForTests(randomBytes(32));
@@ -52,6 +53,7 @@ beforeAll(async () => {
         settings,
         auth,
         sendAuthCode: async (to, _t, code) => {
+          if (failSend) throw failSend;
           sentCodes.push({ to, code });
         },
         sendTemplate: async () => undefined,
@@ -330,5 +332,239 @@ describe('notification outbox', () => {
     });
     expect(sent.filter((t) => t === '+9779800000003')).toHaveLength(1);
     expect(calls).toBe(MAX_ATTEMPTS);
+  });
+});
+
+// What Chrome ACTUALLY sent on prod (Caddy access log, 2026-10-05): a same-origin
+// form POST under Referrer-Policy no-referrer carries `Origin: null`.
+const HOST = 'api.hisabkitab.pro';
+const BROWSER = { origin: 'null', 'sec-fetch-site': 'same-origin', 'sec-fetch-mode': 'navigate', host: HOST };
+const ATTACKS: Record<string, Record<string, string>> = {
+  'sandboxed attacker iframe (null + cross-site)': { origin: 'null', 'sec-fetch-site': 'cross-site', host: HOST },
+  'attacker page': { origin: 'https://evil.example', 'sec-fetch-site': 'cross-site', host: HOST },
+  'sibling subdomain (same-site)': { origin: 'https://hisabkitab.pro', 'sec-fetch-site': 'same-site', host: HOST },
+  'lying Origin vs Fetch Metadata': { origin: `https://${HOST}`, 'sec-fetch-site': 'cross-site', host: HOST },
+  'null origin from a non-browser': { origin: 'null', host: HOST },
+  'look-alike host': { origin: `https://${HOST}.evil.example`, 'sec-fetch-site': 'same-origin', host: HOST },
+  'port-shifted origin': { origin: `https://${HOST}:8443`, host: HOST },
+};
+
+describe('isSameOriginPost (pure)', () => {
+  it('accepts our own pages: real-browser null+same-origin, exact origin, and token-only clients', () => {
+    expect(isSameOriginPost(BROWSER)).toBe(true);
+    expect(isSameOriginPost({ origin: `https://${HOST}`, 'sec-fetch-site': 'same-origin', host: HOST })).toBe(true);
+    expect(isSameOriginPost({ origin: `https://${HOST}`, host: HOST })).toBe(true); // pre-Fetch-Metadata browser
+    expect(isSameOriginPost({ host: HOST })).toBe(true); // curl: the CSRF token is still required
+  });
+
+  it('PROBE: refuses every cross-origin shape', () => {
+    for (const [name, h] of Object.entries(ATTACKS)) {
+      expect(isSameOriginPost(h), name).toBe(false);
+    }
+    expect(isSameOriginPost({ origin: ['null', 'null'], 'sec-fetch-site': 'same-origin', host: HOST })).toBe(false);
+    expect(isSameOriginPost({ 'sec-fetch-site': ['same-origin', 'cross-site'], host: HOST })).toBe(false);
+    expect(isSameOriginPost({ origin: `https://${HOST}`, 'sec-fetch-site': 'same-origin' })).toBe(false); // no Host
+  });
+});
+
+describe('admin panel from a REAL browser (every POST route)', () => {
+  async function pendingTenant(cookie: string, csrf: string, phone: string): Promise<string> {
+    const name = `Browser Probe ${phone}`;
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/tenants',
+      headers: { ...FORM, ...BROWSER, cookie },
+      payload: form({ business_name: name, owner_name: 'Sita', whatsapp: phone, pan_vat: '609876543', _csrf: csrf }),
+    });
+    expect(res.statusCode).toBe(303);
+    const [t] = await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.businessName, name));
+    return t!.id;
+  }
+  const flash = (res: { headers: Record<string, unknown> }) =>
+    decodeURIComponent(String(res.headers.location ?? '')).replace(/\+/g, ' ');
+  const post = (url: string, cookie: string, body: Record<string, string>) =>
+    app.inject({ method: 'POST', url, headers: { ...FORM, ...BROWSER, cookie }, payload: form(body) });
+
+  it('pages send Referrer-Policy same-origin (so browsers send a real Origin)', async () => {
+    const { cookie } = await login();
+    for (const url of ['/admin', '/admin/settings', '/admin/tenants', '/admin/events', '/admin/login']) {
+      const page = await app.inject({ url, headers: { cookie } });
+      expect(page.headers['referrer-policy'], url).toBe('same-origin');
+    }
+  });
+
+  it('Resend code works from the browser: new code sent, old code revoked, logged (the reported bug)', async () => {
+    const { cookie, csrf } = await login();
+    const id = await pendingTenant(cookie, csrf, '9845000201');
+    const first = sentCodes.at(-1)!.code;
+    const res = await post(`/admin/tenants/${id}/resend`, cookie, { _csrf: csrf });
+    expect(res.statusCode).toBe(303);
+    expect(flash(res)).toMatch(/t=ok/);
+    const second = sentCodes.at(-1)!;
+    expect(second.to).toBe('+9779845000201');
+    expect(second.code).not.toBe(first);
+    const live = await adminDb.db
+      .select({ code: schema.pairingCodes.code })
+      .from(schema.pairingCodes)
+      .where(
+        and(
+          eq(schema.pairingCodes.tenantId, id),
+          isNull(schema.pairingCodes.consumedAt),
+          sql`${schema.pairingCodes.expiresAt} > now()`,
+        ),
+      );
+    expect(live.map((r) => r.code)).toEqual([second.code]); // exactly one live code
+    const [ev] = await adminDb.db
+      .select()
+      .from(schema.adminEvents)
+      .where(and(eq(schema.adminEvents.action, 'tenant.code_resent'), sql`${schema.adminEvents.detail}->>'tenant_id' = ${id}`));
+    expect(ev?.detail).toMatchObject({ code_sent: true });
+  });
+
+  it('PROBE: Resend when WhatsApp refuses (#131030): admin still gets a usable code that never counts against signup limits', async () => {
+    const { cookie, csrf } = await login();
+    const id = await pendingTenant(cookie, csrf, '9845000202');
+    failSend = new Error('(#131030) Recipient phone number not in allowed list');
+    try {
+      const res = await post(`/admin/tenants/${id}/resend`, cookie, { _csrf: csrf });
+      expect(flash(res)).toMatch(/t=warn/);
+      const code = /Code (\d{6})/.exec(flash(res))![1]!;
+      const [row] = await adminDb.db.select().from(schema.pairingCodes).where(eq(schema.pairingCodes.code, code));
+      expect(row?.sendFailedAt).not.toBeNull();
+      expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now()); // still usable by hand
+    } finally {
+      failSend = null;
+    }
+  });
+
+  it('PROBE: Resend refuses an active business, an unknown id and a malformed id', async () => {
+    const { cookie, csrf } = await login();
+    const id = await pendingTenant(cookie, csrf, '9845000203');
+    await adminDb.db.update(schema.tenants).set({ status: 'active' }).where(eq(schema.tenants.id, id));
+    for (const target of [id, '00000000-0000-0000-0000-000000000000', 'not-a-uuid', "1'; drop table tenants;--"]) {
+      const before = sentCodes.length;
+      const res = await post(`/admin/tenants/${encodeURIComponent(target)}/resend`, cookie, { _csrf: csrf });
+      expect(flash(res), target).toMatch(/t=bad/);
+      expect(sentCodes.length).toBe(before);
+    }
+  });
+
+  it('suspend then activate from the browser; PROBE: a never-verified business cannot be activated', async () => {
+    const { cookie, csrf } = await login();
+    const id = await pendingTenant(cookie, csrf, '9845000204');
+    const act = (action: string) => post(`/admin/tenants/${id}/${action}`, cookie, { _csrf: csrf });
+    expect(flash(await act('activate'))).toMatch(/never verified/);
+    expect(flash(await act('suspend'))).toMatch(/t=ok/);
+    let [t] = await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.id, id));
+    expect(t?.status).toBe('suspended');
+    await adminDb.db.update(schema.tenants).set({ whatsappE164: '+9779845000204' }).where(eq(schema.tenants.id, id));
+    expect(flash(await act('activate'))).toMatch(/t=ok/);
+    [t] = await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.id, id));
+    expect(t?.status).toBe('active');
+  });
+
+  it('settings save, payment link, Meta buttons and logout all pass the origin gate from the browser', async () => {
+    const { cookie, csrf } = await login();
+    const ok = await post('/admin/settings', cookie, { key: 'signup.daily_cap', value: '60', action: 'save', _csrf: csrf });
+    expect(ok.statusCode).toBe(303);
+    expect(settings.get('signup.daily_cap')).toBe('60');
+    await post('/admin/settings', cookie, { key: 'signup.daily_cap', action: 'clear', _csrf: csrf });
+    expect(settings.get('signup.daily_cap')).toBe('50');
+    for (const url of [
+      '/admin/whatsapp/subscribe',
+      '/admin/whatsapp/sync-templates',
+      '/admin/tenants/00000000-0000-0000-0000-000000000000/payment-link',
+    ]) {
+      const res = await post(url, cookie, { plan: 'pro', _csrf: csrf });
+      expect(res.statusCode, url).toBe(303); // reached the handler (a friendly flash), not the 403 gate
+      expect(res.body, url).not.toContain('Cross-origin');
+    }
+    const out = await post('/admin/logout', cookie, { _csrf: csrf });
+    expect(out.statusCode).toBe(303);
+    expect(String(out.headers['set-cookie'])).toMatch(/Max-Age=0/);
+  });
+
+  it('PROBE: every POST route refuses every cross-origin attack shape, even with a valid session + CSRF token', async () => {
+    const { cookie, csrf } = await login();
+    const id = await pendingTenant(cookie, csrf, '9845000205');
+    const routes: [string, Record<string, string>][] = [
+      ['/admin/settings', { key: 'payments.live', value: 'true', action: 'save' }],
+      ['/admin/tenants', { business_name: 'CSRF Corp', owner_name: 'Eve', whatsapp: '9845000299', pan_vat: '609876543' }],
+      [`/admin/tenants/${id}/resend`, {}],
+      [`/admin/tenants/${id}/suspend`, {}],
+      [`/admin/tenants/${id}/activate`, {}],
+      [`/admin/tenants/${id}/payment-link`, { plan: 'pro' }],
+      ['/admin/whatsapp/subscribe', {}],
+      ['/admin/whatsapp/sync-templates', {}],
+      ['/admin/logout', {}],
+    ];
+    const sentBefore = sentCodes.length;
+    for (const [url, body] of routes) {
+      for (const [name, h] of Object.entries(ATTACKS)) {
+        const res = await app.inject({ method: 'POST', url, headers: { ...FORM, ...h, cookie }, payload: form({ ...body, _csrf: csrf }) });
+        expect(res.statusCode, `${url} / ${name}`).toBe(403);
+        expect(res.headers['set-cookie'], `${url} / ${name}`).toBeUndefined();
+      }
+    }
+    expect(settings.get('payments.live')).toBe('false');
+    expect(sentCodes.length).toBe(sentBefore);
+    const [t] = await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.id, id));
+    expect(t?.status).toBe('pending');
+    const csrfCorp = await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.businessName, 'CSRF Corp'));
+    expect(csrfCorp).toHaveLength(0);
+  });
+
+  it('PROBE: a browser POST without a session, or with a forged CSRF token, is still refused', async () => {
+    const { csrf } = await login();
+    const noSession = await app.inject({
+      method: 'POST',
+      url: '/admin/settings',
+      headers: { ...FORM, ...BROWSER },
+      payload: form({ key: 'payments.live', value: 'true', action: 'save', _csrf: csrf }),
+    });
+    expect(noSession.statusCode).toBe(401);
+    const other = await login();
+    const forged = await post('/admin/settings', other.cookie, { key: 'payments.live', value: 'true', action: 'save', _csrf: 'x' + csrf.slice(1) });
+    expect(forged.statusCode).toBe(403);
+    expect(settings.get('payments.live')).toBe('false');
+  });
+});
+
+describe('admin create-business guards', () => {
+  it("PROBE: refuses our own sender number and a number that already owns a business", async () => {
+    const { cookie, csrf } = await login();
+    const create = (whatsapp: string, business_name: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/admin/tenants',
+        headers: { ...FORM, ...BROWSER, cookie },
+        payload: form({ business_name, owner_name: 'Ram', whatsapp, pan_vat: '609876543', _csrf: csrf }),
+      });
+    const setSender = (value?: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/admin/settings',
+        headers: { ...FORM, ...BROWSER, cookie },
+        payload: form(value ? { key: 'wa.sender_e164', value, action: 'save', _csrf: csrf } : { key: 'wa.sender_e164', action: 'clear', _csrf: csrf }),
+      });
+    await setSender('+9779745861381');
+    expect(settings.get('wa.sender_e164')).toBe('+9779745861381');
+    try {
+      const r = await create('974-586-1381', 'Own Sender Co');
+      expect(decodeURIComponent(String(r.headers.location)).replace(/\+/g, ' ')).toMatch(/own WhatsApp number/);
+      expect(await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.businessName, 'Own Sender Co'))).toHaveLength(0);
+    } finally {
+      await setSender();
+    }
+    const [owner] = await adminDb.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Owned Already', panOrVatNo: '600000079', whatsappE164: '+9779845000300', status: 'suspended' })
+      .returning({ id: schema.tenants.id });
+    expect(owner).toBeDefined();
+    const before = sentCodes.length;
+    const r2 = await create('9845000300', 'Duplicate Owner Co');
+    expect(decodeURIComponent(String(r2.headers.location)).replace(/\+/g, ' ')).toMatch(/already active/);
+    expect(sentCodes.length).toBe(before);
+    expect(await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.businessName, 'Duplicate Owner Co'))).toHaveLength(0);
   });
 });
