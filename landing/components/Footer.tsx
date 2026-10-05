@@ -45,7 +45,6 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
 ];
 
 const LEGAL_FACTS: { label: string; value: string; href?: string }[] = [
-  { label: 'Phone', value: LEGAL_ENTITY.phone, href: LEGAL_ENTITY.phoneHref },
   { label: 'Email', value: LEGAL_ENTITY.email, href: `mailto:${LEGAL_ENTITY.email}` },
 ];
 
@@ -105,7 +104,7 @@ export function Footer() {
             </nav>
           </div>
 
-          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-[auto_auto]">
+          <dl className="mt-6 grid gap-x-8 gap-y-4 rounded-xl border border-hairline bg-white/60 px-5 py-4 text-sm sm:grid-cols-2 lg:grid-cols-[auto]">
             {LEGAL_FACTS.map((f) => (
               <div key={f.label} className="min-w-0">
                 <dt className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{f.label}</dt>
