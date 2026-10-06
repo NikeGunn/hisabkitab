@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { LogoMark } from './Logo';
 
 export function Nav() {
   return (
@@ -12,8 +13,8 @@ export function Nav() {
     >
       <nav className="mx-auto mt-4 flex max-w-content items-center justify-between rounded-pill border border-hairline bg-surface/80 px-4 py-2.5 shadow-card backdrop-blur-md sm:px-5">
         <a href="/" className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-linear-to-br from-primary to-accent font-serif text-white">हि</span>
-          <span className="font-serif text-lg font-semibold">HisabKitab</span>
+          <LogoMark className="h-8 w-8" />
+          <span className="font-sans text-lg font-bold tracking-tight">HisabKitab</span>
         </a>
         <div className="hidden items-center gap-7 text-sm text-muted md:flex">
           <a href="#how" className="transition-colors hover:text-ink">How it works</a>

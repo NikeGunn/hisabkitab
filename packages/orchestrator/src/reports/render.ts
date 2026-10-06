@@ -34,8 +34,21 @@ const FONTS = {
 type Margin = [number, number, number, number];
 const m = (l: number, t: number, r: number, b: number): Margin => [l, t, r, b];
 
-const BRAND = '#0B6E4F'; // deep green — matches the HisabKitab landing palette
-const BRAND_LIGHT = '#E6F2ED';
+const BRAND = '#C2410C'; // deep saffron: the logo's #F68B1F darkened so white text on it stays readable
+const BRAND_LIGHT = '#FDF0E6';
+const BRAND_TINT = '#FDE7D3'; // subtitle text on the BRAND bar
+
+/**
+ * Brand mark (landing/public/brand/hisabkitab-mark.svg). The page is white, so the
+ * gaps are drawn as white strokes instead of the source's mask (simpler for pdfkit's SVG).
+ */
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+<path fill="#F68B1F" d="M16 20H84Q92 20 92 28V72Q92 80 84 80C70 80 58 83 52 92H48C42 83 32 80 30 80L15 95V80Q8 80 8 72V28Q8 20 16 20Z"/>
+<g fill="#F68B1F" stroke="#fff" stroke-width="4.5" stroke-linejoin="round">
+<path d="M17 9C31 7 43 11 50 19V87C42 79 30 75 17 75Z"/><path d="M83 9C69 7 57 11 50 19V87C58 79 70 75 83 75Z"/></g>
+<path fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" d="M30 47L44 60L71 33"/>
+<path fill="none" stroke="#FDB813" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" d="M30 47L44 60L71 33"/>
+</svg>`;
 const INK = '#1a1a1a';
 const MUTE = '#6b7280';
 const ZEBRA = '#f7f9f8';
@@ -86,7 +99,7 @@ export class PdfmakeRenderer implements PdfRenderer {
     };
   }
 
-  /** Branded header: business name + PAN/VAT on the left, report title + period on a green bar. */
+  /** Branded header: business name + PAN/VAT on the left, logo on the right, report title + period on a brand bar. */
   private headerBar(model: ReportModel): Content {
     const { header } = model;
     return {
@@ -102,9 +115,16 @@ export class PdfmakeRenderer implements PdfRenderer {
             },
             {
               width: 'auto',
-              stack: [
-                { text: 'HisabKitab', fontSize: 11, bold: true, color: BRAND, alignment: 'right' },
-                { text: 'Pocket Accountant', fontSize: 7.5, color: MUTE, alignment: 'right' },
+              columns: [
+                { svg: LOGO_SVG, width: 26, height: 26 },
+                {
+                  width: 'auto',
+                  margin: m(5, 2, 0, 0),
+                  stack: [
+                    { text: 'HisabKitab', fontSize: 11, bold: true, color: INK },
+                    { text: 'Pocket Accountant', fontSize: 7.5, color: MUTE },
+                  ],
+                },
               ],
             },
           ],
@@ -117,8 +137,8 @@ export class PdfmakeRenderer implements PdfRenderer {
                 {
                   stack: [
                     { text: header.title.toUpperCase(), fontSize: 12.5, bold: true, color: '#ffffff' },
-                    ...(header.subtitle ? [{ text: header.subtitle, fontSize: 9, color: '#dff0e9', margin: m(0, 1, 0, 0) }] : []),
-                    { text: header.periodLabel, fontSize: 9, color: '#dff0e9', margin: m(0, 1, 0, 0) },
+                    ...(header.subtitle ? [{ text: header.subtitle, fontSize: 9, color: BRAND_TINT, margin: m(0, 1, 0, 0) }] : []),
+                    { text: header.periodLabel, fontSize: 9, color: BRAND_TINT, margin: m(0, 1, 0, 0) },
                   ],
                   fillColor: BRAND,
                   margin: m(10, 7, 10, 7),
