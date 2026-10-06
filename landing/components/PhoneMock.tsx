@@ -2,6 +2,7 @@
 
 import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
+import { LogoMark } from './Logo';
 
 /**
  * The hero focal object: a phone running a live HisabKitab WhatsApp thread.
@@ -71,7 +72,7 @@ export function PhoneMock() {
             <div className="absolute left-1/2 top-0 z-20 h-6 w-32 -translate-x-1/2 rounded-b-2xl bg-ink" />
             {/* WhatsApp header */}
             <div className="flex items-center gap-3 bg-wa-header px-4 pb-3 pt-7 text-white">
-              <div className="grid h-9 w-9 place-items-center rounded-full bg-white/15 font-serif text-lg">हि</div>
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-white"><LogoMark className="h-6 w-6" /></div>
               <div className="leading-tight">
                 <p className="text-sm font-semibold">HisabKitab</p>
                 <p className="text-[11px] text-white/70">online · your accountant</p>

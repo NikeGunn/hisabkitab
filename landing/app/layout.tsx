@@ -65,15 +65,15 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
     locale: 'en_NP',
-    images: [{ url: '/og.svg', width: 1200, height: 630, alt: 'HisabKitab, your pocket accountant on WhatsApp' }],
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'HisabKitab, your pocket accountant on WhatsApp' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: TITLE,
     description: DESCRIPTION,
-    images: ['/og.svg'],
+    images: ['/og.png'],
   },
-  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  icons: { icon: '/icon.svg', apple: '/apple-icon.png' },
   category: 'finance',
 };
 
@@ -88,7 +88,7 @@ const jsonLd = {
       name: 'HisabKitab',
       legalName: LEGAL_ENTITY.name,
       url: SITE,
-      logo: `${SITE}/icon.svg`,
+      logo: `${SITE}/icon-512.png`,
       telephone: LEGAL_ENTITY.phone,
       email: LEGAL_ENTITY.email,
       address: {

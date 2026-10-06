@@ -2,6 +2,7 @@
 
 import { motion, useInView, animate, useMotionValue, useTransform } from 'framer-motion';
 import { useEffect, useRef } from 'react';
+import { LogoMark } from './Logo';
 
 /**
  * A tablet showing the work product: the live ledger and return dashboard that is
@@ -44,7 +45,7 @@ export function TabletMock() {
           {/* app chrome */}
           <div className="flex items-center justify-between border-b border-hairline px-5 py-3">
             <div className="flex items-center gap-2">
-              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 font-serif text-primary">हि</span>
+              <LogoMark className="h-7 w-7" />
               <p className="font-serif text-sm font-semibold">This month, Shrawan 2082</p>
             </div>
             <span className="pill text-[10px]!">Live</span>

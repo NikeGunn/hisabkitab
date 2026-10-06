@@ -4,6 +4,7 @@
  */
 import { LEGAL_ENTITY } from './legal-entity';
 import { NepalCompanyCard } from './NepalCompanyCard';
+import { LogoMark } from './Logo';
 
 const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
@@ -73,8 +74,8 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-4 lg:grid-cols-[1.4fr_repeat(4,1fr)]">
           <div className="col-span-2 sm:col-span-4 lg:col-span-1">
             <div className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-linear-to-br from-primary to-accent font-serif text-white">हि</span>
-              <span className="font-serif text-xl font-semibold">HisabKitab</span>
+              <LogoMark className="h-9 w-9" />
+              <span className="font-sans text-xl font-bold tracking-tight">HisabKitab</span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
               Hisab-kitab is the everyday Nepali phrase for keeping the books. That is exactly, and
