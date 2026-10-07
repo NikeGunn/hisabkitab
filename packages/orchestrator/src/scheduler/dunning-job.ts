@@ -24,7 +24,7 @@ const { subscriptions, tenants } = schema;
 /** Send a pre-approved billing Utility template to a tenant's WhatsApp number. */
 export type BillingTemplateSender = (
   toE164: string,
-  templateName: 'subscription_due_soon' | 'subscription_expired' | 'subscription_suspended',
+  templateName: 'subscription_due_soon' | 'plan_ended_notice' | 'plan_paused_notice',
   bodyParams: string[],
 ) => Promise<void>;
 
@@ -43,10 +43,10 @@ export interface TenantDunningOutcome {
   detail?: string;
 }
 
-const TEMPLATE_FOR: Record<DunningStage, 'subscription_due_soon' | 'subscription_expired' | 'subscription_suspended'> = {
+const TEMPLATE_FOR: Record<DunningStage, 'subscription_due_soon' | 'plan_ended_notice' | 'plan_paused_notice'> = {
   renewal_due_soon: 'subscription_due_soon',
-  expired: 'subscription_expired',
-  suspended: 'subscription_suspended',
+  expired: 'plan_ended_notice',
+  suspended: 'plan_paused_notice',
 };
 
 /** Format an ISO date as "30 Asar"-ish display is overkill here; keep the ISO end date. */

@@ -530,9 +530,9 @@ Meta review — NO public API exists to submit/expedite; resubmit only offered a
 
 **🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
 ✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
-Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② Dedicated sender:
-free the chosen sender SIM from the WhatsApp app, then register it (new WABA "HisabKitab", vertical FINANCE),
-switch in admin Settings, Subscribe webhooks + Submit missing templates. ③ Khalti merchant onboarding
+Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② ✅ Dedicated sender
+DONE 2026-10-08: new WABA "HisabKitab" (FINANCE) registered via the WhatsApp Business Tools MCP, app
+subscribed, 12 templates submitted, admin Settings switched (IDs + 2-step PIN in the local creds file). ③ Khalti merchant onboarding
 (email ready; needs tax clearance cert) → paste live key in admin Settings. ④ Pause the chatbot-platform
 app subscription if both products must ever share one number again (no token for it locally).
 

@@ -112,26 +112,30 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  // plan_ended_notice / plan_paused_notice replace subscription_expired/_suspended,
+  // which Meta re-categorised as MARKETING ("Reply renew" read as a sales prompt;
+  // 2026-10-08). Plain account-status wording keeps them Utility. A deleted name is
+  // locked for 30 days and an approved category can't be changed, hence new names.
   {
-    name: 'subscription_expired',
+    name: 'plan_ended_notice',
     category: 'UTILITY',
     language: 'en',
     components: [
       {
         type: 'BODY',
-        text: 'Your HisabKitab {{1}} plan has ended. You still have access for a few more days. Reply "renew" to continue. Your data is safe.',
+        text: 'Account update: the billing period for your HisabKitab {{1}} plan has ended. Your account stays open during the grace period and your records are kept. Reply here for your account details.',
         example: { body_text: [['Pro']] },
       },
     ],
   },
   {
-    name: 'subscription_suspended',
+    name: 'plan_paused_notice',
     category: 'UTILITY',
     language: 'en',
     components: [
       {
         type: 'BODY',
-        text: 'Your HisabKitab {{1}} plan is paused for non-payment. Your data is retained. Reply "renew" anytime to reactivate.',
+        text: 'Account update: your HisabKitab {{1}} plan is paused because the latest payment was not received. Your records are kept and nothing has been deleted. Reply here for your account details.',
         example: { body_text: [['Pro']] },
       },
     ],
