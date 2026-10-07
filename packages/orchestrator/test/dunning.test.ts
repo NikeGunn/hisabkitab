@@ -91,7 +91,7 @@ describe('runDunningPass', () => {
     const mine = out.find((o) => o.tenantId === tid)!;
     expect(mine.stage).toBe('expired');
     expect(mine.newStatus).toBe('past_due');
-    expect(sent[0]!.template).toBe('subscription_expired');
+    expect(sent[0]!.template).toBe('plan_ended_notice');
     const [row] = await adminSql`SELECT status FROM subscriptions WHERE tenant_id = ${tid}`;
     expect(row!['status']).toBe('past_due');
   });
@@ -101,7 +101,7 @@ describe('runDunningPass', () => {
     const { sender, sent } = capturingSender();
     const out = await runDunningPass({ db: orch.db, sendTemplate: sender }, NOW);
     expect(out.find((o) => o.tenantId === tid)!.newStatus).toBe('suspended');
-    expect(sent[0]!.template).toBe('subscription_suspended');
+    expect(sent[0]!.template).toBe('plan_paused_notice');
     const [row] = await adminSql`SELECT status FROM subscriptions WHERE tenant_id = ${tid}`;
     expect(row!['status']).toBe('suspended'); // suspended, NOT deleted
   });
