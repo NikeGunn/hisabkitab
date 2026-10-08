@@ -74,7 +74,7 @@ describe('runDunningPass', () => {
     expect(mine.status).toBe('sent');
     expect(mine.stage).toBe('renewal_due_soon');
     expect(sent).toHaveLength(1);
-    expect(sent[0]!.template).toBe('subscription_due_soon');
+    expect(sent[0]!.template).toBe('plan_renewal_notice');
     expect(sent[0]!.params[2]).toBe('4,999'); // Pro price display
 
     // PROBE: a second pass the same day re-sends NOTHING (latch).

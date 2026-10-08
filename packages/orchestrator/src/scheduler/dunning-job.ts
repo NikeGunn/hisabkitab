@@ -24,7 +24,7 @@ const { subscriptions, tenants } = schema;
 /** Send a pre-approved billing Utility template to a tenant's WhatsApp number. */
 export type BillingTemplateSender = (
   toE164: string,
-  templateName: 'subscription_due_soon' | 'plan_ended_notice' | 'plan_paused_notice',
+  templateName: 'plan_renewal_notice' | 'plan_ended_notice' | 'plan_paused_notice',
   bodyParams: string[],
 ) => Promise<void>;
 
@@ -43,8 +43,8 @@ export interface TenantDunningOutcome {
   detail?: string;
 }
 
-const TEMPLATE_FOR: Record<DunningStage, 'subscription_due_soon' | 'plan_ended_notice' | 'plan_paused_notice'> = {
-  renewal_due_soon: 'subscription_due_soon',
+const TEMPLATE_FOR: Record<DunningStage, 'plan_renewal_notice' | 'plan_ended_notice' | 'plan_paused_notice'> = {
+  renewal_due_soon: 'plan_renewal_notice',
   expired: 'plan_ended_notice',
   suspended: 'plan_paused_notice',
 };

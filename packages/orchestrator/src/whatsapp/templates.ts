@@ -100,22 +100,23 @@ export const TEMPLATES: TemplateDefinition[] = [
     ],
   },
   // ---- P10 billing dunning (subscription renewal nudges) ----
+  // plan_renewal_notice / plan_ended_notice / plan_paused_notice replace
+  // subscription_due_soon/_expired/_suspended,
+  // which Meta re-categorised as MARKETING ("Reply renew" read as a sales prompt;
+  // 2026-10-08). Plain account-status wording keeps them Utility. A deleted name is
+  // locked for 30 days and an approved category can't be changed, hence new names.
   {
-    name: 'subscription_due_soon',
+    name: 'plan_renewal_notice',
     category: 'UTILITY',
     language: 'en',
     components: [
       {
         type: 'BODY',
-        text: 'Your HisabKitab {{1}} plan renews on {{2}} (Rs {{3}}/month). Reply "renew" to keep it active.',
+        text: 'Account update: the current billing period of your HisabKitab {{1}} plan ends on {{2}}. The fee for the next month is Rs {{3}} as per your plan. Reply here for your account details.',
         example: { body_text: [['Pro', '30 Asar', '4,999']] },
       },
     ],
   },
-  // plan_ended_notice / plan_paused_notice replace subscription_expired/_suspended,
-  // which Meta re-categorised as MARKETING ("Reply renew" read as a sales prompt;
-  // 2026-10-08). Plain account-status wording keeps them Utility. A deleted name is
-  // locked for 30 days and an approved category can't be changed, hence new names.
   {
     name: 'plan_ended_notice',
     category: 'UTILITY',
