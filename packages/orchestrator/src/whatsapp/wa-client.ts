@@ -30,6 +30,11 @@ export interface WaClientOptions {
   fetchImpl?: typeof fetch;
   /** retry attempts for transient Graph failures (default 3; set 1 to disable). */
   retryAttempts?: number;
+  /**
+   * Billing guard asked before EVERY template send (category-guard.ts): throws when
+   * Meta has re-categorised the template as MARKETING, so it never goes out.
+   */
+  templateGuard?: { assertSendable(templateName: string): Promise<unknown> };
 }
 
 export interface WaMediaMeta {
@@ -129,6 +134,7 @@ export class WaClient {
     lang = 'en',
     button?: { index?: number; param: string },
   ): Promise<void> {
+    await this.opts.templateGuard?.assertSendable(templateName);
     const components: unknown[] = [];
     if (bodyParams.length) {
       components.push({ type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) });

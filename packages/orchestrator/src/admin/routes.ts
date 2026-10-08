@@ -284,11 +284,16 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
 
     const tplRows = meta
       ? meta.templatesError
-        ? `<tr><td colspan="2">${pill('BLOCKED', 'bad')} ${esc(meta.templatesError)}</td></tr>`
+        ? `<tr><td colspan="3">${pill('BLOCKED', 'bad')} ${esc(meta.templatesError)}</td></tr>`
         : meta.templates
             .map((t) => {
               const tone: Tone = t.status === 'APPROVED' ? 'ok' : t.status === 'PENDING' ? 'warn' : 'bad';
-              return `<tr><td><code>${esc(t.name)}</code></td><td>${pill(t.status, tone)} ${t.reason ? `<small>${esc(t.reason)}</small>` : ''}</td></tr>`;
+              // MARKETING bills at the top rate; the send-time guard refuses it, so flag it loudly.
+              const cat = t.category
+                ? pill(t.category, t.category === 'MARKETING' ? 'bad' : 'muted') +
+                  (t.category === 'MARKETING' ? ' <small>blocked from sending: reword under a new name</small>' : '')
+                : '';
+              return `<tr><td><code>${esc(t.name)}</code></td><td>${pill(t.status, tone)} ${t.reason ? `<small>${esc(t.reason)}</small>` : ''}</td><td>${cat}</td></tr>`;
             })
             .join('')
       : '';
@@ -328,7 +333,7 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
           <p class="mut">Receipts outbox: ${kv(outbox)}</p></div>
       </div>
       <div class="card"><h2>WhatsApp sender</h2>${waCard}</div>
-      ${meta ? `<div class="card"><h2>Message templates</h2><table><tr><th>Template</th><th>Meta status</th></tr>${tplRows}</table></div>` : ''}`;
+      ${meta ? `<div class="card"><h2>Message templates</h2><table><tr><th>Template</th><th>Meta status</th><th>Category</th></tr>${tplRows}</table></div>` : ''}`;
     return html(reply, layout({ title: 'Overview', path: '/admin', csrf: csrf(req), flash: flashOf(req), body }));
   });
 

@@ -40,7 +40,7 @@ export interface MetaStatus {
     nameStatus: string;
   };
   phoneError?: string;
-  templates: { name: string; status: string; reason?: string }[];
+  templates: { name: string; status: string; category?: string; reason?: string }[];
   templatesError?: string;
   appSubscribed?: boolean;
 }
@@ -66,15 +66,16 @@ export async function metaStatus(c: MetaCreds): Promise<MetaStatus> {
     out.phoneError = String(err);
   }
   try {
-    const t = await graph(c, `/${c.businessAccountId}/message_templates?fields=name,status,rejected_reason&limit=250`);
+    const t = await graph(c, `/${c.businessAccountId}/message_templates?fields=name,status,category,rejected_reason&limit=250`);
     if (t.ok) {
-      const byName = new Map<string, { status: string; reason?: string }>();
+      const byName = new Map<string, { status: string; category?: string; reason?: string }>();
       for (const row of t.body.data ?? []) {
         // several languages/versions may exist; APPROVED wins
         const prev = byName.get(row.name);
         if (!prev || row.status === 'APPROVED') {
           byName.set(row.name, {
             status: row.status,
+            ...(row.category ? { category: row.category } : {}),
             ...(row.rejected_reason && row.rejected_reason !== 'NONE' ? { reason: row.rejected_reason } : {}),
           });
         }

@@ -8,6 +8,7 @@ import type { PlanCode } from '@hisab/shared';
 import { loadConfig } from './config.js';
 import { DbGateLogger } from './audit/audit-logger.js';
 import { WaClient } from './whatsapp/wa-client.js';
+import { TemplateCategoryGuard, graphCategoryFetcher } from './whatsapp/category-guard.js';
 import { SerialQueues } from './whatsapp/router.js';
 import { buildServer } from './server.js';
 import { startScheduler, type SchedulerHandle } from './scheduler/queue.js';
@@ -36,11 +37,30 @@ const settings = await new SettingsCache(handle.db, process.env, (err) =>
   rootLogger.error('settings refresh failed', { error: String(err) }),
 ).start(10_000);
 
+// Never send a template Meta has re-categorised as MARKETING (billing guard).
+const templateGuard = new TemplateCategoryGuard({
+  fetchCategories: graphCategoryFetcher({
+    creds: () => ({
+      accessToken: settings.require('wa.access_token'),
+      businessAccountId: settings.require('wa.business_account_id'),
+    }),
+    ...(config.WA_GRAPH_BASE_URL ? { baseUrl: config.WA_GRAPH_BASE_URL } : {}),
+  }),
+  scope: () => settings.get('wa.business_account_id') ?? '',
+  onBlocked: (template) => {
+    rootLogger.error('template send refused: Meta categorised it MARKETING', { component: 'billing-guard', template });
+    metrics.error({ component: 'billing-guard' });
+  },
+  onLookupError: (err) =>
+    rootLogger.warn('template categories unavailable; using last known', { component: 'billing-guard', error: String(err) }),
+});
+
 const wa = new WaClient({
   credentials: () => ({
     phoneNumberId: settings.require('wa.phone_number_id'),
     accessToken: settings.require('wa.access_token'),
   }),
+  templateGuard,
   ...(config.WA_GRAPH_BASE_URL ? { baseUrl: config.WA_GRAPH_BASE_URL } : {}),
 });
 

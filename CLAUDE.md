@@ -528,6 +528,12 @@ deployed sha-12652a4 green. Agent v11 already targets `https://api.hisabkitab.pr
 Meta status (Graph-checked): ALL templates APPROVED, WABA APPROVED; business verification still in
 Meta review — NO public API exists to submit/expedite; resubmit only offered after a REJECTION.
 
+**✅ Template billing shield (2026-10-08):** Meta re-categorised 3 dunning templates as MARKETING;
+replaced by `plan_renewal_notice`/`plan_ended_notice`/`plan_paused_notice` (plain "Account update" wording).
+`whatsapp/category-guard.ts` checks each template's LIVE category before every send (WaClient hook) and
+refuses MARKETING; `billing-guard.test.ts` lints wording (no sales nudges, no edge {{vars}}); admin panel
+shows a Category column. Never declare a MARKETING template.
+
 **🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
 ✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
 Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② ✅ Dedicated sender
