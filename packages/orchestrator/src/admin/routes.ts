@@ -41,15 +41,18 @@ import { AdminAuth, SESSION_COOKIE, parseCookies, sessionCookieHeader, verifyPas
 import { csrfField, esc, fmtDate, layout, pill, type Tone } from './html.js';
 import { metaStatus, subscribeApp, syncTemplates, type MetaCreds } from './meta.js';
 import { initiateSubscriptionLink } from './payment-link.js';
-import { issuePairingCode, PAIRING_TTL_MINUTES } from '../onboarding/pairing.js';
-import { PAIRING_TEMPLATE, isOwnSender } from '../signup/signup.js';
+import { PAIRING_TTL_MINUTES } from '../onboarding/pairing.js';
+import { isOwnSender } from '../signup/signup.js';
+import { dbNow, deliverApproval, deliverCode, latestDeliveries, retryNow, senderDegraded } from '../onboarding/delivery.js';
+import { describeDelivery } from '../onboarding/delivery-policy.js';
 
 export interface AdminDeps {
   db: Db; // hisab_orch
   settings: SettingsCache;
   auth: AdminAuth;
-  sendAuthCode(to: string, template: string, code: string): Promise<void>;
-  sendTemplate(to: string, template: string, params: string[], button?: string): Promise<void>;
+  /** Resolve to Meta's message id (wamid) when known, so delivery can be tracked. */
+  sendAuthCode(to: string, template: string, code: string): Promise<string | void>;
+  sendTemplate(to: string, template: string, params: string[], button?: string): Promise<string | void>;
   signingSecret: string;
   /** Payments MCP endpoint for payment links (internal URL). Omitted = links disabled. */
   paymentsMcpUrl?: string;
@@ -64,9 +67,6 @@ export interface AdminDeps {
 
 type Req = FastifyRequest & { admin?: AdminSession };
 type Form = Record<string, string | undefined>;
-
-/** WhatsApp template that tells an applicant their pilot application was approved. */
-export const APPROVED_TEMPLATE = 'account_approved';
 
 const REVIEW_TONE: Record<'awaiting' | 'approved' | 'declined', Tone> = { awaiting: 'warn', approved: 'ok', declined: 'bad' };
 
@@ -285,6 +285,18 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       .select({ n: count() })
       .from(schema.tenants)
       .where(and(eq(schema.tenants.status, 'pending'), eq(schema.tenants.reviewStatus, 'awaiting')));
+    const [undelivered] = await deps.db
+      .select({ n: count() })
+      .from(schema.onboardingMessages)
+      .innerJoin(schema.tenants, eq(schema.tenants.id, schema.onboardingMessages.tenantId))
+      .where(
+        and(
+          eq(schema.onboardingMessages.status, 'failed'),
+          isNull(schema.onboardingMessages.supersededAt),
+          eq(schema.tenants.status, 'pending'),
+        ),
+      );
+    const degraded = await senderDegraded(deps.db);
     const outbox = await deps.db
       .select({ status: schema.outboundNotifications.status, n: count() })
       .from(schema.outboundNotifications)
@@ -331,13 +343,18 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     const live = deps.settings.bool('payments.live');
     const keySet = Boolean(deps.settings.get('khalti.secret_key'));
 
-    const body = `
+    const degradedBanner = degraded
+      ? `<div class="card" style="border-color:#dc2626"><h2>${pill('SENDER DEGRADED', 'bad')} WhatsApp is refusing our messages</h2>
+          <p>The latest onboarding message failed with an <b>account-level</b> error (for example 131042, a billing or payment-method problem on the WhatsApp account). Fix it in Meta Business Manager. Until a message is delivered again, automatic retries send <b>one probe at a time</b> so nothing is wasted.</p></div>`
+      : '';
+    const body = `${degradedBanner}
       <div class="grid">
         <div class="card"><h2>Businesses</h2><p>${kv(tenantCounts)}</p><p class="mut">Subscriptions: ${kv(subCounts)}</p><a href="/admin/tenants">Manage →</a></div>
         <div class="card"><h2>Signup</h2><p>${deps.settings.bool('signup.enabled') ? pill('OPEN', 'ok') : pill('CLOSED', 'warn')} ${
           deps.settings.bool('signup.require_approval') ? pill('REVIEW FIRST', 'muted') : pill('INSTANT CODE', 'muted')
         }</p>
           <p>Applications awaiting review: <b>${awaiting?.n ?? 0}</b>${(awaiting?.n ?? 0) > 0 ? ' · <a href="/admin/tenants#applications">Review →</a>' : ''}</p>
+          <p>Onboarding messages not delivered: <b>${undelivered?.n ?? 0}</b>${(undelivered?.n ?? 0) > 0 ? ' · <a href="/admin/tenants">See →</a>' : ''}</p>
           <p>Codes sent (24h): <b>${codes24h?.n ?? 0}</b> / ${esc(deps.settings.get('signup.daily_cap'))}</p>
           <p class="mut">Public number: ${esc(deps.settings.get('wa.sender_e164') || 'not set')}</p></div>
         <div class="card"><h2>Payments</h2>
@@ -456,6 +473,11 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       .orderBy(desc(schema.tenants.createdAt))
       .limit(300);
 
+    const dbClock = await dbNow(deps.db); // retry_at is on the DB clock
+    const deliveries = await latestDeliveries(
+      deps.db,
+      rows.filter((t) => t.status === 'pending').map((t) => t.id),
+    );
     const planOpts = (Object.keys(PLAN_META) as PlanCode[])
       .map((p) => `<option value="${p}">${esc(PLAN_META[p].name)}</option>`)
       .join('');
@@ -467,16 +489,21 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
         const form = (action: string, label: string, cls = 'ghost', extra = '') =>
           `<form method="post" action="/admin/tenants/${esc(t.id)}/${action}">${csrfField(csrf(req))}${extra}<button class="${cls}">${label}</button></form>`;
         if (t.status === 'pending' && t.review === 'declined') actions.push(form('approve', 'Approve'));
+        const delivery = t.status === 'pending' ? deliveries.get(t.id) : undefined;
         if (t.status === 'pending' && t.review !== 'awaiting' && t.review !== 'declined' && (t.pendingPhone || t.applicant)) {
+          if (delivery?.status === 'failed') actions.push(form('retry-delivery', 'Retry now', ''));
           actions.push(form('resend', 'Resend code'));
         }
+        const dv = delivery ? describeDelivery(delivery, dbClock) : undefined;
         if (t.status === 'active') {
           actions.push(form('payment-link', 'Send payment link', 'ghost', `<select name="plan" style="width:auto">${planOpts}</select>`));
           actions.push(form('suspend', 'Suspend', 'danger'));
         }
         if (t.status === 'suspended') actions.push(form('activate', 'Reactivate'));
         return `<tr><td><b>${esc(t.name)}</b><br><small>${esc(t.owner ?? '')} ${t.email ? '· ' + esc(t.email) : ''}</small><br><code>${esc(t.id.slice(0, 8))}</code></td>
-          <td>${esc(phone ?? '')}</td><td>${pill(t.status, tone)}${t.review && t.status === 'pending' ? ' ' + pill(t.review, REVIEW_TONE[t.review]) : ''}<br><small>${esc(t.source)}</small></td>
+          <td>${esc(phone ?? '')}</td><td>${pill(t.status, tone)}${t.review && t.status === 'pending' ? ' ' + pill(t.review, REVIEW_TONE[t.review]) : ''}<br><small>${esc(t.source)}</small>${
+            dv ? `<br>${pill(dv.text, dv.tone)}` : ''
+          }</td>
           <td>${t.plan ? `${esc(PLAN_META[t.plan as PlanCode]?.name ?? t.plan)} · ${esc(t.subStatus)}<br><small>until ${esc(t.periodEnd)}</small>` : '<span class="mut">—</span>'}</td>
           <td><small>${esc(fmtDate(t.created))}</small></td><td><div class="row">${actions.join('')}</div></td></tr>`;
       })
@@ -513,22 +540,9 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     return html(reply, layout({ title: 'Businesses', path: '/admin/tenants', csrf: csrf(req), flash: flashOf(req), body }));
   });
 
-  /** Issue a fresh number-bound code and send it; returns the code for one-time display. */
-  async function sendCode(tenantId: string, phone: string): Promise<{ code: string; sent: boolean; error?: string }> {
-    const code = await issuePairingCode(deps.db, tenantId, { phoneE164: phone, digits: 6 });
-    try {
-      await deps.sendAuthCode(phone, PAIRING_TEMPLATE, code);
-      return { code, sent: true };
-    } catch (err) {
-      // The code stays LIVE (the admin reads it to the owner), but it reached no
-      // one on WhatsApp, so it must not count against the owner's signup limits.
-      await deps.db
-        .update(schema.pairingCodes)
-        .set({ sendFailedAt: sql`now()` })
-        .where(eq(schema.pairingCodes.code, code));
-      return { code, sent: false, error: errText(err) };
-    }
-  }
+  /** Issue a fresh number-bound code and send it (tracked); the code is shown to the admin once. */
+  const sendCode = (tenantId: string, phone: string) =>
+    deliverCode(deps.db, deps, { tenantId, phone, kind: 'admin_code' });
 
   app.post('/admin/tenants', async (req: Req, reply) => {
     const f = (req.body ?? {}) as Form;
@@ -654,22 +668,42 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     });
     if (!claimed) return back(reply, '/admin/tenants', 'muted', `${t.businessName} was already decided.`);
 
-    // Tell the owner. The approval notice invites a reply (any reply from that
-    // number pairs it); if Meta refuses it (e.g. not approved yet) a code goes instead.
-    let delivery: string;
-    let tone: Tone = 'ok';
-    try {
-      await deps.sendTemplate(phone, APPROVED_TEMPLATE, [t.businessName]);
-      delivery = `${t.businessName} approved. The owner was messaged on WhatsApp at ${phone}; their reply activates the account and starts the trial.`;
-    } catch (err) {
-      tone = 'warn';
-      const r = await sendCode(t.id, phone);
-      delivery = r.sent
-        ? `${t.businessName} approved. The approval notice could not be sent (${errText(err)}), so code ${r.code} went to ${phone} instead. Any reply from that number activates it.`
-        : `${t.businessName} approved, but WhatsApp delivery failed (${r.error}). Ask the owner to message us from ${phone}: any message activates it (or give code ${r.code}).`;
-    }
+    // Tell the owner (tracked: a late failure shows on the row and retries itself).
+    const r = await deliverApproval(deps.db, deps, { tenantId: t.id, phone, businessName: t.businessName });
+    const tone: Tone = r.via === 'notice' && r.sent ? 'ok' : 'warn';
+    const delivery =
+      r.via === 'notice'
+        ? `${t.businessName} approved. The approval message went to WhatsApp for ${phone}; its delivery shows on the business row. The owner's reply activates the account and starts the trial.`
+        : r.sent
+          ? `${t.businessName} approved. The approval notice could not be sent (${r.noticeError}), so code ${r.code} went to ${phone} instead. Any reply from that number activates it.`
+          : `${t.businessName} approved, but WhatsApp refused the message (${r.error}). It will retry automatically when the error is temporary. The owner can also message us from ${phone}: any message activates it (or give code ${r.code}).`;
     await event('admin', 'signup.approved', { tenant_id: t.id, business: t.businessName, phone_tail: phone.slice(-4) }, clientIp(req));
     return back(reply, '/admin/tenants', tone, delivery);
+  });
+
+  app.post(tenantRoute('retry-delivery'), async (req: Req, reply) => {
+    const t = await tenantById((req.params as { id: string }).id);
+    if (!t || t.status !== 'pending' || t.reviewStatus === 'awaiting' || t.reviewStatus === 'declined') {
+      return back(reply, '/admin/tenants', 'bad', 'Only a pending, approved business can be retried.');
+    }
+    const [last] = await deps.db
+      .select({ to: schema.onboardingMessages.toE164 })
+      .from(schema.onboardingMessages)
+      .where(eq(schema.onboardingMessages.tenantId, t.id))
+      .orderBy(desc(schema.onboardingMessages.id))
+      .limit(1);
+    const phone = last?.to ?? t.applicantE164;
+    if (!phone) return back(reply, '/admin/tenants', 'bad', 'No WhatsApp number on file for this business.');
+    const r = await retryNow(deps.db, deps, { id: t.id, businessName: t.businessName, reviewStatus: t.reviewStatus, phone });
+    await event('admin', 'onboarding.retry_now', { tenant_id: t.id, via: r.via, sent: r.sent }, clientIp(req));
+    return back(
+      reply,
+      '/admin/tenants',
+      r.sent ? 'ok' : 'warn',
+      r.sent
+        ? `Sent again to ${phone}${r.code ? ` (code ${r.code})` : ''}. Delivery status will update on the row.`
+        : `WhatsApp refused it again (${r.error}).${r.code ? ` Code ${r.code} — read it to the owner.` : ''}`,
+    );
   });
 
   app.post(tenantRoute('decline'), async (req: Req, reply) => {

@@ -8,7 +8,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { metricsResponse } from '@hisab/shared';
 import { handleVerifyHandshake, verifyWebhookSignature } from './whatsapp/signature.js';
-import { parseDeliveryStatuses, parseInboundWebhook } from './whatsapp/inbound.js';
+import { parseDeliveryStatuses, parseInboundWebhook, type DeliveryStatus } from './whatsapp/inbound.js';
 import { processInbound, type RouterDeps } from './whatsapp/router.js';
 import { metrics, metricsRegistry, inboundCtx, rootLogger } from './obs.js';
 
@@ -30,6 +30,11 @@ export interface ServerOptions {
    * (unit tests only).
    */
   acceptsPhoneNumberId?: (phoneNumberId: string) => boolean;
+  /**
+   * Fold each outbound delivery status into its tracked message (onboarding
+   * delivery + retries). Unknown message ids are ignored by the handler.
+   */
+  onDeliveryStatus?: (st: DeliveryStatus) => Promise<unknown>;
   /** Mount extra routes (signup API, admin panel) on the same Fastify instance. */
   register?: (app: FastifyInstance) => void;
 }
@@ -95,7 +100,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
 
     // Outbound delivery outcomes: log + count every one; a failure is a WARN with
     // Meta's error code so an undelivered reminder/reply is never silent.
-    for (const st of parseDeliveryStatuses(payload)) {
+    const statuses = parseDeliveryStatuses(payload);
+    for (const st of statuses) {
       const code = st.errors[0] ? String(st.errors[0].code) : 'none';
       metrics.waDelivery({ status: st.status, code });
       const fields = {
@@ -108,8 +114,18 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       else rootLogger.info('whatsapp delivery status', fields);
     }
 
-    const work = Promise.allSettled(
-      messages.map((m) => {
+    const tracked = opts.onDeliveryStatus;
+    const statusWork = tracked
+      ? statuses.map((st) =>
+          tracked(st).catch((err) => {
+            metrics.error({ component: 'delivery-status' });
+            rootLogger.error('delivery status update failed', { correlation_id: st.waMessageId, error: String(err) });
+          }),
+        )
+      : [];
+    const work = Promise.allSettled([
+      ...statusWork,
+      ...messages.map((m) => {
         // One correlation id per inbound message (the wa_message_id) threads the
         // whole pipeline; every line below is greppable back to this message.
         const ctx = inboundCtx(m.waMessageId);
@@ -119,7 +135,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
           opts.deps.log?.(`processInbound(${m.waMessageId}) failed: ${String(err)}`);
         });
       }),
-    );
+    ]);
     if (opts.awaitProcessing) await work;
     return reply.code(200).send({ received: messages.length });
   });

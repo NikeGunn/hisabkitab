@@ -40,6 +40,27 @@ export const tenants = pgTable('tenants', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+// 0022: delivery of every onboarding WhatsApp message (approval notice / codes)
+export const onboardingMessages = pgTable('onboarding_messages', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id),
+  toE164: text('to_e164').notNull(),
+  kind: text('kind', { enum: ['approval_notice', 'approval_code', 'admin_code', 'signup_code'] }).notNull(),
+  waMessageId: text('wa_message_id').unique(),
+  status: text('status', { enum: ['accepted', 'sent', 'delivered', 'read', 'failed'] })
+    .notNull()
+    .default('accepted'),
+  errorCode: integer('error_code'),
+  errorTitle: text('error_title'),
+  attempt: integer('attempt').notNull().default(1),
+  retryAt: timestamp('retry_at', { withTimezone: true }),
+  supersededAt: timestamp('superseded_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const pairingCodes = pgTable('pairing_codes', {
   code: text('code').primaryKey(),
   tenantId: uuid('tenant_id')

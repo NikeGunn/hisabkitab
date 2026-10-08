@@ -29,6 +29,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
   await adminSql`INSERT INTO validation_events (tenant_id, entry_type, entry_id, result) VALUES (${id}, 'sale', ${s!['id']}, 'pass')`;
   await adminSql`INSERT INTO audit_log (tenant_id, actor, action, detail) VALUES (${id}, 'system', 'seed', '{}')`;
   await adminSql`INSERT INTO pairing_codes (code, tenant_id, expires_at) VALUES (${'C' + id.slice(0, 6)}, ${id}, now() + interval '1 hour')`;
+  await adminSql`INSERT INTO onboarding_messages (tenant_id, to_e164, kind, status, error_code) VALUES (${id}, ${e164}, 'approval_code', 'failed', 131042)`;
   await adminSql`INSERT INTO payments (tenant_id, provider, pidx, purchase_order_id, purchase_order_name, amount_paisa) VALUES (${id}, 'khalti', ${'pidx-' + id.slice(0, 8)}, 'po', 'momo', 904000)`;
   await adminSql`INSERT INTO reminder_log (tenant_id, bs_year, bs_month, kind, verdict) VALUES (${id}, 2082, 1, 'return_prepared', 'PASS')`;
   await adminSql`INSERT INTO tenant_sessions (tenant_id, session_id, vault_id) VALUES (${id}, ${'sesn_' + id.slice(0, 8)}, ${'vault_' + id.slice(0, 8)})`;
@@ -45,7 +46,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
 
 const TENANT_TABLES = [
   'sales', 'expenses', 'vendors', 'vat_returns', 'validation_events',
-  'audit_log', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
+  'audit_log', 'onboarding_messages', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
   'usage_counters', 'memberships', 'subscriptions', 'billing_payments', 'outbound_notifications',
 ];
 

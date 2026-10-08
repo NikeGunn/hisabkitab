@@ -543,6 +543,16 @@ if Meta refuses it) and the applicant's FIRST message from that number pairs it 
 proof); awaiting applicants get "under review", never paired. **Decline** sends nothing; re-applying
 re-queues. Approved owner who missed the message: resubmit form → code. OFF = old instant-code flow.
 
+**✅ Onboarding delivery tracking + self-healing retries (2026-10-08, migration 0022):** every approval
+notice / verification code goes through `onboarding/delivery.ts` (`deliverCode`/`deliverApproval`) and is
+recorded in `onboarding_messages` with Meta's wamid; the status webhook (`server.ts onDeliveryStatus`) folds
+reports in as a max-register (accepted<sent<failed<delivered<read: any order/duplicates converge). Failures
+are classified by Meta code (`delivery-policy.ts`): account (131042 billing) / transient → exponential
+backoff with seeded jitter, max 5 sends; template → immediate fallback to a code; recipient → parked. Account
+failures open a circuit breaker: ONE probe at a time until something is delivered. Retrier ticks every 30s,
+claims with FOR UPDATE SKIP LOCKED. ONE clock: the DB's (`dbNow`). Admin: per-row delivery pill, Retry now,
+"SENDER DEGRADED" banner, undelivered count. Root incident: 2026-10-08 code to +977…1002 accepted then 131042.
+
 **🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
 ✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
 Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② ✅ Dedicated sender

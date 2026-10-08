@@ -43,6 +43,12 @@ export interface WaMediaMeta {
   fileSizeBytes: number;
 }
 
+/** Meta's message id (wamid) from a /messages response; its delivery status webhooks carry it. */
+export function messageIdOf(res: unknown): string | undefined {
+  const id = (res as { messages?: { id?: unknown }[] } | null)?.messages?.[0]?.id;
+  return typeof id === 'string' && id.length > 0 && id.length <= 256 ? id : undefined;
+}
+
 export class WaError extends Error {
   constructor(
     message: string,
@@ -133,7 +139,7 @@ export class WaClient {
     bodyParams: string[],
     lang = 'en',
     button?: { index?: number; param: string },
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     await this.opts.templateGuard?.assertSendable(templateName);
     const components: unknown[] = [];
     if (bodyParams.length) {
@@ -147,7 +153,7 @@ export class WaClient {
         parameters: [{ type: 'text', text: button.param }],
       });
     }
-    await this.request(`/${this.creds().phoneNumberId}/messages`, {
+    const res = await this.request(`/${this.creds().phoneNumberId}/messages`, {
       method: 'POST',
       body: JSON.stringify({
         messaging_product: 'whatsapp',
@@ -156,11 +162,12 @@ export class WaClient {
         template: { name: templateName, language: { code: lang }, components },
       }),
     });
+    return messageIdOf(res);
   }
 
   /** One-time verification code via the AUTHENTICATION template (body + copy-code button). */
-  async sendAuthCode(to: string, templateName: string, code: string, lang = 'en'): Promise<void> {
-    await this.sendTemplate(to, templateName, [code], lang, { index: 0, param: code });
+  async sendAuthCode(to: string, templateName: string, code: string, lang = 'en'): Promise<string | undefined> {
+    return this.sendTemplate(to, templateName, [code], lang, { index: 0, param: code });
   }
 
   /**
