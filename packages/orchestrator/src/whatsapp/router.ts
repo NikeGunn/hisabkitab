@@ -13,7 +13,13 @@ import { appendAudit, schema, type Db } from '@hisab/db';
 import type { GateLogger } from '../audit/audit-logger.js';
 import { runTurn, type CapturedReportRequest } from '../session/client.js';
 import { getOrCreateTenantSession, type SessionStoreDeps } from './../session/store.js';
-import { handleUnknownSender, ONBOARDING_PROMPT, pairedWelcome, SUSPENDED_ACCOUNT_REPLY } from '../onboarding/pairing.js';
+import {
+  handleUnknownSender,
+  ONBOARDING_PROMPT,
+  pairedWelcome,
+  SUSPENDED_ACCOUNT_REPLY,
+  underReviewReply,
+} from '../onboarding/pairing.js';
 import {
   resolveMembership,
   isMemberOfSuspendedTenant,
@@ -253,6 +259,8 @@ async function handleClaimed(
       );
       if (outcome.kind === 'paired') {
         await send(msg.fromE164, pairedWelcome(outcome.businessName));
+      } else if (outcome.kind === 'under_review') {
+        await send(msg.fromE164, underReviewReply(outcome.businessName));
       } else if (outcome.kind === 'invalid_code') {
         await send(
           msg.fromE164,

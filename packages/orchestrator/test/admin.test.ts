@@ -30,6 +30,8 @@ let app: FastifyInstance;
 let settings: SettingsCache;
 const sentCodes: { to: string; code: string }[] = [];
 let failSend: Error | null = null;
+const sentTemplates: { to: string; template: string; params: string[] }[] = [];
+let failTemplate: Error | null = null;
 
 beforeAll(async () => {
   __setPiiKeyForTests(randomBytes(32));
@@ -56,7 +58,10 @@ beforeAll(async () => {
           if (failSend) throw failSend;
           sentCodes.push({ to, code });
         },
-        sendTemplate: async () => undefined,
+        sendTemplate: async (to, template, params) => {
+          if (failTemplate) throw failTemplate;
+          sentTemplates.push({ to, template, params });
+        },
         signingSecret: 'signing-secret-xyz',
         agentConfigured: true,
         model: 'claude-test',
@@ -162,7 +167,7 @@ describe('admin auth', () => {
     const base = { key: 'signup.daily_cap', value: '7', action: 'save' };
     const noToken = await app.inject({ method: 'POST', url: '/admin/settings', headers: { ...FORM, cookie }, payload: form(base) });
     expect(noToken.statusCode).toBe(403);
-    const wrong = await app.inject({ method: 'POST', url: '/admin/settings', headers: { ...FORM, cookie }, payload: form({ ...base, _csrf: 'x' + csrf.slice(1) }) });
+    const wrong = await app.inject({ method: 'POST', url: '/admin/settings', headers: { ...FORM, cookie }, payload: form({ ...base, _csrf: (csrf[0] === 'x' ? 'y' : 'x') + csrf.slice(1) }) });
     expect(wrong.statusCode).toBe(403);
     const xorigin = await app.inject({
       method: 'POST',
@@ -524,7 +529,7 @@ describe('admin panel from a REAL browser (every POST route)', () => {
     });
     expect(noSession.statusCode).toBe(401);
     const other = await login();
-    const forged = await post('/admin/settings', other.cookie, { key: 'payments.live', value: 'true', action: 'save', _csrf: 'x' + csrf.slice(1) });
+    const forged = await post('/admin/settings', other.cookie, { key: 'payments.live', value: 'true', action: 'save', _csrf: (csrf[0] === 'x' ? 'y' : 'x') + csrf.slice(1) });
     expect(forged.statusCode).toBe(403);
     expect(settings.get('payments.live')).toBe('false');
   });
@@ -566,5 +571,145 @@ describe('admin create-business guards', () => {
     expect(decodeURIComponent(String(r2.headers.location)).replace(/\+/g, ' ')).toMatch(/already active/);
     expect(sentCodes.length).toBe(before);
     expect(await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.businessName, 'Duplicate Owner Co'))).toHaveLength(0);
+  });
+});
+
+describe('pilot application review (Approve / Decline)', () => {
+  const post = (url: string, cookie: string, body: Record<string, string>) =>
+    app.inject({ method: 'POST', url, headers: { ...FORM, ...BROWSER, cookie }, payload: form(body) });
+  const flash = (res: { headers: Record<string, unknown> }) =>
+    decodeURIComponent(String(res.headers.location ?? '')).replace(/\+/g, ' ');
+  let n = 0;
+  /** An application as the website form leaves it: pending, awaiting, nothing sent. */
+  async function application(name = `Applicant ${(n += 1)}`): Promise<{ id: string; phone: string; name: string }> {
+    n += 1;
+    const phone = `+97798460${String(10_000 + n * 7 + (Date.now() % 1000)).slice(-5)}`;
+    const [t] = await adminDb.db
+      .insert(schema.tenants)
+      .values({ businessName: name, panOrVatNo: '601111111', signupSource: 'web', reviewStatus: 'awaiting', applicantE164: phone })
+      .returning({ id: schema.tenants.id });
+    return { id: t!.id, phone, name };
+  }
+  const tenant = async (id: string) => (await adminDb.db.select().from(schema.tenants).where(eq(schema.tenants.id, id)))[0]!;
+
+  it('lists waiting applications (HTML-escaped) and counts them on the overview', async () => {
+    const { cookie } = await login();
+    await application('<script>alert(1)</script> Traders');
+    const page = await app.inject({ url: '/admin/tenants', headers: { cookie } });
+    expect(page.body).toContain('Applications awaiting review');
+    expect(page.body).not.toContain('<script>alert(1)</script>');
+    expect(page.body).toContain('&#60;script&#62;');
+    const overview = await app.inject({ url: '/admin', headers: { cookie } });
+    expect(overview.body).toMatch(/Applications awaiting review: <b>[1-9]/);
+  });
+
+  it('Approve messages the applicant (no code), records it; a second click messages nobody', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    const codesBefore = sentCodes.length;
+    const res = await post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf });
+    expect(flash(res)).toMatch(/t=ok/);
+    expect(sentTemplates.filter((s) => s.to === a.phone)).toEqual([
+      { to: a.phone, template: 'account_approved', params: [a.name] },
+    ]);
+    expect(sentCodes.length).toBe(codesBefore); // the notice replaces the code
+    expect(await tenant(a.id)).toMatchObject({ status: 'pending', reviewStatus: 'approved' });
+
+    const again = await post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf });
+    expect(flash(again)).toMatch(/t=bad/);
+    expect(sentTemplates.filter((s) => s.to === a.phone)).toHaveLength(1);
+  });
+
+  it('PROBE: 5 racing Approve clicks message the applicant exactly once', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    await Promise.all(Array.from({ length: 5 }, () => post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf })));
+    expect(sentTemplates.filter((s) => s.to === a.phone)).toHaveLength(1);
+    const audits = await adminDb.db
+      .select()
+      .from(schema.auditLog)
+      .where(and(eq(schema.auditLog.tenantId, a.id), eq(schema.auditLog.action, 'signup.approved')));
+    expect(audits).toHaveLength(1);
+  });
+
+  it('PROBE: approval notice refused by Meta: a code goes instead; both refused: code shown to admin', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    failTemplate = new Error('(#132001) Template name does not exist in the translation');
+    try {
+      const res = await post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf });
+      expect(flash(res)).toMatch(/t=warn/);
+      expect(sentCodes.at(-1)?.to).toBe(a.phone);
+
+      const b = await application();
+      failSend = new Error('(#131030) Recipient phone number not in allowed list');
+      const res2 = await post(`/admin/tenants/${b.id}/approve`, cookie, { _csrf: csrf });
+      expect(flash(res2)).toMatch(/t=warn/);
+      expect(flash(res2)).toMatch(/code \d{6}/);
+      expect((await tenant(b.id)).reviewStatus).toBe('approved'); // decision stands; owner can still message in
+    } finally {
+      failTemplate = null;
+      failSend = null;
+    }
+  });
+
+  it('Decline sends nothing; a declined one can still be approved later; declining twice is refused', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    const before = { t: sentTemplates.length, c: sentCodes.length };
+    expect(flash(await post(`/admin/tenants/${a.id}/decline`, cookie, { _csrf: csrf }))).toMatch(/Nothing was sent/);
+    expect(sentTemplates.length).toBe(before.t);
+    expect(sentCodes.length).toBe(before.c);
+    expect((await tenant(a.id)).reviewStatus).toBe('declined');
+    expect(flash(await post(`/admin/tenants/${a.id}/decline`, cookie, { _csrf: csrf }))).toMatch(/t=bad/);
+    expect(flash(await post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf }))).toMatch(/t=ok/);
+  });
+
+  it('PROBE: Resend code is refused for an application nobody approved', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    const before = sentCodes.length;
+    expect(flash(await post(`/admin/tenants/${a.id}/resend`, cookie, { _csrf: csrf }))).toMatch(/Approve this application first/);
+    expect(sentCodes.length).toBe(before);
+  });
+
+  it('PROBE: number taken by another business since applying: refused, still awaiting, nothing sent', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    await adminDb.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Already Live', panOrVatNo: '602222222', status: 'active', whatsappE164: a.phone });
+    const res = await post(`/admin/tenants/${a.id}/approve`, cookie, { _csrf: csrf });
+    expect(flash(res)).toMatch(/already active/);
+    expect((await tenant(a.id)).reviewStatus).toBe('awaiting');
+    expect(sentTemplates.filter((s) => s.to === a.phone)).toHaveLength(0);
+  });
+
+  it('PROBE: no CSRF / cross-site / no session / wrong targets never approve', async () => {
+    const { cookie, csrf } = await login();
+    const a = await application();
+    const noCsrf = await post(`/admin/tenants/${a.id}/approve`, cookie, {});
+    expect(noCsrf.statusCode).toBe(403);
+    const cross = await app.inject({
+      method: 'POST',
+      url: `/admin/tenants/${a.id}/approve`,
+      headers: { ...FORM, cookie, origin: 'https://evil.example', 'sec-fetch-site': 'cross-site', host: HOST },
+      payload: form({ _csrf: csrf }),
+    });
+    expect(cross.statusCode).toBe(403);
+    const anon = await app.inject({ method: 'POST', url: `/admin/tenants/${a.id}/approve`, headers: FORM, payload: form({ _csrf: csrf }) });
+    expect(anon.statusCode).toBe(401);
+    expect((await tenant(a.id)).reviewStatus).toBe('awaiting');
+
+    // an admin-created business (no review) and garbage ids are not applications
+    const [legacy] = await adminDb.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Admin Made', panOrVatNo: '603333333' })
+      .returning({ id: schema.tenants.id });
+    for (const target of [legacy!.id, '00000000-0000-0000-0000-000000000000', 'not-a-uuid']) {
+      expect(flash(await post(`/admin/tenants/${encodeURIComponent(target)}/approve`, cookie, { _csrf: csrf })), target).toMatch(/t=bad/);
+      expect(flash(await post(`/admin/tenants/${encodeURIComponent(target)}/decline`, cookie, { _csrf: csrf })), target).toMatch(/t=bad/);
+    }
+    expect(sentTemplates.filter((s) => s.to === a.phone)).toHaveLength(0);
   });
 });

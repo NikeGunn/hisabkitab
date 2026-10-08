@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
+import { ReviewDialog } from './ReviewDialog';
 
 /**
- * Pilot signup. Posts to the HisabKitab API, which sends a one-time verification
- * code to the owner's WhatsApp. The owner then sends "START <code>" to HisabKitab
- * from that same number, which proves they control it. Nothing here is trusted
- * by the server; all validation is repeated there.
+ * Pilot signup. Posts to the HisabKitab API. With review on (the default) the API
+ * only records an application: our team approves it in the admin panel, then
+ * HisabKitab messages the owner on WhatsApp and their reply starts the trial.
+ * With review off, the API sends a one-time code and the owner sends
+ * "START <code>" from that number. Nothing here is trusted by the server; all
+ * validation is repeated there.
  */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'https://api.hisabkitab.pro';
 
 type Result =
+  | { status: 'under_review'; resubmitted: boolean; sender_e164?: string; wa_link?: string }
   | { status: 'code_sent'; sender_e164?: string; wa_link?: string; expires_minutes: number }
   | { status: 'already_registered'; sender_e164?: string; wa_link?: string }
   | { status: 'invalid'; errors: Record<string, string> }
@@ -20,7 +24,7 @@ type Result =
 const MESSAGES: Record<string, string> = {
   closed: 'New signups are paused for a moment. Please try again later or email hello@hisabkitab.pro.',
   busy: 'We are onboarding a lot of businesses today. Please try again tomorrow, or email hello@hisabkitab.pro.',
-  rate_limited: 'Too many attempts. Please wait a while before requesting another code.',
+  rate_limited: 'Too many attempts from this connection. Please wait a while and try again.',
   send_failed:
     'We could not deliver a WhatsApp message to that number. Check that it is your WhatsApp number and try again.',
   send_failed_service:
@@ -35,6 +39,9 @@ export function SignupForm() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [applicant, setApplicant] = useState({ owner: '', business: '' });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const closeDialog = useCallback(() => setDialogOpen(false), []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,6 +56,7 @@ export function SignupForm() {
       consent: fd.get('consent') === 'on',
       website: String(fd.get('website') ?? ''),
     };
+    setApplicant({ owner: body.owner_name, business: body.business_name });
     setBusy(true);
     setErrors({});
     try {
@@ -59,6 +67,7 @@ export function SignupForm() {
       });
       const data = (await res.json().catch(() => ({ status: 'error' }))) as Result;
       if (data.status === 'invalid') setErrors(data.errors);
+      if (data.status === 'under_review') setDialogOpen(true);
       setResult(data);
     } catch {
       setResult({ status: 'error' });
@@ -74,6 +83,34 @@ export function SignupForm() {
         ? MESSAGES.send_failed_service
         : MESSAGES[result.status]
       : undefined;
+
+  if (result?.status === 'under_review') {
+    return (
+      <>
+        {dialogOpen ? (
+          <ReviewDialog
+            ownerName={applicant.owner}
+            businessName={applicant.business}
+            resubmitted={result.resubmitted}
+            senderE164={result.sender_e164}
+            waLink={result.wa_link}
+            onClose={closeDialog}
+          />
+        ) : null}
+        <div className="card p-8 text-center">
+          <div className="text-4xl">📒</div>
+          <h3 className="mt-4 font-serif text-2xl font-semibold text-ink">Your application is in review</h3>
+          <p className="mx-auto mt-3 max-w-md text-muted">
+            Our team is reviewing <b className="text-ink">{applicant.business}</b>. Once it is approved, HisabKitab will
+            message you on WhatsApp. Reply to that message and your 14-day free trial starts.
+          </p>
+          <button type="button" className="mt-6 text-sm text-muted underline hover:text-ink" onClick={() => setDialogOpen(true)}>
+            What happens next?
+          </button>
+        </div>
+      </>
+    );
+  }
 
   if (result && (result.status === 'code_sent' || result.status === 'already_registered')) {
     const sent = result.status === 'code_sent';
@@ -170,10 +207,10 @@ export function SignupForm() {
         <p className="rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{notice}</p>
       ) : null}
       <button type="submit" disabled={busy} className="btn-primary w-full justify-center disabled:opacity-60">
-        {busy ? 'Sending code…' : 'Send my WhatsApp code →'}
+        {busy ? 'Sending your application…' : 'Apply for the pilot →'}
       </button>
       <p className="text-center text-xs text-muted">
-        Free during the pilot. No card needed. You approve every entry.
+        Free during the pilot. No card needed. Every application is reviewed by our team.
       </p>
     </form>
   );

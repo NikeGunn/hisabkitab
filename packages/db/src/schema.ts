@@ -33,6 +33,10 @@ export const tenants = pgTable('tenants', {
   ownerName: text('owner_name'),
   contactEmail: text('contact_email'),
   signupSource: text('signup_source', { enum: ['admin', 'web'] }).notNull().default('admin'),
+  // 0021: a website application waits for the operator's approval
+  reviewStatus: text('review_status', { enum: ['awaiting', 'approved', 'declined'] }),
+  applicantE164: text('applicant_e164'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

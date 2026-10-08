@@ -47,6 +47,10 @@
   --animate-marquee: marquee 40s linear infinite;
   --animate-marquee-reverse: marqueeReverse 40s linear infinite;
   --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-pop-in: popIn 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  --animate-fade-in: fadeIn 0.3s ease-out both;
+  --animate-stamp: stamp 0.55s cubic-bezier(0.3, 1.6, 0.5, 1) 0.35s both;
+  --animate-rise: rise 0.5s ease-out both;
 
   @keyframes float {
     0%,
@@ -71,6 +75,44 @@
     }
     100% {
       transform: translateX(0);
+    }
+  }
+  @keyframes popIn {
+    0% {
+      opacity: 0;
+      transform: translateY(24px) scale(0.96);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes stamp {
+    0% {
+      opacity: 0;
+      transform: rotate(-14deg) scale(2.2);
+    }
+    100% {
+      opacity: 1;
+      transform: rotate(-14deg) scale(1);
+    }
+  }
+  @keyframes rise {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
   @keyframes shimmer {

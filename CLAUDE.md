@@ -534,6 +534,15 @@ replaced by `plan_renewal_notice`/`plan_ended_notice`/`plan_paused_notice` (plai
 refuses MARKETING; `billing-guard.test.ts` lints wording (no sales nudges, no edge {{vars}}); admin panel
 shows a Category column. Never declare a MARKETING template.
 
+**✅ Pilot applications reviewed by hand (2026-10-08, migration 0021):** `signup.require_approval`
+(admin Settings, default ON): the pilot form only records an APPLICATION (pending tenant,
+`review_status='awaiting'`, `applicant_e164`), sends NOTHING to the number, alerts the admin, and the
+landing shows a "you are on the list / in review" popup (`landing/app/pilot/ReviewDialog.tsx`). Admin →
+Businesses → **Approve** sends the `account_approved` Utility template (falls back to a `pairing_code`
+if Meta refuses it) and the applicant's FIRST message from that number pairs it (Meta-verified sender =
+proof); awaiting applicants get "under review", never paired. **Decline** sends nothing; re-applying
+re-queues. Approved owner who missed the message: resubmit form → code. OFF = old instant-code flow.
+
 **🌐 EXTERNAL (remaining, not code):** ✅ DNS `api` → 43.152.239.105 (Let's Encrypt cert issued) and
 ✅ webhook registered to `https://api.hisabkitab.pro/webhook` (Meta `active:true`), both 2026-10-02.
 Still open: ① Lighthouse console: enable automatic snapshots (off-box backup). ② ✅ Dedicated sender
