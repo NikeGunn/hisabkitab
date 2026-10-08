@@ -190,3 +190,44 @@ describe('POST /webhook delivery statuses', () => {
     expect(m.body).not.toContain('15550001111');
   });
 });
+
+describe('delivery statuses reach the onboarding tracker', () => {
+  const statusBody = (id: string, status: string, code?: number) =>
+    JSON.stringify({
+      object: 'whatsapp_business_account',
+      entry: [{ changes: [{ field: 'messages', value: { statuses: [{ id, status, recipient_id: '9779705651002', ...(code ? { errors: [{ code, title: 'Business eligibility payment issue' }] } : {}) }] } }] }],
+    });
+
+  it('a signed status is handed to onDeliveryStatus; PROBE: a forged one never is; a crashing tracker still ACKs 200', async () => {
+    const seen: { waMessageId: string; status: string; errors: { code: number }[] }[] = [];
+    let crash = false;
+    const tracked = buildServer({
+      verifyToken: VERIFY,
+      appSecret: SECRET,
+      awaitProcessing: true,
+      deps: {} as RouterDeps,
+      onDeliveryStatus: async (st) => {
+        if (crash) throw new Error('db down');
+        seen.push(st);
+      },
+    });
+    try {
+      const body = statusBody('wamid.code1', 'failed', 131042);
+      const res = await tracked.inject({ method: 'POST', url: '/webhook', headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign(body) }, payload: body });
+      expect(res.statusCode).toBe(200);
+      expect(seen).toEqual([{ waMessageId: 'wamid.code1', status: 'failed', recipientTail: '1002', errors: [{ code: 131042, title: 'Business eligibility payment issue' }] }]);
+
+      const forged = statusBody('wamid.code1', 'delivered');
+      const bad = await tracked.inject({ method: 'POST', url: '/webhook', headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign('other') }, payload: forged });
+      expect(bad.statusCode).toBe(401);
+      expect(seen).toHaveLength(1);
+
+      crash = true;
+      const again = statusBody('wamid.code2', 'sent');
+      const res2 = await tracked.inject({ method: 'POST', url: '/webhook', headers: { 'content-type': 'application/json', 'x-hub-signature-256': sign(again) }, payload: again });
+      expect(res2.statusCode).toBe(200);
+    } finally {
+      await tracked.close();
+    }
+  });
+});

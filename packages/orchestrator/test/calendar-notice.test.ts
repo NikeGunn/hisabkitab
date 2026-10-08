@@ -63,6 +63,7 @@ beforeEach(async () => {
     'expenses',
     'sales',
     'tenant_sessions',
+    'onboarding_messages',
     'pairing_codes',
     'outbound_notifications',
     'vendors',

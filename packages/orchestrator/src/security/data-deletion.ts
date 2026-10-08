@@ -29,6 +29,7 @@ const {
   vendors,
   auditLog,
   pairingCodes,
+  onboardingMessages,
   tenantSessions,
   memberships,
   users,
@@ -131,6 +132,15 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
           .delete(auditLog)
           .where(eq(auditLog.tenantId, tenantId))
           .returning({ id: auditLog.id })
+      ).length,
+    );
+    await n(
+      'onboarding_messages',
+      (
+        await tx
+          .delete(onboardingMessages)
+          .where(eq(onboardingMessages.tenantId, tenantId))
+          .returning({ id: onboardingMessages.id })
       ).length,
     );
     await n(

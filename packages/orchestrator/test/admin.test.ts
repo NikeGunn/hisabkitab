@@ -713,3 +713,82 @@ describe('pilot application review (Approve / Decline)', () => {
     expect(sentTemplates.filter((s) => s.to === a.phone)).toHaveLength(0);
   });
 });
+
+describe('onboarding delivery in the admin panel', () => {
+  const post = (url: string, cookie: string, body: Record<string, string>) =>
+    app.inject({ method: 'POST', url, headers: { ...FORM, ...BROWSER, cookie }, payload: form(body) });
+  const flash = (res: { headers: Record<string, unknown> }) =>
+    decodeURIComponent(String(res.headers.location ?? '')).replace(/\+/g, ' ');
+  let k = 0;
+  async function approvedWithFailure(code: number, retryInMin: number | null) {
+    k += 1;
+    const phone = `+97798471${String(10_000 + k * 13 + (Date.now() % 997)).slice(-5)}`;
+    const [t] = await adminDb.db
+      .insert(schema.tenants)
+      .values({ businessName: `Delivery Probe ${k}`, panOrVatNo: '605555555', signupSource: 'web', reviewStatus: 'approved', applicantE164: phone })
+      .returning({ id: schema.tenants.id });
+    await adminDb.db.insert(schema.onboardingMessages).values({
+      tenantId: t!.id,
+      toE164: phone,
+      kind: 'approval_code',
+      waMessageId: `wamid.admin.${t!.id}`,
+      status: 'failed',
+      errorCode: code,
+      errorTitle: code === 131042 ? 'Business eligibility payment issue' : 'Message undeliverable',
+      retryAt: retryInMin === null ? null : sql`now() + make_interval(mins => ${retryInMin})`,
+      updatedAt: sql`now() + interval '1 hour'`, // the latest outcome on the sender
+    });
+    return { id: t!.id, phone, name: `Delivery Probe ${k}` };
+  }
+  afterAll(async () => {
+    // every row this block created (Retry now adds rows without a wamid under the mock)
+    await adminDb.db.delete(schema.onboardingMessages).where(sql`${schema.onboardingMessages.toE164} like '+97798471%'`);
+  });
+
+  it('a late 131042 shows on the business row with the auto-retry, a Retry now button, and the DEGRADED banner', async () => {
+    const { cookie } = await login();
+    const b = await approvedWithFailure(131042, 8);
+    const page = await app.inject({ url: '/admin/tenants', headers: { cookie } });
+    expect(page.body).toMatch(/Not delivered \(131042 Business eligibility payment issue\)\. Auto-retry in [78] min, attempt 2\/5/);
+    expect(page.body).toContain(`/admin/tenants/${b.id}/retry-delivery`);
+    const overview = await app.inject({ url: '/admin', headers: { cookie } });
+    expect(overview.body).toContain('SENDER DEGRADED');
+    expect(overview.body).toMatch(/Onboarding messages not delivered: <b>[1-9]/);
+  });
+
+  it('a permanent failure says it will not retry by itself', async () => {
+    const { cookie } = await login();
+    await approvedWithFailure(131026, null);
+    const page = await app.inject({ url: '/admin/tenants', headers: { cookie } });
+    expect(page.body).toContain('Not delivered (131026 Message undeliverable). Not retrying automatically');
+  });
+
+  it('Retry now resends at once, supersedes the scheduled retry, and is logged', async () => {
+    const { cookie, csrf } = await login();
+    const b = await approvedWithFailure(131042, 30);
+    const res = await post(`/admin/tenants/${b.id}/retry-delivery`, cookie, { _csrf: csrf });
+    expect(flash(res)).toMatch(/t=ok/);
+    expect(sentTemplates.filter((s) => s.to === b.phone)).toEqual([{ to: b.phone, template: 'account_approved', params: [b.name] }]);
+    const live = await adminDb.db
+      .select()
+      .from(schema.onboardingMessages)
+      .where(and(eq(schema.onboardingMessages.tenantId, b.id), isNull(schema.onboardingMessages.supersededAt)));
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ kind: 'approval_notice', attempt: 2, status: 'accepted' });
+  });
+
+  it('PROBE: Retry now is refused for awaiting / active / unknown businesses, and without CSRF', async () => {
+    const { cookie, csrf } = await login();
+    const b = await approvedWithFailure(131042, 5);
+    expect((await post(`/admin/tenants/${b.id}/retry-delivery`, cookie, {})).statusCode).toBe(403);
+    await adminDb.db.update(schema.tenants).set({ reviewStatus: 'awaiting' }).where(eq(schema.tenants.id, b.id));
+    const before = sentTemplates.length + sentCodes.length;
+    expect(flash(await post(`/admin/tenants/${b.id}/retry-delivery`, cookie, { _csrf: csrf }))).toMatch(/t=bad/);
+    await adminDb.db.update(schema.tenants).set({ reviewStatus: 'approved', status: 'active' }).where(eq(schema.tenants.id, b.id));
+    expect(flash(await post(`/admin/tenants/${b.id}/retry-delivery`, cookie, { _csrf: csrf }))).toMatch(/t=bad/);
+    for (const target of ['00000000-0000-0000-0000-000000000000', 'not-a-uuid']) {
+      expect(flash(await post(`/admin/tenants/${target}/retry-delivery`, cookie, { _csrf: csrf }))).toMatch(/t=bad/);
+    }
+    expect(sentTemplates.length + sentCodes.length).toBe(before);
+  });
+});

@@ -25,6 +25,7 @@ import { registerSignup } from './signup/route.js';
 import { registerAdmin, registerAdminDisabled } from './admin/routes.js';
 import { AdminAuth } from './admin/auth.js';
 import { startOutboxDrain } from './notify/outbox-drain.js';
+import { applyDeliveryStatus, startDeliveryRetrier } from './onboarding/delivery.js';
 
 const config = await loadConfig();
 const handle = createDb(config.DATABASE_URL);
@@ -72,6 +73,7 @@ const app = buildServer({
   appSecret: () => settings.require('wa.app_secret'),
   // Only answer messages sent to OUR sender — the Meta app also serves other numbers.
   acceptsPhoneNumberId: (id) => id === settings.get('wa.phone_number_id'),
+  onDeliveryStatus: (st) => applyDeliveryStatus(handle.db, st),
   register: (server) => {
     registerSignup(server, {
       db: handle.db,
@@ -164,9 +166,18 @@ await app.listen({ port: config.PORT, host: '0.0.0.0' });
 // Transactional WhatsApp outbox (payment receipts queued by the payments service).
 const stopOutbox = startOutboxDrain(
   handle.db,
-  (to, template, params, button) =>
-    wa.sendTemplate(to, template, params, 'en', button ? { index: 0, param: button } : undefined),
+  async (to, template, params, button) =>
+    void (await wa.sendTemplate(to, template, params, 'en', button ? { index: 0, param: button } : undefined)),
   (msg, fields) => rootLogger.info(msg, { component: 'outbox', ...(fields ?? {}) }),
+);
+// Onboarding delivery: retries approval notices / codes Meta failed temporarily.
+const stopRetrier = startDeliveryRetrier(
+  handle.db,
+  {
+    sendAuthCode: (to, template, code) => wa.sendAuthCode(to, template, code),
+    sendTemplate: (to, template, params) => wa.sendTemplate(to, template, params),
+  },
+  (msg, fields) => rootLogger.info(msg, { component: 'onboarding-delivery', ...(fields ?? {}) }),
 );
 rootLogger.info('orchestrator listening', {
   port: config.PORT,
@@ -184,11 +195,11 @@ if (config.SCHEDULER_ENABLED) {
       ledgerMcpUrl: config.LEDGER_MCP_URL,
       signingSecret: config.TENANT_SIGNING_SECRET,
     }),
-    sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+    sendTemplate: async (to, name, params) => void (await wa.sendTemplate(to, name, params)),
     // P10: subscription dunning runs in the same daily tick (cross-tenant, hisab_orch).
     dunning: {
       db: handle.db,
-      sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+      sendTemplate: async (to, name, params) => void (await wa.sendTemplate(to, name, params)),
       log: (msg) => schedLog('dunning', msg),
     },
     // P13: TDS-deposit reminder runs in the same daily tick (after the VAT reminder).
@@ -198,13 +209,13 @@ if (config.SCHEDULER_ENABLED) {
         ledgerMcpUrl: config.LEDGER_MCP_URL,
         signingSecret: config.TENANT_SIGNING_SECRET,
       }),
-      sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+      sendTemplate: async (to, name, params) => void (await wa.sendTemplate(to, name, params)),
       log: (msg) => schedLog('tds', msg),
     },
     // Compliance-calendar digest runs in the same daily tick (once per BS month).
     calendar: {
       db: handle.db,
-      sendTemplate: (to, name, params) => wa.sendTemplate(to, name, params),
+      sendTemplate: async (to, name, params) => void (await wa.sendTemplate(to, name, params)),
       log: (msg) => schedLog('calendar', msg),
     },
     ...(config.REMINDER_CRON ? { cron: config.REMINDER_CRON } : {}),
@@ -228,6 +239,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     void (async () => {
       stopOutbox();
+      stopRetrier();
       settings.stop();
       await scheduler?.close();
       await app.close();

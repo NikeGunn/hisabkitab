@@ -29,9 +29,10 @@ import {
   signupInputSchema,
 } from '@hisab/shared';
 import { issuePairingCode } from '../onboarding/pairing.js';
+import { PAIRING_TEMPLATE, recordAccepted } from '../onboarding/delivery.js';
 import { WaError } from '../whatsapp/wa-client.js';
 
-export const PAIRING_TEMPLATE = 'pairing_code';
+export { PAIRING_TEMPLATE };
 export const ADMIN_SIGNUP_ALERT_TEMPLATE = 'admin_account_update';
 
 export interface SignupSettings {
@@ -50,8 +51,9 @@ export interface SignupSettings {
 
 export interface SignupDeps {
   db: Db; // hisab_orch
-  sendAuthCode(to: string, template: string, code: string): Promise<void>;
-  sendTemplate(to: string, template: string, params: string[]): Promise<void>;
+  /** Resolves to Meta's message id (wamid) when known, so delivery can be tracked. */
+  sendAuthCode(to: string, template: string, code: string): Promise<string | void>;
+  sendTemplate(to: string, template: string, params: string[]): Promise<string | void>;
   settings: SignupSettings;
   log?: (msg: string, fields?: Record<string, unknown>) => void;
   now?: () => Date;
@@ -301,7 +303,9 @@ export async function handleSignup(deps: SignupDeps, body: unknown): Promise<Sig
   }
 
   try {
-    await deps.sendAuthCode(phone, PAIRING_TEMPLATE, decision.code);
+    const waMessageId = await deps.sendAuthCode(phone, PAIRING_TEMPLATE, decision.code);
+    // accepted is not delivered: the status webhook settles it (and retries a failure)
+    await recordAccepted(deps.db, { tenantId: decision.tenantId, to: phone, kind: 'signup_code', waMessageId, attempt: 1 });
   } catch (err) {
     // Burn the code we could not deliver (and say so) — never leave a usable code
     // the owner never received. Mark it undelivered so it doesn't count against
