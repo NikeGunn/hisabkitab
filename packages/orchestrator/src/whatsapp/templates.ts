@@ -210,6 +210,21 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  // Applicant notice: the operator approved a pilot application in the admin panel.
+  // Account-status wording only (no offer/trial language) so it stays Utility. Any
+  // reply from the applicant's number activates the business (pairing.ts).
+  {
+    name: 'account_approved',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Your HisabKitab account for {{1}} has been approved. Reply to this message to finish setting it up.',
+        example: { body_text: [['Karki Hardware']] },
+      },
+    ],
+  },
 ];
 
 /** Every template the running product sends. The admin panel checks each is APPROVED. */

@@ -1,6 +1,14 @@
 /**
  * Self-serve signup (hisabkitab.pro/pilot → POST /signup).
  *
+ * With `signup.require_approval` on (default) the form only records an
+ * APPLICATION (pending tenant, review_status 'awaiting'): no code, no WhatsApp
+ * spend. The operator approves it in the admin panel, which notifies the owner;
+ * the owner's first message FROM that number then activates the business.
+ * Re-submitting the form while approved (e.g. the owner missed our message)
+ * falls through to the code flow below.
+ *
+ * Without approval:
  *   form → validate → (pending tenant, number-bound 6-digit code) → WhatsApp
  *   `pairing_code` AUTHENTICATION template to the CLAIMED number → owner sends
  *   `START <code>` (or pastes the code) FROM that number → pairing.ts binds it,
@@ -33,6 +41,11 @@ export interface SignupSettings {
   senderE164(): string | undefined;
   /** Admin's WhatsApp for new-signup alerts; undefined/empty = off. */
   alertE164(): string | undefined;
+  /**
+   * true = the form only records an APPLICATION; no code is sent until the
+   * operator approves it in the admin panel. Omitted = false (code sent at once).
+   */
+  requireApproval?(): boolean;
 }
 
 export interface SignupDeps {
@@ -46,6 +59,8 @@ export interface SignupDeps {
 
 export type SignupResult =
   | { status: 'code_sent'; sender_e164?: string; wa_link?: string; expires_minutes: number }
+  /** Application recorded; the operator reviews it. `resubmitted` = it was already on file. */
+  | { status: 'under_review'; resubmitted: boolean; sender_e164?: string; wa_link?: string }
   | { status: 'invalid'; errors: Record<string, string> }
   | { status: 'closed' }
   | { status: 'busy' }
@@ -111,7 +126,9 @@ export async function handleSignup(deps: SignupDeps, body: unknown): Promise<Sig
   // Bot: pretend success, do nothing (no template spend, no row).
   if (isBotSubmission(input)) {
     deps.log?.('signup honeypot tripped');
-    return { status: 'code_sent', expires_minutes: SIGNUP_CODE_TTL_MINUTES };
+    return deps.settings.requireApproval?.()
+      ? { status: 'under_review', resubmitted: false }
+      : { status: 'code_sent', expires_minutes: SIGNUP_CODE_TTL_MINUTES };
   }
   if (!deps.settings.enabled()) return { status: 'closed' };
 
@@ -168,15 +185,6 @@ export async function handleSignup(deps: SignupDeps, body: unknown): Promise<Sig
       .limit(1);
     if (member || owned) return { kind: 'already_registered' as const };
 
-    // Re-use this number's still-pending business (a resend), else create one.
-    const [pending] = await tx
-      .select({ tenantId: schema.pairingCodes.tenantId })
-      .from(schema.pairingCodes)
-      .innerJoin(schema.tenants, eq(schema.tenants.id, schema.pairingCodes.tenantId))
-      .where(and(eq(schema.pairingCodes.phoneE164, phone), eq(schema.tenants.status, 'pending')))
-      .orderBy(desc(schema.pairingCodes.createdAt))
-      .limit(1);
-
     const fields = {
       businessName: input.business_name,
       ownerName: input.owner_name,
@@ -185,10 +193,72 @@ export async function handleSignup(deps: SignupDeps, body: unknown): Promise<Sig
       contactEmail: input.email ?? null,
       signupSource: 'web' as const,
     };
+
+    // This number's still-pending website application, if any.
+    const [application] = await tx
+      .select({ id: schema.tenants.id, review: schema.tenants.reviewStatus })
+      .from(schema.tenants)
+      .where(
+        and(
+          eq(schema.tenants.applicantE164, phone),
+          eq(schema.tenants.status, 'pending'),
+          isNotNull(schema.tenants.reviewStatus),
+        ),
+      )
+      .orderBy(desc(schema.tenants.createdAt))
+      .limit(1);
+
+    if (deps.settings.requireApproval?.() && application?.review !== 'approved') {
+      if (application) {
+        // Same number again: refresh the details; a declined one goes back in the queue.
+        await tx
+          .update(schema.tenants)
+          .set({ ...fields, reviewStatus: 'awaiting', reviewedAt: null })
+          .where(eq(schema.tenants.id, application.id));
+        await appendAudit(tx, application.id, {
+          actor: 'system',
+          action: 'signup.reapplied',
+          detail: { source: 'web', was: application.review },
+        });
+        return { kind: 'applied' as const, tenantId: application.id, fresh: application.review === 'declined' };
+      }
+      // applications cost nothing to send, but the queue is still capped per day
+      const [{ n: appliedToday } = { n: 0 }] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.tenants)
+        .where(and(isNotNull(schema.tenants.reviewStatus), gt(schema.tenants.createdAt, dayAgo)));
+      if (appliedToday >= deps.settings.dailyCap()) return { kind: 'busy' as const };
+
+      const [t] = await tx
+        .insert(schema.tenants)
+        .values({ ...fields, reviewStatus: 'awaiting', applicantE164: phone })
+        .returning({ id: schema.tenants.id });
+      await appendAudit(tx, t!.id, { actor: 'system', action: 'signup.applied', detail: { source: 'web' } });
+      return { kind: 'applied' as const, tenantId: t!.id, fresh: true };
+    }
+
+    // Re-use this number's still-pending business (a resend), else create one.
+    const [pending] = application
+      ? [{ tenantId: application.id }]
+      : await tx
+          .select({ tenantId: schema.pairingCodes.tenantId })
+          .from(schema.pairingCodes)
+          .innerJoin(schema.tenants, eq(schema.tenants.id, schema.pairingCodes.tenantId))
+          .where(and(eq(schema.pairingCodes.phoneE164, phone), eq(schema.tenants.status, 'pending')))
+          .orderBy(desc(schema.pairingCodes.createdAt))
+          .limit(1);
+
     let tenantId: string;
-    if (pending) {
+    if (application?.review === 'approved') {
+      // approved earlier, owner missed our message: keep the reviewed details, just send a code
+      tenantId = application.id;
+    } else if (pending) {
       tenantId = pending.tenantId;
-      await tx.update(schema.tenants).set(fields).where(eq(schema.tenants.id, tenantId));
+      // review switched off while this application waited: sending a code approves it
+      await tx
+        .update(schema.tenants)
+        .set(application ? { ...fields, reviewStatus: 'approved', reviewedAt: sql`now()` } : fields)
+        .where(eq(schema.tenants.id, tenantId));
     } else {
       const [t] = await tx.insert(schema.tenants).values(fields).returning({ id: schema.tenants.id });
       tenantId = t!.id;
@@ -203,6 +273,27 @@ export async function handleSignup(deps: SignupDeps, body: unknown): Promise<Sig
   });
 
   if (decision.kind === 'busy') return { status: 'busy' };
+  if (decision.kind === 'applied') {
+    await deps.db.insert(schema.adminEvents).values({
+      actor: 'website',
+      action: decision.fresh ? 'signup.applied' : 'signup.reapplied',
+      detail: { tenant_id: decision.tenantId, business: input.business_name, phone_tail: phone.slice(-4) },
+    });
+    const alertTo = deps.settings.alertE164();
+    if (alertTo && decision.fresh) {
+      // best-effort: an alert failure must never fail the owner's application
+      await deps
+        .sendTemplate(alertTo, ADMIN_SIGNUP_ALERT_TEMPLATE, [input.business_name])
+        .catch((err) => deps.log?.('admin signup alert failed', { error: String(err) }));
+    }
+    const link = waLink(sender);
+    return {
+      status: 'under_review',
+      resubmitted: !decision.fresh,
+      ...(sender ? { sender_e164: sender } : {}),
+      ...(link ? { wa_link: link } : {}),
+    };
+  }
   if (decision.kind === 'rate_limited') return { status: 'rate_limited' };
   if (decision.kind === 'already_registered') {
     const link = waLink(sender);

@@ -16,6 +16,7 @@ export const SIGNUP_ALLOWED_ORIGINS = [
 
 const STATUS_CODE: Record<SignupResult['status'], number> = {
   code_sent: 200,
+  under_review: 202,
   already_registered: 200,
   invalid: 400,
   closed: 503,

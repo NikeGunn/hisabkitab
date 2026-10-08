@@ -36,8 +36,9 @@ export default function PilotPage() {
 
       <Section title="Join in one minute">
         <p>
-          Tell us about your business. We send a one-time code to your WhatsApp, you send it back
-          to HisabKitab, and you are in. Your 14-day free trial starts right away.
+          Tell us about your business. Our team reviews every application by hand, usually within a
+          day. Once you are approved, HisabKitab messages you on WhatsApp. Reply, and your 14-day
+          free trial starts right away.
         </p>
         <div id="signup" className="mt-6">
           <SignupForm />

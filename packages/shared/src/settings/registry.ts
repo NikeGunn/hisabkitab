@@ -144,6 +144,15 @@ export const SETTINGS = {
     options: ['true', 'false'],
     schema: bool,
   },
+  'signup.require_approval': {
+    group: 'signup',
+    label: 'Review applications first',
+    help: 'On = the pilot form only records an application; nothing is sent until you press Approve under Businesses. Off = the form sends the WhatsApp code straight away.',
+    secret: false,
+    default: 'true',
+    options: ['true', 'false'],
+    schema: bool,
+  },
   'signup.daily_cap': {
     group: 'signup',
     label: 'Max signups per day',

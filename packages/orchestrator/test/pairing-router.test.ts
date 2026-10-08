@@ -12,6 +12,7 @@ import {
   issuePairingCode,
   ONBOARDING_PROMPT,
   SUSPENDED_ACCOUNT_REPLY,
+  underReviewReply,
 } from '../src/onboarding/pairing.js';
 import {
   processInbound,
@@ -327,5 +328,49 @@ describe('issuePairingCode revoke', () => {
       .from(schema.pairingCodes)
       .where(and(eq(schema.pairingCodes.tenantId, t!.id), isNull(schema.pairingCodes.consumedAt), gt(schema.pairingCodes.expiresAt, sql`now()`)));
     expect(stillLive).toHaveLength(1);
+  });
+});
+
+describe('pilot applications over WhatsApp (review first)', () => {
+  async function applicationFor(phone: string, review: 'awaiting' | 'approved' | 'declined'): Promise<string> {
+    const [t] = await admin.db
+      .insert(schema.tenants)
+      .values({ businessName: 'Review Traders', panOrVatNo: '604444444', signupSource: 'web', reviewStatus: review, applicantE164: phone })
+      .returning({ id: schema.tenants.id });
+    return t!.id;
+  }
+
+  it('PROBE: an awaiting applicant gets the under-review reply, never the agent, never paired', async () => {
+    const phone = '+9779807770001';
+    const id = await applicationFor(phone, 'awaiting');
+    const sent: { to: string; body: string }[] = [];
+    await processInbound(makeDeps(sent), textMsg('wamid.review-1', phone, 'hello, can I start?'));
+    expect(sent).toEqual([{ to: phone, body: underReviewReply('Review Traders') }]);
+    const [t] = await orch.db.select().from(schema.tenants).where(eq(schema.tenants.id, id));
+    expect(t).toMatchObject({ status: 'pending', whatsappE164: null });
+  });
+
+  it('approved applicant: a bare "ok" or an image (no text) pairs it and welcomes the owner', async () => {
+    for (const [i, msg] of [
+      textMsg('wamid.review-2', '+9779807770002', 'ok'),
+      { waMessageId: 'wamid.review-3', fromE164: '+9779807770003', timestamp: '0', kind: 'image' } as InboundMessage,
+    ].entries()) {
+      const id = await applicationFor(msg.fromE164, 'approved');
+      const sent: { to: string; body: string }[] = [];
+      await processInbound(makeDeps(sent), msg);
+      expect(sent, String(i)).toHaveLength(1);
+      expect(sent[0]!.body).toContain('Review Traders');
+      expect(sent[0]!.body).not.toBe(ONBOARDING_PROMPT);
+      const [t] = await orch.db.select().from(schema.tenants).where(eq(schema.tenants.id, id));
+      expect(t).toMatchObject({ status: 'active', whatsappE164: msg.fromE164 });
+    }
+  });
+
+  it('PROBE: a declined applicant just gets the normal onboarding prompt', async () => {
+    const phone = '+9779807770004';
+    await applicationFor(phone, 'declined');
+    const sent: { to: string; body: string }[] = [];
+    await processInbound(makeDeps(sent), textMsg('wamid.review-4', phone, 'hi'));
+    expect(sent).toEqual([{ to: phone, body: ONBOARDING_PROMPT }]);
   });
 });

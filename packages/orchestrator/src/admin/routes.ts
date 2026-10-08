@@ -3,6 +3,8 @@
  * behind Caddy TLS). Lets the operator run the pilot without a deploy:
  *   - see live health: WhatsApp sender, template approvals, Khalti mode, signups
  *   - edit runtime settings (new WhatsApp number, production Khalti key, …)
+ *   - review pilot applications from the website: Approve (owner notified on
+ *     WhatsApp) or Decline — nothing is sent to an applicant before Approve
  *   - set up a business by hand (WhatsApp verification code sent + shown once)
  *   - send a Khalti payment link, suspend / reactivate a business
  *   - subscribe the app to a new WhatsApp account + submit missing templates
@@ -13,7 +15,7 @@
  * appended to admin_events. Secrets are write-only: the UI never echoes them.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, count, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { ZodError } from 'zod';
 import {
   appendAudit,
@@ -62,6 +64,11 @@ export interface AdminDeps {
 
 type Req = FastifyRequest & { admin?: AdminSession };
 type Form = Record<string, string | undefined>;
+
+/** WhatsApp template that tells an applicant their pilot application was approved. */
+export const APPROVED_TEMPLATE = 'account_approved';
+
+const REVIEW_TONE: Record<'awaiting' | 'approved' | 'declined', Tone> = { awaiting: 'warn', approved: 'ok', declined: 'bad' };
 
 const GROUP_TITLES: Record<SettingGroup, string> = {
   whatsapp: 'WhatsApp (Meta Cloud API)',
@@ -274,6 +281,10 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       .select({ n: count() })
       .from(schema.pairingCodes)
       .where(and(sql`${schema.pairingCodes.phoneE164} is not null`, gt(schema.pairingCodes.createdAt, dayAgo)));
+    const [awaiting] = await deps.db
+      .select({ n: count() })
+      .from(schema.tenants)
+      .where(and(eq(schema.tenants.status, 'pending'), eq(schema.tenants.reviewStatus, 'awaiting')));
     const outbox = await deps.db
       .select({ status: schema.outboundNotifications.status, n: count() })
       .from(schema.outboundNotifications)
@@ -323,7 +334,10 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     const body = `
       <div class="grid">
         <div class="card"><h2>Businesses</h2><p>${kv(tenantCounts)}</p><p class="mut">Subscriptions: ${kv(subCounts)}</p><a href="/admin/tenants">Manage →</a></div>
-        <div class="card"><h2>Signup</h2><p>${deps.settings.bool('signup.enabled') ? pill('OPEN', 'ok') : pill('CLOSED', 'warn')}</p>
+        <div class="card"><h2>Signup</h2><p>${deps.settings.bool('signup.enabled') ? pill('OPEN', 'ok') : pill('CLOSED', 'warn')} ${
+          deps.settings.bool('signup.require_approval') ? pill('REVIEW FIRST', 'muted') : pill('INSTANT CODE', 'muted')
+        }</p>
+          <p>Applications awaiting review: <b>${awaiting?.n ?? 0}</b>${(awaiting?.n ?? 0) > 0 ? ' · <a href="/admin/tenants#applications">Review →</a>' : ''}</p>
           <p>Codes sent (24h): <b>${codes24h?.n ?? 0}</b> / ${esc(deps.settings.get('signup.daily_cap'))}</p>
           <p class="mut">Public number: ${esc(deps.settings.get('wa.sender_e164') || 'not set')}</p></div>
         <div class="card"><h2>Payments</h2>
@@ -429,6 +443,9 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
         status: schema.tenants.status,
         source: schema.tenants.signupSource,
         created: schema.tenants.createdAt,
+        review: schema.tenants.reviewStatus,
+        applicant: schema.tenants.applicantE164,
+        vat: schema.tenants.vatRegistered,
         plan: schema.subscriptions.planCode,
         subStatus: schema.subscriptions.status,
         periodEnd: schema.subscriptions.currentPeriodEnd,
@@ -445,24 +462,42 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     const list = rows
       .map((t) => {
         const tone: Tone = t.status === 'active' ? 'ok' : t.status === 'pending' ? 'warn' : 'bad';
-        const phone = t.e164 ?? t.pendingPhone;
+        const phone = t.e164 ?? t.pendingPhone ?? t.applicant;
         const actions: string[] = [];
         const form = (action: string, label: string, cls = 'ghost', extra = '') =>
           `<form method="post" action="/admin/tenants/${esc(t.id)}/${action}">${csrfField(csrf(req))}${extra}<button class="${cls}">${label}</button></form>`;
-        if (t.status === 'pending' && t.pendingPhone) actions.push(form('resend', 'Resend code'));
+        if (t.status === 'pending' && t.review === 'declined') actions.push(form('approve', 'Approve'));
+        if (t.status === 'pending' && t.review !== 'awaiting' && t.review !== 'declined' && (t.pendingPhone || t.applicant)) {
+          actions.push(form('resend', 'Resend code'));
+        }
         if (t.status === 'active') {
           actions.push(form('payment-link', 'Send payment link', 'ghost', `<select name="plan" style="width:auto">${planOpts}</select>`));
           actions.push(form('suspend', 'Suspend', 'danger'));
         }
         if (t.status === 'suspended') actions.push(form('activate', 'Reactivate'));
         return `<tr><td><b>${esc(t.name)}</b><br><small>${esc(t.owner ?? '')} ${t.email ? '· ' + esc(t.email) : ''}</small><br><code>${esc(t.id.slice(0, 8))}</code></td>
-          <td>${esc(phone ?? '')}</td><td>${pill(t.status, tone)}<br><small>${esc(t.source)}</small></td>
+          <td>${esc(phone ?? '')}</td><td>${pill(t.status, tone)}${t.review && t.status === 'pending' ? ' ' + pill(t.review, REVIEW_TONE[t.review]) : ''}<br><small>${esc(t.source)}</small></td>
           <td>${t.plan ? `${esc(PLAN_META[t.plan as PlanCode]?.name ?? t.plan)} · ${esc(t.subStatus)}<br><small>until ${esc(t.periodEnd)}</small>` : '<span class="mut">—</span>'}</td>
           <td><small>${esc(fmtDate(t.created))}</small></td><td><div class="row">${actions.join('')}</div></td></tr>`;
       })
       .join('');
 
+    const applications = rows.filter((t) => t.status === 'pending' && t.review === 'awaiting');
+    const appRows = applications
+      .map((t) => {
+        const act = (action: string, label: string, cls: string) =>
+          `<form method="post" action="/admin/tenants/${esc(t.id)}/${action}">${csrfField(csrf(req))}<button class="${cls}">${label}</button></form>`;
+        return `<tr><td><b>${esc(t.name)}</b><br><small>${esc(t.owner ?? '')}${t.email ? ' · ' + esc(t.email) : ''}</small></td>
+          <td>${esc(t.applicant ?? '')}</td><td>${t.vat ? pill('VAT', 'ok') : pill('PAN only', 'muted')}</td>
+          <td><small>${esc(fmtDate(t.created))}</small></td>
+          <td><div class="row">${act('approve', 'Approve', '')}${act('decline', 'Decline', 'danger')}</div></td></tr>`;
+      })
+      .join('');
     const body = `
+      <div class="card" id="applications"><h2>Applications awaiting review (${applications.length})</h2>
+        <p class="mut">From the pilot form. Nothing has been sent to these numbers. <b>Approve</b> messages the owner on WhatsApp; their reply activates the business and starts the trial. <b>Decline</b> sends nothing.</p>
+        ${applications.length ? `<table><tr><th>Business</th><th>WhatsApp</th><th>Type</th><th>Applied</th><th>Decision</th></tr>${appRows}</table>` : '<p class="mut">No applications waiting.</p>'}
+      </div>
       <div class="card"><h2>Set up a business</h2>
         <p class="mut">Creates the business and sends the owner a WhatsApp verification code. The code is also shown to you once, so you can read it out on a call. The owner replies <code>START &lt;code&gt;</code> from that number to activate.</p>
         <form method="post" action="/admin/tenants">${csrfField(csrf(req))}
@@ -565,15 +600,92 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       .where(and(eq(schema.pairingCodes.tenantId, t.id), sql`${schema.pairingCodes.phoneE164} is not null`))
       .orderBy(desc(schema.pairingCodes.createdAt))
       .limit(1);
-    if (!last?.phone) return back(reply, '/admin/tenants', 'bad', 'No WhatsApp number on file for this business.');
-    const r = await sendCode(t.id, last.phone);
+    if (t.reviewStatus === 'awaiting' || t.reviewStatus === 'declined') {
+      return back(reply, '/admin/tenants', 'bad', 'Approve this application first.');
+    }
+    const resendTo = last?.phone ?? t.applicantE164;
+    if (!resendTo) return back(reply, '/admin/tenants', 'bad', 'No WhatsApp number on file for this business.');
+    const r = await sendCode(t.id, resendTo);
     await event('admin', 'tenant.code_resent', { tenant_id: t.id, code_sent: r.sent }, clientIp(req));
     return back(
       reply,
       '/admin/tenants',
       r.sent ? 'ok' : 'warn',
-      r.sent ? `New code ${r.code} sent to ${last.phone}.` : `WhatsApp delivery failed (${r.error}). Code ${r.code} — read it to the owner.`,
+      r.sent ? `New code ${r.code} sent to ${resendTo}.` : `WhatsApp delivery failed (${r.error}). Code ${r.code} — read it to the owner.`,
     );
+  });
+
+  app.post(tenantRoute('approve'), async (req: Req, reply) => {
+    const t = await tenantById((req.params as { id: string }).id);
+    if (!t || t.status !== 'pending' || !t.applicantE164 || (t.reviewStatus !== 'awaiting' && t.reviewStatus !== 'declined')) {
+      return back(reply, '/admin/tenants', 'bad', 'Only an application waiting for review can be approved.');
+    }
+    const phone = t.applicantE164;
+    // the number may have joined another business since it applied
+    const [taken] = await deps.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id))
+      .where(and(eq(schema.users.whatsappE164, phone), eq(schema.memberships.status, 'active')))
+      .limit(1);
+    const [owned] = await deps.db
+      .select({ id: schema.tenants.id })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.whatsappE164, phone))
+      .limit(1);
+    if (taken || owned) return back(reply, '/admin/tenants', 'bad', `${phone} is already active on another business.`);
+
+    // claim the decision atomically: a double click approves (and messages) once
+    const claimed = await deps.db.transaction(async (tx) => {
+      const rows = await tx
+        .update(schema.tenants)
+        .set({ reviewStatus: 'approved', reviewedAt: sql`now()` })
+        .where(
+          and(
+            eq(schema.tenants.id, t.id),
+            eq(schema.tenants.status, 'pending'),
+            inArray(schema.tenants.reviewStatus, ['awaiting', 'declined']),
+          ),
+        )
+        .returning({ id: schema.tenants.id });
+      if (rows.length === 0) return false;
+      await appendAudit(tx, t.id, { actor: 'system', action: 'signup.approved', detail: { by: 'admin' } });
+      return true;
+    });
+    if (!claimed) return back(reply, '/admin/tenants', 'muted', `${t.businessName} was already decided.`);
+
+    // Tell the owner. The approval notice invites a reply (any reply from that
+    // number pairs it); if Meta refuses it (e.g. not approved yet) a code goes instead.
+    let delivery: string;
+    let tone: Tone = 'ok';
+    try {
+      await deps.sendTemplate(phone, APPROVED_TEMPLATE, [t.businessName]);
+      delivery = `${t.businessName} approved. The owner was messaged on WhatsApp at ${phone}; their reply activates the account and starts the trial.`;
+    } catch (err) {
+      tone = 'warn';
+      const r = await sendCode(t.id, phone);
+      delivery = r.sent
+        ? `${t.businessName} approved. The approval notice could not be sent (${errText(err)}), so code ${r.code} went to ${phone} instead. Any reply from that number activates it.`
+        : `${t.businessName} approved, but WhatsApp delivery failed (${r.error}). Ask the owner to message us from ${phone}: any message activates it (or give code ${r.code}).`;
+    }
+    await event('admin', 'signup.approved', { tenant_id: t.id, business: t.businessName, phone_tail: phone.slice(-4) }, clientIp(req));
+    return back(reply, '/admin/tenants', tone, delivery);
+  });
+
+  app.post(tenantRoute('decline'), async (req: Req, reply) => {
+    const t = await tenantById((req.params as { id: string }).id);
+    if (!t || t.status !== 'pending' || t.reviewStatus !== 'awaiting') {
+      return back(reply, '/admin/tenants', 'bad', 'Only an application waiting for review can be declined.');
+    }
+    await deps.db.transaction(async (tx) => {
+      await tx
+        .update(schema.tenants)
+        .set({ reviewStatus: 'declined', reviewedAt: sql`now()` })
+        .where(eq(schema.tenants.id, t.id));
+      await appendAudit(tx, t.id, { actor: 'system', action: 'signup.declined', detail: { by: 'admin' } });
+    });
+    await event('admin', 'signup.declined', { tenant_id: t.id, business: t.businessName }, clientIp(req));
+    return back(reply, '/admin/tenants', 'muted', `${t.businessName} declined. Nothing was sent to the applicant.`);
   });
 
   for (const [suffix, status] of [

@@ -82,6 +82,7 @@ const app = buildServer({
         dailyCap: () => Number(settings.get('signup.daily_cap') ?? 0),
         senderE164: () => settings.get('wa.sender_e164') || undefined,
         alertE164: () => settings.get('signup.alert_e164') || undefined,
+        requireApproval: () => settings.bool('signup.require_approval'),
       },
       log: signupLog,
     });

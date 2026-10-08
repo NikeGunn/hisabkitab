@@ -4,7 +4,7 @@
  * (cross-tenant by design — the orchestrator is the tenancy trust root).
  */
 import { randomInt } from 'node:crypto';
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { appendAudit, schema, type Db, type Tx } from '@hisab/db';
 import { SIGNUP_MAX_FAILED_ATTEMPTS, TRIAL_DAYS, startTrial, type PlanCode } from '@hisab/shared';
 
@@ -66,19 +66,28 @@ export async function issuePairingCode(db: Db | Tx, tenantId: string, opts: Issu
 
 export type PairingOutcome =
   | { kind: 'paired'; tenantId: string; businessName: string }
+  | { kind: 'under_review'; businessName: string }
   | { kind: 'invalid_code' }
   | { kind: 'no_code' };
 
+type PairOpts = { trialPlan?: PlanCode; now?: Date };
+
 /**
- * Unknown sender sent `text`. If it is a valid `START <code>`, bind the number,
- * activate the tenant, consume the code, audit-log the pairing.
+ * Unknown sender sent `text`. In order:
+ *   1. the sender's website application was APPROVED → any message from that
+ *      number pairs it (the Meta-verified sender IS the proof a code would give);
+ *   2. the application is still AWAITING review → say so, pair nothing;
+ *   3. a valid `START <code>` (or a bare bound code) → bind, activate, consume.
  */
 export async function handleUnknownSender(
   db: Db,
   fromE164: string,
   text: string | undefined,
-  opts: { trialPlan?: PlanCode; now?: Date } = {},
+  opts: PairOpts = {},
 ): Promise<PairingOutcome> {
+  const application = await pairApprovedApplicant(db, fromE164, opts);
+  if (application) return application;
+
   const started = text?.match(START_RE)?.[1];
   const bare = started ? undefined : text?.match(BARE_CODE_RE)?.[1];
   const code = started ?? bare;
@@ -113,50 +122,87 @@ export async function handleUnknownSender(
       .update(schema.pairingCodes)
       .set({ consumedAt: new Date() })
       .where(eq(schema.pairingCodes.code, found.code));
-    await tx
-      .update(schema.tenants)
-      .set({ whatsappE164: fromE164, status: 'active' })
-      .where(eq(schema.tenants.id, found.tenantId));
-
-    // P8: the paired number is this business's OWNER. Create the identity + an
-    // active owner membership so resolveMembership returns owner from now on.
-    // Both upserts are idempotent (re-pairing the same number is a no-op).
-    const [u] = await tx
-      .insert(schema.users)
-      .values({ whatsappE164: fromE164 })
-      .onConflictDoNothing()
-      .returning({ id: schema.users.id });
-    const ownerId =
-      u?.id ??
-      (await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.whatsappE164, fromE164)))[0]!
-        .id;
-    await tx
-      .insert(schema.memberships)
-      .values({ userId: ownerId, tenantId: found.tenantId, role: 'owner', status: 'active' })
-      .onConflictDoNothing();
-
-    // Every verified business starts on a free trial (idempotent: an existing
-    // subscription — e.g. re-pairing — is left untouched).
-    if (opts.trialPlan) {
-      const today = (opts.now ?? new Date()).toISOString().slice(0, 10);
-      const trial = startTrial(today, TRIAL_DAYS);
-      await tx
-        .insert(schema.subscriptions)
-        .values({
-          tenantId: found.tenantId,
-          planCode: opts.trialPlan,
-          status: trial.status,
-          currentPeriodEnd: trial.currentPeriodEnd,
-        })
-        .onConflictDoNothing();
-    }
-
-    await appendAudit(tx, found.tenantId, { actor: 'system', action: 'whatsapp_paired', detail: { fromE164 } });
+    await activateOwner(tx, found.tenantId, fromE164, opts, 'code');
     return { kind: 'paired' as const, tenantId: found.tenantId, businessName: found.businessName };
   });
 
   if (outcome.kind === 'invalid_code') await countFailedAttempt(db, fromE164);
   return outcome;
+}
+
+/**
+ * The sender's pending website application: approved → pair now; awaiting → report
+ * it; declined / none → null (fall through to the code path + signup prompt).
+ * The row is locked so two racing messages pair it once.
+ */
+async function pairApprovedApplicant(db: Db, fromE164: string, opts: PairOpts): Promise<PairingOutcome | null> {
+  return db.transaction(async (tx) => {
+    const [app] = await tx
+      .select({ id: schema.tenants.id, businessName: schema.tenants.businessName, review: schema.tenants.reviewStatus })
+      .from(schema.tenants)
+      .where(
+        and(
+          eq(schema.tenants.applicantE164, fromE164),
+          eq(schema.tenants.status, 'pending'),
+          inArray(schema.tenants.reviewStatus, ['awaiting', 'approved']),
+        ),
+      )
+      .orderBy(desc(schema.tenants.createdAt))
+      .limit(1)
+      .for('update');
+    if (!app) return null;
+    if (app.review === 'awaiting') return { kind: 'under_review' as const, businessName: app.businessName };
+    // never-issued codes for this business are dead once it is paired
+    await tx
+      .update(schema.pairingCodes)
+      .set({ expiresAt: sql`now()` })
+      .where(
+        and(
+          eq(schema.pairingCodes.tenantId, app.id),
+          isNull(schema.pairingCodes.consumedAt),
+          gt(schema.pairingCodes.expiresAt, sql`now()`),
+        ),
+      );
+    await activateOwner(tx, app.id, fromE164, opts, 'approved_application');
+    return { kind: 'paired' as const, tenantId: app.id, businessName: app.businessName };
+  });
+}
+
+/** Bind the number as the business's OWNER, activate it and start the trial. */
+async function activateOwner(tx: Tx, tenantId: string, fromE164: string, opts: PairOpts, via: string): Promise<void> {
+  await tx
+    .update(schema.tenants)
+    .set({ whatsappE164: fromE164, status: 'active' })
+    .where(eq(schema.tenants.id, tenantId));
+
+  // P8: the paired number is this business's OWNER. Create the identity + an
+  // active owner membership so resolveMembership returns owner from now on.
+  // Both upserts are idempotent (re-pairing the same number is a no-op).
+  const [u] = await tx
+    .insert(schema.users)
+    .values({ whatsappE164: fromE164 })
+    .onConflictDoNothing()
+    .returning({ id: schema.users.id });
+  const ownerId =
+    u?.id ??
+    (await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.whatsappE164, fromE164)))[0]!.id;
+  await tx
+    .insert(schema.memberships)
+    .values({ userId: ownerId, tenantId, role: 'owner', status: 'active' })
+    .onConflictDoNothing();
+
+  // Every verified business starts on a free trial (idempotent: an existing
+  // subscription — e.g. re-pairing — is left untouched).
+  if (opts.trialPlan) {
+    const today = (opts.now ?? new Date()).toISOString().slice(0, 10);
+    const trial = startTrial(today, TRIAL_DAYS);
+    await tx
+      .insert(schema.subscriptions)
+      .values({ tenantId, planCode: opts.trialPlan, status: trial.status, currentPeriodEnd: trial.currentPeriodEnd })
+      .onConflictDoNothing();
+  }
+
+  await appendAudit(tx, tenantId, { actor: 'system', action: 'whatsapp_paired', detail: { fromE164, via } });
 }
 
 /**
@@ -197,6 +243,15 @@ export async function findTenantBySender(
 export const SUSPENDED_ACCOUNT_REPLY =
   'Your HisabKitab account is paused right now, so we cannot record or answer anything. ' +
   'Your data is safe and kept. Please contact us at hello@hisabkitab.pro to reactivate it.';
+
+/** An applicant messaging us before the operator has approved their application. */
+export function underReviewReply(businessName: string): string {
+  return (
+    `Namaste! 🙏 Your HisabKitab application for ${businessName} is with our team for review. ` +
+    'We check every pilot business by hand, usually within a day. ' +
+    'As soon as it is approved we will message you right here, and you can start straight away.'
+  );
+}
 
 export const ONBOARDING_PROMPT =
   'Namaste! 🙏 This is HisabKitab, a bookkeeping assistant for VAT-registered businesses. ' +
