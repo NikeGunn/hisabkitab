@@ -156,6 +156,22 @@ export const TEMPLATES: TemplateDefinition[] = [
       },
     ],
   },
+  // Owner notice: the operator changed this business's team from the admin panel
+  // (added / changed / removed someone). The owner must always know who can see
+  // their books. Account-status wording only, no names or numbers (Meta reads PII
+  // in an alert as INCORRECT_CATEGORY); the owner replies TEAM to see who.
+  {
+    name: 'team_access_update',
+    category: 'UTILITY',
+    language: 'en',
+    components: [
+      {
+        type: 'BODY',
+        text: 'Account update for {{1}}: {{2}}. Reply TEAM to see everyone who has access to your books.',
+        example: { body_text: [['Karki Hardware', 'HisabKitab support added an auditor with access for 30 days']] },
+      },
+    ],
+  },
   // Payment link with a URL button. The button points at OUR redirect
   // (/payments/go/<pidx>), never at Khalti directly, so the same approved template
   // works for sandbox and production Khalti without re-approval.

@@ -7,6 +7,8 @@
  *     WhatsApp) or Decline — nothing is sent to an applicant before Approve
  *   - set up a business by hand (WhatsApp verification code sent + shown once)
  *   - send a Khalti payment link, suspend / reactivate a business
+ *   - manage a business's team (Team page: add an accountant/auditor/tester for a
+ *     limited time, change or remove access; the owner is notified) — admin/team.ts
  *   - subscribe the app to a new WhatsApp account + submit missing templates
  *
  * Security: one scrypt-hashed password (ADMIN_PASSWORD_HASH; panel is DISABLED
@@ -46,6 +48,7 @@ import { PAIRING_TTL_MINUTES } from '../onboarding/pairing.js';
 import { isOwnSender } from '../signup/signup.js';
 import { dbNow, deliverApproval, deliverCode, latestDeliveries, retryNow, senderDegraded } from '../onboarding/delivery.js';
 import { describeDelivery } from '../onboarding/delivery-policy.js';
+import { registerTeamRoutes } from './team.js';
 
 export interface AdminDeps {
   db: Db; // hisab_orch
@@ -515,6 +518,7 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
         }
         const dv = delivery ? describeDelivery(delivery, dbClock) : undefined;
         if (t.status === 'active') {
+          actions.push(`<a class="btn ghost" href="/admin/tenants/${esc(t.id)}/team">Team</a>`);
           actions.push(form('payment-link', 'Send payment link', 'ghost', `<select name="plan" style="width:auto">${planOpts}</select>`));
           actions.push(form('suspend', 'Suspend', 'danger'));
         }
@@ -784,6 +788,18 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     } catch (err) {
       return back(reply, '/admin/tenants', 'bad', `Could not send the link: ${errText(err)}`);
     }
+  });
+
+  // ---- team access (admin/team.ts) ---------------------------------------------
+  registerTeamRoutes(app, {
+    db: deps.db,
+    sendTemplate: (to, template, params) => deps.sendTemplate(to, template, params),
+    html,
+    back,
+    flashOf,
+    csrf: (req) => csrf(req as Req),
+    event,
+    clientIp,
   });
 
   // ---- activity --------------------------------------------------------------

@@ -4,6 +4,7 @@
  * "upgrade to unlock" prompts. Plan PRICES live in @hisab/mcp-payments/plans.ts
  * (the billing source of truth); this maps the same plan CODES to capabilities.
  */
+import type { Role } from '../rbac/roles.js';
 
 export type PlanCode = 'starter' | 'pro' | 'business';
 
@@ -41,16 +42,16 @@ export type Feature =
   | 'vat_reminders' // monthly VAT return prep + nudge
   | 'arap' // debtors/creditors, statements, aging
   | 'reports' // professional PDF reports
-  | 'accountant_seat'; // an accountant membership
+  | 'accountant_seat'; // an accountant membership (record + confirm on the owner's behalf)
 
 /** Cumulative tiers: each plan includes everything cheaper plans have. */
 const PLAN_FEATURES: Record<PlanCode, readonly Feature[]> = {
   starter: ['logging', 'vat_reminders'],
-  pro: ['logging', 'vat_reminders', 'arap'],
+  pro: ['logging', 'vat_reminders', 'arap', 'accountant_seat'],
   business: ['logging', 'vat_reminders', 'arap', 'reports', 'accountant_seat'],
 };
 
-/** Max members (users) a plan allows. */
+/** Max members (users) a plan allows, INCLUDING the owner. Starter = the owner alone. */
 const PLAN_SEATS: Record<PlanCode, number> = { starter: 1, pro: 3, business: 10 };
 
 function isPlanCode(code: string): code is PlanCode {
@@ -74,4 +75,33 @@ export function minPlanFor(feature: Feature): PlanCode | null {
     if (PLAN_FEATURES[code].includes(feature)) return code;
   }
   return null;
+}
+
+/**
+ * Roles that need a specific plan feature on top of a free seat. Read-only roles
+ * (auditor, viewer) and staff only need a seat; an accountant (who can CONFIRM
+ * entries) needs the accountant seat feature.
+ */
+const ROLE_FEATURE: Partial<Record<Role, Feature>> = { accountant: 'accountant_seat' };
+
+export type SeatCheck =
+  | { ok: true; seats: number; used: number }
+  | { ok: false; reason: 'role_not_in_plan'; minPlan: PlanCode | null }
+  | { ok: false; reason: 'no_free_seat'; seats: number; used: number };
+
+/**
+ * May a business on `planCode`, already using `seatsUsed` seats (owner included),
+ * add one more member with `role`? Deny-by-default: an unknown plan has 0 seats,
+ * the owner role is never grantable here, and a garbled seat count (negative,
+ * fractional, NaN) fails closed instead of opening a seat.
+ */
+export function checkTeamSeat(planCode: string, role: Role, seatsUsed: number): SeatCheck {
+  const seats = planSeats(planCode);
+  if (role === 'owner') return { ok: false, reason: 'role_not_in_plan', minPlan: null };
+  const feature = ROLE_FEATURE[role];
+  if (feature && !planAllows(planCode, feature)) return { ok: false, reason: 'role_not_in_plan', minPlan: minPlanFor(feature) };
+  if (!Number.isInteger(seatsUsed) || seatsUsed < 0 || seatsUsed >= seats) {
+    return { ok: false, reason: 'no_free_seat', seats, used: Number.isFinite(seatsUsed) ? seatsUsed : seats };
+  }
+  return { ok: true, seats, used: seatsUsed };
 }

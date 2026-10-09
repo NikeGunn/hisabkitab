@@ -505,6 +505,21 @@ Chrome sends `Origin: null`): gate is now `isSameOriginPost` (Fetch Metadata) + 
 signup loop); own sender number refused at signup/admin create. **Open decision:** billing-suspended
 subscriptions still get full agent access (PRD says read-only + renew prompt).
 
+**✅ Team access — auditor role, seats, admin Team page (2026-10-09, migration 0023):** one team core
+(`identity/membership.ts`) drives BOTH the owner's WhatsApp commands (`add 98… as auditor [for N days]`,
+`change 98… to viewer`, `remove 98…`, `team`; strict anchored grammar so "add 25000000 staff salary" is
+never an invite) and admin → Businesses → **Team** (`admin/team.ts`: role cards, access length, Resend,
+Remove, audited "testing/support" plan override; owner gets `team_access_update` on every support change).
+New read-only **auditor** role (`generate_report` + new `audit_trail` cap; `verify_audit_chain` now needs
+`audit_trail`, so viewer/staff lost it). Seats enforced under a per-tenant advisory lock (Starter 1 /
+Pro 3 / Business 10, owner included; accountant needs `accountant_seat`, now Pro+; no subscription =
+starter). `expires_at` checked in `resolveMembership` on every message; invites answerable 7 days;
+removed/expired members get a plain "access ended" reply. Fixed: chat invites stored the raw typed number
+(`98…`) but WhatsApp sends `+977…`, so JOIN never matched — everything now goes through `normalizePhone`.
+One number = one business until "switch business" (§4): inviting a number active elsewhere is refused.
+Pricing page (`/pay`) has the plan comparison + roles. `team_access_update` template must be submitted
+(admin → Submit missing templates) before owner notices deliver.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.

@@ -27,15 +27,20 @@ export interface Plan {
 const PLAN_COPY: Record<PlanCode, { blurb: string; features: string[] }> = {
   starter: {
     blurb: 'For a solo shop finding its rhythm.',
-    features: ['Log by photo or text', 'VAT reminders', 'Nil return prep', '1 user'],
+    features: ['Log by photo or text', 'VAT reminders', 'Nil return prep', 'Just you (the owner)'],
   },
   pro: {
     blurb: 'For a growing business with credit customers.',
-    features: ['Everything in Starter', 'Debtors and creditors', 'Statements and aging', '3 users'],
+    features: [
+      'Everything in Starter',
+      'Debtors and creditors',
+      'Statements and aging',
+      'Up to 3 people: add an accountant, auditor, staff or viewer',
+    ],
   },
   business: {
     blurb: 'For an established SMB and its accountant.',
-    features: ['Everything in Pro', 'All PDF reports', 'Accountant seat', 'Priority support'],
+    features: ['Everything in Pro', 'All PDF reports', 'Up to 10 people', 'Priority support'],
   },
 };
 

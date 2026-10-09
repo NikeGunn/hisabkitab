@@ -6,10 +6,11 @@ import { can, assertCan, isRole, RoleError, ROLES, CAPABILITIES, type Role, type
 // The PRD §3 matrix, transcribed once. ✅ = allowed. Tests below are generated
 // from this, so adding a capability/role forces an explicit decision here.
 const MATRIX: Record<Role, Record<Capability, boolean>> = {
-  owner: { record_entry: true, confirm_entry: true, generate_report: true, prepare_vat: true, move_money: true, manage_billing: true },
-  accountant: { record_entry: true, confirm_entry: true, generate_report: true, prepare_vat: true, move_money: false, manage_billing: false },
-  staff: { record_entry: true, confirm_entry: false, generate_report: false, prepare_vat: false, move_money: false, manage_billing: false },
-  viewer: { record_entry: false, confirm_entry: false, generate_report: true, prepare_vat: false, move_money: false, manage_billing: false },
+  owner: { record_entry: true, confirm_entry: true, generate_report: true, prepare_vat: true, move_money: true, manage_billing: true, audit_trail: true },
+  accountant: { record_entry: true, confirm_entry: true, generate_report: true, prepare_vat: true, move_money: false, manage_billing: false, audit_trail: true },
+  auditor: { record_entry: false, confirm_entry: false, generate_report: true, prepare_vat: false, move_money: false, manage_billing: false, audit_trail: true },
+  staff: { record_entry: true, confirm_entry: false, generate_report: false, prepare_vat: false, move_money: false, manage_billing: false, audit_trail: false },
+  viewer: { record_entry: false, confirm_entry: false, generate_report: true, prepare_vat: false, move_money: false, manage_billing: false, audit_trail: false },
 };
 
 describe('can() — full PRD §3 matrix', () => {
@@ -34,6 +35,7 @@ describe('headline guarantees', () => {
     for (const cap of ['move_money', 'manage_billing'] as const) {
       expect(can('owner', cap)).toBe(true);
       expect(can('accountant', cap)).toBe(false);
+      expect(can('auditor', cap)).toBe(false);
       expect(can('staff', cap)).toBe(false);
       expect(can('viewer', cap)).toBe(false);
     }
@@ -43,6 +45,16 @@ describe('headline guarantees', () => {
     expect(can('viewer', 'generate_report')).toBe(true);
     expect(can('viewer', 'record_entry')).toBe(false);
     expect(can('viewer', 'confirm_entry')).toBe(false);
+  });
+});
+
+describe('auditor is strictly read-only', () => {
+  it('PROBE: an auditor can never write, confirm, prepare VAT, move money or manage users', () => {
+    for (const cap of ['record_entry', 'confirm_entry', 'prepare_vat', 'move_money', 'manage_billing'] as const) {
+      expect(can('auditor', cap)).toBe(false);
+    }
+    expect(can('auditor', 'generate_report')).toBe(true);
+    expect(can('auditor', 'audit_trail')).toBe(true);
   });
 });
 

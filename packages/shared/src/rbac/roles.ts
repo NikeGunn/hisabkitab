@@ -12,7 +12,7 @@
  */
 
 /** A membership role. Order = privilege, but capability is decided by the matrix. */
-export type Role = 'owner' | 'accountant' | 'staff' | 'viewer';
+export type Role = 'owner' | 'accountant' | 'auditor' | 'staff' | 'viewer';
 
 /** Server-enforced capabilities (PRD §3 matrix rows). */
 export type Capability =
@@ -21,7 +21,8 @@ export type Capability =
   | 'generate_report' // pull statements / PDF reports / summaries
   | 'prepare_vat' // prepare / mark a VAT return
   | 'move_money' // initiate / refund a payment
-  | 'manage_billing' // subscription + user management;
+  | 'manage_billing' // subscription + user management
+  | 'audit_trail'; // verify the tamper-evident audit log (the auditor's core job)
 
 /** Stable bit per capability (used to pack the per-role masks below). */
 const BIT: Record<Capability, number> = {
@@ -31,9 +32,10 @@ const BIT: Record<Capability, number> = {
   prepare_vat: 1 << 3,
   move_money: 1 << 4,
   manage_billing: 1 << 5,
+  audit_trail: 1 << 6,
 };
 
-export const ROLES: readonly Role[] = ['owner', 'accountant', 'staff', 'viewer'];
+export const ROLES: readonly Role[] = ['owner', 'accountant', 'auditor', 'staff', 'viewer'];
 export const CAPABILITIES = Object.keys(BIT) as readonly Capability[];
 
 /** Pack a capability list into a single mask (build-time only). */
@@ -41,17 +43,23 @@ const mask = (...caps: Capability[]): number => caps.reduce((m, c) => m | BIT[c]
 
 /**
  * The PRD §3 permission matrix, as one bitmask per role:
- *   | Capability        | Owner | Accountant | Staff | Viewer |
- *   | record (draft)    |  ✅   |    ✅      |  ✅   |   ❌   |
- *   | confirm (save)    |  ✅   |    ✅      |  ❌   |   ❌   |
- *   | generate report   |  ✅   |    ✅      |  ❌   |   ✅   |
- *   | prepare VAT       |  ✅   |    ✅      |  ❌   |   ❌   |
- *   | move money        |  ✅   |    ❌      |  ❌   |   ❌   |
- *   | manage users/bill |  ✅   |    ❌      |  ❌   |   ❌   |
+ *   | Capability        | Owner | Accountant | Auditor | Staff | Viewer |
+ *   | record (draft)    |  ✅   |    ✅      |   ❌    |  ✅   |   ❌   |
+ *   | confirm (save)    |  ✅   |    ✅      |   ❌    |  ❌   |   ❌   |
+ *   | generate report   |  ✅   |    ✅      |   ✅    |  ❌   |   ✅   |
+ *   | prepare VAT       |  ✅   |    ✅      |   ❌    |  ❌   |   ❌   |
+ *   | move money        |  ✅   |    ❌      |   ❌    |  ❌   |   ❌   |
+ *   | manage users/bill |  ✅   |    ❌      |   ❌    |  ❌   |   ❌   |
+ *   | audit trail       |  ✅   |    ✅      |   ✅    |  ❌   |   ❌   |
+ *
+ * The auditor is strictly READ-ONLY (it can never write, confirm, or move money):
+ * it reads every report and verifies the tamper-evident audit chain. The viewer
+ * reads reports only.
  */
 const ROLE_MASK: Record<Role, number> = {
-  owner: mask('record_entry', 'confirm_entry', 'generate_report', 'prepare_vat', 'move_money', 'manage_billing'),
-  accountant: mask('record_entry', 'confirm_entry', 'generate_report', 'prepare_vat'),
+  owner: mask('record_entry', 'confirm_entry', 'generate_report', 'prepare_vat', 'move_money', 'manage_billing', 'audit_trail'),
+  accountant: mask('record_entry', 'confirm_entry', 'generate_report', 'prepare_vat', 'audit_trail'),
+  auditor: mask('generate_report', 'audit_trail'),
   staff: mask('record_entry'),
   viewer: mask('generate_report'),
 };
