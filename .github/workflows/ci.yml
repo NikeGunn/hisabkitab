@@ -189,7 +189,7 @@ jobs:
       - name: Smoke test ${{ matrix.service }} boots and serves /healthz
         if: matrix.service != 'orchestrator'
         run: |
-          docker run -d --name smoke -p 8080:8080 \
+          docker run -d --name smoke -p 8080:8080 -e LAB_HOST=0.0.0.0 \
             -e LEDGER_MCP_TOKEN=ci -e PAYMENTS_MCP_TOKEN=ci -e TALLY_MCP_TOKEN=ci \
             -e TENANT_SIGNING_SECRET=ci-secret-123 \
             -e DATABASE_URL=postgres://x:y@localhost:5432/z \
