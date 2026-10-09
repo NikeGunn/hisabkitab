@@ -6,7 +6,7 @@
 #   ssh -i hisab.pem ubuntu@<ip> 'bash /tmp/bootstrap.sh'
 #
 # Installs: swap, Docker + Compose, Caddy (auto-TLS), ufw (22/80/443), fail2ban,
-# unattended-upgrades, nightly DB backup + 5-min health watchdog (cron), then
+# unattended-upgrades, nightly DB backup + daily image prune + 5-min health watchdog (cron), then
 # clones the repo to /opt/hisabkitab and starts the prod stack from GHCR.
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -59,10 +59,7 @@ sudo install -m 644 /tmp/Caddyfile.rendered /etc/caddy/Caddyfile
 sudo systemctl enable caddy >/dev/null && sudo systemctl reload-or-restart caddy
 
 # --- ops automation ---
-sudo install -m 750 "$HERE/hisab-backup.sh" /usr/local/bin/hisab-backup
-sudo install -m 750 "$HERE/hisab-watchdog.sh" /usr/local/bin/hisab-watchdog
-printf '30 2 * * * root /usr/local/bin/hisab-backup\n*/5 * * * * root /usr/local/bin/hisab-watchdog\n' \
-  | sudo tee /etc/cron.d/hisabkitab >/dev/null
+bash "$HERE/install-ops.sh" # backup + watchdog + disk guard + cron + journal cap (CD re-runs it)
 
 # --- start the stack (CD takes over image tags from here) ---
 cd "$APP"

@@ -519,7 +519,7 @@ subscriptions still get full agent access (PRD says read-only + renew prompt).
 VM runs ONLY hisabkitab; kribaat.com is a DIFFERENT server, 43.152.233.234, never touch). The old VM
 (43.128.216.245) was deleted with its data; the new one started from an empty DB. **The host is now
 infra-as-code: `infra/vm/bootstrap.sh`** (idempotent: swap, Docker, Caddy, ufw 22/80/443, fail2ban,
-unattended-upgrades, nightly `pg_dump` backup 14d, 5-min health watchdog, clone + compose up) +
+unattended-upgrades, nightly `pg_dump` backup 14d, 5-min health watchdog, daily disk guard, clone + compose up) +
 `infra/vm/Caddyfile` (api.hisabkitab.pro + `<ip>.sslip.io` fallback; /ledger /payments /tally prefix
 routes; **/metrics 403 via a `handle` block — a bare `respond` loses to `handle_path` and leaked
 metrics**). Rebuild a lost VM = prod `.env` + `bootstrap.sh` (runbook `docs/DEPLOY.md §1`). All 18
@@ -527,6 +527,15 @@ migrations applied; 4 services healthy; cold reboot self-heals <90s. CD (`DEPLOY
 deployed sha-12652a4 green. Agent v11 already targets `https://api.hisabkitab.pro/{ledger,payments}/mcp`.
 Meta status (Graph-checked): ALL templates APPROVED, WABA APPROVED; business verification still in
 Meta review — NO public API exists to submit/expedite; resubmit only offered after a REJECTION.
+
+**✅ Disk guard + skills sync (2026-10-09):** every deploy left its ~3 GB of images behind (disk hit 66%,
+74 images; pruned to 26%). `infra/vm/hisab-prune.sh` keeps the newest 3 deploys (rollback), escalates at
+75%/85% (keep 2/1, apt + journal cleanup), never touches volumes/backups/in-use images, steps aside during a
+deploy, flock-locked. `infra/vm/install-ops.sh` is the ONE place for backup/watchdog/prune + cron + journald
+cap (200M); bootstrap AND every CD deploy run it, then the guard. Admin Overview shows a Server card + red
+DISK ALMOST FULL banner at >=85% (`admin/server-health.ts`, same tiers). Live agent v12 = local minus the
+TALLYPRIME paragraph and the tally-accounts skill (Tally not attached in prod, by design): push a changed
+skill with a single `skills.versions.create`, NEVER `agent:setup --update` (it would add Tally).
 
 **✅ Template billing shield (2026-10-08):** Meta re-categorised 3 dunning templates as MARKETING;
 replaced by `plan_renewal_notice`/`plan_ended_notice`/`plan_paused_notice` (plain "Account update" wording).

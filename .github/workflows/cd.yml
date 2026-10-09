@@ -112,7 +112,16 @@ jobs:
             git pull --ff-only origin main || true
             docker compose -f compose.yaml -f compose.prod.yaml pull
             docker compose -f compose.yaml -f compose.prod.yaml up -d --remove-orphans
-            docker image prune -f
+            # Refresh host ops from the repo (disk guard, backup, watchdog, cron), then
+            # drop images beyond the newest 3 deploys so the disk never fills. A guard
+            # failure must not fail an otherwise-good deploy, so it only warns.
+            if sudo -n true 2>/dev/null; then
+              bash infra/vm/install-ops.sh || echo "::warning::install-ops failed"
+              sudo -n /usr/local/bin/hisab-prune || echo "::warning::disk guard reported a problem"
+            else
+              docker image prune -f
+              echo "::warning::no passwordless sudo: disk guard not refreshed"
+            fi
             echo "Deployed sha-${GITHUB_SHA}"
 
       - name: Post-deploy health check
