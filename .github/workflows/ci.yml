@@ -143,19 +143,7 @@ jobs:
       # this fails the PR before any human looks at it.
       - name: Rehearsal Lab regression gate
         working-directory: agents-learning
-        run: |
-          pnpm lab eval --agent careful --split all
-          pnpm lab eval --agent policy:rules --split all
-          pnpm lab eval --agent policy:research/weights/grpo-v1_judge-seed0.json --split test
-          node -e "
-            const r = (f) => require('./reports/' + f);
-            const bad = [];
-            for (const f of ['careful-all.json', 'policy_rules-all.json']) if (r(f).pass_rate !== 1) bad.push(f + ' pass_rate ' + r(f).pass_rate);
-            const p = r('policy_research_weights_grpo-v1_judge-seed0.json-test.json');
-            if (p.hard_violations !== 0) bad.push('learned policy has ' + p.hard_violations + ' hard violations on test');
-            if (bad.length) { console.error(bad.join('
-')); process.exit(1); }
-            console.log('regression gate PASS');"
+        run: pnpm lab weekly
 
   # ── research layer (Python + numpy): gradient checks, stats, GRPO on a known bandit ──
   research:
