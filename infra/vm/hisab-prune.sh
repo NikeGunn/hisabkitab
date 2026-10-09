@@ -33,8 +33,11 @@ used_pct() { df --output=pcent / | tail -1 | tr -dc '0-9'; }
 
 docker info >/dev/null 2>&1 || { log -p user.err "docker unreachable, nothing done"; exit 1; }
 # Never race a deploy: while compose is pulling/starting, step aside (the deploy runs
-# this guard itself right after `up`).
-if pgrep -af 'docker[- ]compose' | grep -Eq ' (pull|up)( |$)'; then
+# this guard itself right after `up`). Match only processes whose NAME is docker /
+# docker-compose (pgrep -x on the process name): a shell script whose command line
+# merely CONTAINS "docker compose pull" (exactly how CD runs its deploy script, with
+# this guard inside it) must not count, or the post-deploy run would skip itself.
+if pgrep -a -x 'docker|docker-compose' | grep -Eq ' (pull|up)( |$)'; then
   log "deploy in progress, skipping (the deploy runs the guard after up)"
   exit 0
 fi
