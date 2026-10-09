@@ -196,7 +196,7 @@ export const TOOL_CAPABILITY: Record<keyof typeof inputSchemas, Capability> = {
   get_vendor: 'generate_report',
   generate_return_summary: 'generate_report',
   verify_filing_deadline: 'generate_report',
-  verify_audit_chain: 'generate_report',
+  verify_audit_chain: 'audit_trail', // owner, accountant, auditor (not viewer/staff)
   get_cost_summary: 'generate_report',
   get_receivables_summary: 'generate_report',
   get_payables_summary: 'generate_report',

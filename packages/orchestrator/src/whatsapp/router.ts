@@ -23,11 +23,13 @@ import {
 import {
   resolveMembership,
   isMemberOfSuspendedTenant,
-  parseInviteCommand,
+  parseTeamCommand,
   isAcceptCommand,
-  inviteMember,
   acceptInvite,
+  endedAccess,
+  ROLE_ACCESS,
 } from '../identity/membership.js';
+import { endedAccessReply, handleTeamCommand, memberWelcome } from '../identity/team-chat.js';
 import { attachInboundMedia } from './media.js';
 import { scanForCredentials, CREDENTIAL_REFUSAL } from '../security/credential-guard.js';
 import { TenantRateLimiter, RATE_LIMITED_REPLY } from '../resilience/rate-limit.js';
@@ -130,40 +132,6 @@ export function todayContext(now: Date): string {
   return `[Context: today in Nepal is AD ${ad}${bs}. Use it for "today"/"aaja" unless the owner gives another date.]`;
 }
 
-/** Reply to an owner's invite command (PRD v2.0 §3). */
-function inviteReply(
-  res: ReturnType<typeof inviteMember> extends Promise<infer R> ? R : never,
-): string {
-  switch (res.kind) {
-    case 'invited':
-      return (
-        `Invite sent to ${res.inviteE164} as ${res.role}. 🙌 They'll get a WhatsApp message from me; ` +
-        `they reply "JOIN" from that number to accept. They'll get ${res.role} access only.`
-      );
-    case 'already_member':
-      return `That number is already on your team (as ${res.role}). Nothing to do.`;
-    case 'not_owner':
-      return 'Only the business owner can add team members. Please ask the owner to do this.';
-    case 'bad_role':
-      return 'You can add someone as accountant, staff, or viewer. For example: "add 98XXXXXXXX as accountant".';
-    case 'bad_number':
-      return 'I couldn\'t read that phone number. Try the full number, e.g. "add 9779812345678 as staff".';
-  }
-}
-
-/** Welcome a newly joined member, stating their (limited) access. */
-function memberWelcome(businessName: string, role: string): string {
-  const access: Record<string, string> = {
-    accountant: 'record and confirm entries, prepare VAT, and pull reports',
-    staff: 'record draft entries (the owner or accountant confirms them)',
-    viewer: 'view reports and summaries',
-  };
-  return (
-    `You've joined ${businessName} as ${role}. 🎉 You can ${access[role] ?? 'use HisabKitab'}. ` +
-    `Money actions and team changes stay with the owner.`
-  );
-}
-
 /**
  * True when the message was processed; false when deduped as a retry.
  *
@@ -242,7 +210,7 @@ async function handleClaimed(
       if (isAcceptCommand(msg.text)) {
         const accepted = await acceptInvite(deps.db, msg.fromE164);
         if (accepted.kind === 'accepted') {
-          await send(msg.fromE164, memberWelcome(accepted.businessName, accepted.role));
+          await send(msg.fromE164, memberWelcome(accepted.businessName, accepted.role, accepted.expiresAt));
           return true;
         }
       }
@@ -267,7 +235,10 @@ async function handleClaimed(
           'That code is not valid (or has expired). Please check it, or contact us for a new one.',
         );
       } else {
-        await send(msg.fromE164, ONBOARDING_PROMPT);
+        // A former team member (removed / time-limited access ran out): say so
+        // plainly instead of pointing them at the signup form.
+        const ended = await endedAccess(deps.db, msg.fromE164);
+        await send(msg.fromE164, ended ? endedAccessReply(ended.businessName, ended.why) : ONBOARDING_PROMPT);
       }
       return true;
     }
@@ -277,20 +248,26 @@ async function handleClaimed(
     // is tagged {correlation_id, tenant_id} without re-passing them.
     const tlog = obs.log.child({ tenant_id: tenant.tenantId, role: member.role });
 
-    // Owner-only invite command, handled BEFORE the agent turn so the model never
-    // sees it as a normal request and a non-owner can never grant a seat. Authority
-    // comes from `member.role` (the verified session), not the message text.
-    const invite = parseInviteCommand(msg.text);
-    if (invite) {
-      const res = await inviteMember(deps.db, member, invite.e164, invite.role);
-      if (res.kind === 'invited') {
-        // The invitee has never messaged us, so only an approved template reaches
-        // them. Best-effort: the invite row exists either way and JOIN still works.
-        await deps.wa
-          .sendTemplate(res.inviteE164, 'team_invite', [member.businessName, res.role])
-          .catch((err) => tlog.warn('team_invite send failed', { error: String(err) }));
-      }
-      await send(msg.fromE164, inviteReply(res));
+    // Owner-only team commands (add / change / remove / team), handled BEFORE the
+    // agent turn so the model never sees them as a normal request and a non-owner
+    // can never change the team. Authority comes from `member.role` (the verified
+    // session), not the message text.
+    const teamCmd = parseTeamCommand(msg.text);
+    if (teamCmd) {
+      const reply = await handleTeamCommand(
+        {
+          db: deps.db,
+          // The invitee has never messaged us, so only an approved template reaches them.
+          sendInvite: (to, businessName, role) =>
+            deps.wa
+              .sendTemplate(to, 'team_invite', [businessName, role])
+              .then(() => undefined)
+              .catch((err) => tlog.warn('team_invite send failed', { error: String(err) })),
+        },
+        member,
+        teamCmd,
+      );
+      await send(msg.fromE164, reply);
       return true;
     }
 
@@ -392,7 +369,13 @@ async function handleClaimed(
     const turnStart = Date.now();
     // The agent has no clock: without this it guessed "today" a year off and
     // recorded a sale as backdated. Nepal date, AD + BS, from the server clock.
-    const turn = await runTurn(deps.anthropic, sessionId, `${todayContext(new Date())}\n${turnText}`, {
+    // A team member (not the owner) is told their role so the agent never offers an
+    // action the tools will refuse. A HINT only: the MCP tools enforce the role.
+    const roleContext =
+      member.role === 'owner'
+        ? ''
+        : `[Context: this message is from a team member with the ${member.role} role. They can ${ROLE_ACCESS[member.role]}. Do not offer anything else; money actions and team changes are the owner's.]\n`;
+    const turn = await runTurn(deps.anthropic, sessionId, `${todayContext(new Date())}\n${roleContext}${turnText}`, {
       ...(msg.text ? { ownerText: msg.text } : {}),
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,

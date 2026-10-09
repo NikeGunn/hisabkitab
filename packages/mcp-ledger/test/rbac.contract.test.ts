@@ -14,12 +14,12 @@ const TODAY_ISO = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStar
 
 let handle: DbHandle;
 let tenantId: string;
-const sessions: Partial<Record<'owner' | 'accountant' | 'staff' | 'viewer', TestSession>> = {};
+const sessions: Partial<Record<'owner' | 'accountant' | 'auditor' | 'staff' | 'viewer', TestSession>> = {};
 
 beforeAll(async () => {
   handle = appDb();
   tenantId = await createTenant('RBAC Traders');
-  for (const role of ['owner', 'accountant', 'staff', 'viewer'] as const) {
+  for (const role of ['owner', 'accountant', 'auditor', 'staff', 'viewer'] as const) {
     sessions[role] = await openSession(handle, tenantId, role);
   }
 });
@@ -107,5 +107,31 @@ describe('prepare_vat — owner/accountant only', () => {
     });
     expect(r.isError).toBe(true);
     expect(denied(r.text)).toBe(true);
+  });
+});
+
+describe('auditor — strictly read-only, plus the audit trail', () => {
+  it('an auditor may pull reports and verify the audit chain', async () => {
+    expect((await sessions.auditor!.callToolRaw('list_transactions', { bs_year: 2080, bs_month: 1 })).isError).toBeFalsy();
+    expect((await sessions.auditor!.callToolRaw('verify_audit_chain', {})).isError).toBeFalsy();
+  });
+
+  it('PROBE: an auditor can never record, confirm or mark a return (writes nothing)', async () => {
+    const rec = await sessions.auditor!.callToolRaw('record_sale', { occurred_on: TODAY_ISO, amount_paisa: 113000, inclusive: true });
+    expect(rec.isError).toBe(true);
+    expect(rec.text).toMatch(/auditor/);
+    const conf = await sessions.auditor!.callToolRaw('confirm_entry', { entry_type: 'sale', entry_id: '00000000-0000-0000-0000-000000000000' });
+    expect(conf.isError).toBe(true);
+    expect(denied(conf.text)).toBe(true);
+    const ret = await sessions.auditor!.callToolRaw('mark_return_filed_by_user', { return_id: '00000000-0000-0000-0000-000000000000' });
+    expect(denied(ret.text)).toBe(true);
+  });
+
+  it('PROBE: the audit trail is not open to viewer or staff', async () => {
+    for (const role of ['viewer', 'staff'] as const) {
+      const r = await sessions[role]!.callToolRaw('verify_audit_chain', {});
+      expect(r.isError).toBe(true);
+      expect(denied(r.text)).toBe(true);
+    }
   });
 });

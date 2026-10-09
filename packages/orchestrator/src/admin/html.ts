@@ -34,7 +34,11 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px 6px;
 input,select,textarea{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
 label{display:block;font-weight:600;margin:10px 0 4px}small,.mut{color:var(--mut)}
 button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:7px 12px;background:var(--brand);color:#fff;font-weight:600}
-button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}button.danger{background:var(--bad)}
+button.ghost,a.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}button.danger{background:var(--bad)}
+a.btn{display:inline-block;text-decoration:none;border-radius:8px;padding:7px 12px;font-weight:600}
+.opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px;margin:6px 0;font-weight:400;cursor:pointer}
+.opt input{width:auto;margin-top:3px}.opt:has(input:checked){border-color:var(--brand)}
+tr.mut td{color:var(--mut)}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.flash{padding:10px 12px;border-radius:10px;margin-bottom:12px;border:1px solid currentColor}
 code{font-size:12px;background:var(--bg);padding:1px 5px;border-radius:5px;word-break:break-all}
 .kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px}

@@ -97,11 +97,18 @@ export const memberships = pgTable(
     tenantId: uuid('tenant_id')
       .notNull()
       .references(() => tenants.id),
-    role: text('role', { enum: ['owner', 'accountant', 'staff', 'viewer'] }).notNull(),
+    role: text('role', { enum: ['owner', 'accountant', 'auditor', 'staff', 'viewer'] }).notNull(),
     status: text('status', { enum: ['invited', 'active', 'revoked'] })
       .notNull()
       .default('invited'),
     invitedBy: uuid('invited_by').references(() => users.id),
+    /** Access ends at this instant (NULL = until removed). Never set on an owner. */
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    grantedVia: text('granted_via', { enum: ['chat', 'admin', 'system'] })
+      .notNull()
+      .default('system'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedVia: text('revoked_via', { enum: ['chat', 'admin', 'system'] }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
