@@ -49,6 +49,7 @@ import { isOwnSender } from '../signup/signup.js';
 import { dbNow, deliverApproval, deliverCode, latestDeliveries, retryNow, senderDegraded } from '../onboarding/delivery.js';
 import { describeDelivery } from '../onboarding/delivery-policy.js';
 import { registerTeamRoutes } from './team.js';
+import { registerLabRoutes } from './lab.js';
 
 export interface AdminDeps {
   db: Db; // hisab_orch
@@ -801,6 +802,9 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
     event,
     clientIp,
   });
+
+  // ---- agent lab (admin/lab.ts) ------------------------------------------------
+  registerLabRoutes(app, { db: deps.db, html, back, flashOf, csrf: (req) => csrf(req as Req), event, clientIp });
 
   // ---- activity --------------------------------------------------------------
   app.get('/admin/events', async (req: Req, reply) => {

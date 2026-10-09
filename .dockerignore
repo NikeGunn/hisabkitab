@@ -17,8 +17,16 @@ landing
 infra
 docs
 **/*.md
+# …except the agent's skill files: the Rehearsal Lab loads them into the real system prompt.
+!packages/orchestrator/skills/**/SKILL.md
 **/test
 **/*.test.ts
 **/vitest.config.ts
 .vscode
 .idea
+
+# Rehearsal Lab artifacts that never belong in an image
+agents-learning/reports
+agents-learning/research/results
+**/__pycache__
+**/.pytest_cache

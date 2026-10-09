@@ -38,6 +38,43 @@ importers:
         specifier: ^8.70.1
         version: 8.70.1(eslint@9.39.4)(typescript@5.9.3)
 
+  agents-learning:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.105.0
+        version: 0.105.0(zod@4.6.5)
+      '@hisab/mcp-ledger':
+        specifier: workspace:*
+        version: link:../packages/mcp-ledger
+      '@hisab/orchestrator':
+        specifier: workspace:*
+        version: link:../packages/orchestrator
+      '@hisab/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
+      langsmith:
+        specifier: 0.10.9
+        version: 0.10.9(@opentelemetry/api@1.9.1)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.0
+        version: 20.19.43
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+
   packages/db:
     dependencies:
       '@hisab/shared':
@@ -45,7 +82,7 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.45.3
-        version: 0.45.3(gel@2.2.0)(postgres@3.4.9)
+        version: 0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -79,7 +116,7 @@ importers:
         version: 1.31.0(zod@4.6.5)
       drizzle-orm:
         specifier: ^0.45.3
-        version: 0.45.3(gel@2.2.0)(postgres@3.4.9)
+        version: 0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -98,7 +135,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/mcp-payments:
     dependencies:
@@ -116,7 +153,7 @@ importers:
         version: 1.31.0(zod@4.6.5)
       drizzle-orm:
         specifier: 0.45.3
-        version: 0.45.3(gel@2.2.0)(postgres@3.4.9)
+        version: 0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -135,7 +172,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/mcp-tally:
     dependencies:
@@ -153,7 +190,7 @@ importers:
         version: 1.31.0(zod@4.6.5)
       drizzle-orm:
         specifier: 0.45.3
-        version: 0.45.3(gel@2.2.0)(postgres@3.4.9)
+        version: 0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -175,7 +212,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/orchestrator:
     dependencies:
@@ -199,7 +236,7 @@ importers:
         version: 6.3.11(ioredis@6.0.0)
       drizzle-orm:
         specifier: 0.45.3
-        version: 0.45.3(gel@2.2.0)(postgres@3.4.9)
+        version: 0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9)
       fastify:
         specifier: ^5.12.1
         version: 5.12.5
@@ -233,7 +270,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/shared:
     dependencies:
@@ -255,7 +292,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
   packages/tally-connector:
     dependencies:
@@ -280,7 +317,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.11
-        version: 4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
 
 packages:
 
@@ -771,6 +808,10 @@ packages:
 
   '@nodable/entities@3.1.0':
     resolution: {integrity: sha512-LsS/DjHr+uDM647Gru/cA8+J3a3HfhttwCKLyuoyN7yXTFCxKBtSgMQBvrW9yNPa2/zDRUNuGPaH5QUFoa4arQ==}
+
+  '@opentelemetry/api@1.9.1':
+    resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
+    engines: {node: '>=8.0.0'}
 
   '@oxc-project/types@0.133.0':
     resolution: {integrity: sha512-KzkdCd6Uxqnf6l3HOw1xfatAlUURA0g14cvBYFyJ5SaNOQbOUvBr9PKArcPcrNIeRsBdgcUzOGrhKveVpvOIGA==}
@@ -1458,6 +1499,9 @@ packages:
     resolution: {integrity: sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==}
     engines: {node: '>= 0.6'}
 
+  eventemitter3@4.0.7:
+    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
+
   eventsource-parser@3.1.1:
     resolution: {integrity: sha512-EKN1vKAMcZ8MlYMpaNuxN6R9yakzH6uajHcHVTqWJzvu5pWw9DyhbP35HH8MVBQ+dZjAfDxk+A8NiR9KWaXiyQ==}
     engines: {node: '>=18.0.0'}
@@ -1742,6 +1786,26 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
+  langsmith@0.10.9:
+    resolution: {integrity: sha512-2dtQLOtX0GQZzw5n+n+m+/9wdBaFvSyFQpGu2GXVpjCKCkzJktoVDZIYQ/aHQXEEeNr+xXMscPDv7Cogbcy0yA==}
+    peerDependencies:
+      '@opentelemetry/api': '*'
+      '@opentelemetry/exporter-trace-otlp-proto': '*'
+      '@opentelemetry/sdk-trace-base': '*'
+      openai: '*'
+      ws: '>=7'
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+      '@opentelemetry/exporter-trace-otlp-proto':
+        optional: true
+      '@opentelemetry/sdk-trace-base':
+        optional: true
+      openai:
+        optional: true
+      ws:
+        optional: true
+
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
@@ -1928,6 +1992,10 @@ packages:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
 
+  p-finally@1.0.0:
+    resolution: {integrity: sha512-LICb2p9CB7FS+0eR1oqWnHhp0FljGLZCWBE9aix0Uye9W8LTQPwMTYVGWQWIw9RdQiDg4+epXQODwIYJtSJaow==}
+    engines: {node: '>=4'}
+
   p-limit@3.1.0:
     resolution: {integrity: sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==}
     engines: {node: '>=10'}
@@ -1935,6 +2003,14 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  p-queue@6.6.2:
+    resolution: {integrity: sha512-RwFpb72c/BhQLEXIZ5K2e+AhgNVmIejGlTgiB9MzZ0e93GRvqZ7uSi0dvRF7/XIXDeNkra2fNHBxTyPDGySpjQ==}
+    engines: {node: '>=8'}
+
+  p-timeout@3.2.0:
+    resolution: {integrity: sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg==}
+    engines: {node: '>=8'}
 
   pako@0.2.9:
     resolution: {integrity: sha512-NUcwaKxUxWrZLpDG+z/xZaCgQITkA/Dv4V/T6bw7VON6l1Xz/VnrBqrYjZQ12TamKHzITTfOEIYUj48y2KXImA==}
@@ -2862,6 +2938,9 @@ snapshots:
 
   '@nodable/entities@3.1.0': {}
 
+  '@opentelemetry/api@1.9.1':
+    optional: true
+
   '@oxc-project/types@0.133.0': {}
 
   '@petamoriken/float16@3.9.3': {}
@@ -3324,8 +3403,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.45.3(gel@2.2.0)(postgres@3.4.9):
+  drizzle-orm@0.45.3(@opentelemetry/api@1.9.1)(gel@2.2.0)(postgres@3.4.9):
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       gel: 2.2.0
       postgres: 3.4.9
 
@@ -3468,6 +3548,8 @@ snapshots:
   esutils@2.0.3: {}
 
   etag@1.8.1: {}
+
+  eventemitter3@4.0.7: {}
 
   eventsource-parser@3.1.1: {}
 
@@ -3803,6 +3885,12 @@ snapshots:
     dependencies:
       json-buffer: 3.0.1
 
+  langsmith@0.10.9(@opentelemetry/api@1.9.1):
+    dependencies:
+      p-queue: 6.6.2
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.1
+
   levn@0.4.1:
     dependencies:
       prelude-ls: 1.2.1
@@ -3962,6 +4050,8 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
+  p-finally@1.0.0: {}
+
   p-limit@3.1.0:
     dependencies:
       yocto-queue: 0.1.0
@@ -3969,6 +4059,15 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  p-queue@6.6.2:
+    dependencies:
+      eventemitter3: 4.0.7
+      p-timeout: 3.2.0
+
+  p-timeout@3.2.0:
+    dependencies:
+      p-finally: 1.0.0
 
   pako@0.2.9: {}
 
@@ -4401,7 +4500,7 @@ snapshots:
       fsevents: 2.3.3
       tsx: 4.23.15
 
-  vitest@4.1.11(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15)):
+  vitest@4.1.11(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15))
@@ -4424,6 +4523,7 @@ snapshots:
       vite: 8.0.16(@types/node@20.19.43)(esbuild@0.28.2)(tsx@4.23.15)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@opentelemetry/api': 1.9.1
       '@types/node': 20.19.43
     transitivePeerDependencies:
       - msw

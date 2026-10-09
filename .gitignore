@@ -25,3 +25,10 @@ hisab.pem
 # Private local files — never publish (repo is PUBLIC)
 company legal docs/
 jev-prd.md
+technical.md
+
+# Rehearsal Lab: generated eval reports stay local (big, regenerable); research
+# results + learned weights ARE committed (they are the reproducible evidence).
+agents-learning/reports/
+**/__pycache__/
+**/.pytest_cache/

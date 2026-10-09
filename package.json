@@ -11,6 +11,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "typecheck": "pnpm -r typecheck",
     "verify": "pnpm --filter @hisab/shared verify",
+    "lab": "pnpm --filter @hisab/rehearsal lab",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

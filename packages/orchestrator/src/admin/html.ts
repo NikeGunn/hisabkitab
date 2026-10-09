@@ -15,6 +15,7 @@ const NAV: [string, string][] = [
   ['/admin', 'Overview'],
   ['/admin/tenants', 'Businesses'],
   ['/admin/settings', 'Settings'],
+  ['/admin/lab', 'Agent Lab'],
   ['/admin/events', 'Activity'],
 ];
 

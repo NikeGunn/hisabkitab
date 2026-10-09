@@ -33,6 +33,7 @@ COPY packages/mcp-payments/package.json  packages/mcp-payments/package.json
 COPY packages/mcp-tally/package.json     packages/mcp-tally/package.json
 COPY packages/tally-connector/package.json packages/tally-connector/package.json
 COPY packages/orchestrator/package.json  packages/orchestrator/package.json
+COPY agents-learning/package.json        agents-learning/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
@@ -44,7 +45,7 @@ RUN pnpm -r typecheck
 # ── runtime: slim, non-root, tini, only the selected service is the entrypoint ─
 FROM node:${NODE_VERSION}-slim AS runtime
 ARG SERVICE
-RUN test -n "$SERVICE" || (echo "ERROR: --build-arg SERVICE=<orchestrator|mcp-ledger|mcp-payments> is required" && false)
+RUN test -n "$SERVICE" || (echo "ERROR: --build-arg SERVICE=<orchestrator|mcp-ledger|mcp-payments|mcp-tally|rehearsal> is required" && false)
 # Writable HOME + corepack cache for the non-root user (corepack writes a cache
 # on first pnpm invocation; without a writable HOME it crashes at runtime).
 ENV NODE_ENV=production CI=1 PNPM_HOME=/pnpm HOME=/home/hisab COREPACK_HOME=/home/hisab/.corepack

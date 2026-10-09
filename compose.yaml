@@ -13,6 +13,7 @@
 #   payments   tenant-scoped Payments MCP (:8080 /mcp + /payments/khalti/return)
 #   tally      tenant-scoped Tally MCP + connector API (:8080 /mcp + /connector/*)
 #   orchestrator  Fastify webhook + scheduler (:8080 /webhook + /healthz)
+#   lab-worker Rehearsal Lab durable episode worker (profile "lab": COMPOSE_PROFILES=lab)
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: hisabkitab
@@ -32,6 +33,7 @@ services:
       # match what the services connect with (dev defaults; prod from .env)
       HISAB_APP_PASSWORD: ${HISAB_APP_PASSWORD:-hisab_app_dev}
       HISAB_ORCH_PASSWORD: ${HISAB_ORCH_PASSWORD:-hisab_orch_dev}
+      HISAB_LAB_PASSWORD: ${HISAB_LAB_PASSWORD:-hisab_lab_dev}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -199,6 +201,41 @@ services:
       timeout: 3s
       retries: 6
       start_period: 20s
+    restart: unless-stopped
+
+  # Rehearsal Lab worker: runs queued synthetic episodes (pnpm lab enqueue …).
+  # Deliberately holds NO WhatsApp, Khalti, ledger-MCP or tenant-DB credential: its DB
+  # role (hisab_lab) can only touch the `rehearsal` schema. Hardened container; set
+  # LAB_RUNTIME=runsc on a host with gVisor for a user-space kernel boundary.
+  lab-worker:
+    profiles: ['lab']
+    build:
+      <<: *app-build
+      args:
+        SERVICE: rehearsal
+    command: ['sh', '-c', 'pnpm --filter @hisab/rehearsal lab worker --follow --id lab-worker-1']
+    runtime: ${LAB_RUNTIME:-runc}
+    environment:
+      LAB_DATABASE_URL: postgres://hisab_lab:${HISAB_LAB_PASSWORD:-hisab_lab_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
+      # Only needed for real-model rehearsals (agent "claude…"); budget-capped per run.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      HISAB_MODEL: ${HISAB_MODEL:-claude-sonnet-4-6}
+      HISAB_EFFORT: ${HISAB_EFFORT:-low}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-hisab-rehearsal}
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /home/hisab/.cache:rw,noexec,nosuid,size=32m
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    deploy:
+      resources:
+        limits: { pids: 128 }
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:

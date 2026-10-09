@@ -1,0 +1,31 @@
+{
+  "name": "@hisab/rehearsal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx --env-file-if-exists=../.env src/server.ts",
+    "lab": "tsx --env-file-if-exists=../.env src/cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
+    "@hisab/mcp-ledger": "workspace:*",
+    "@hisab/orchestrator": "workspace:*",
+    "@hisab/shared": "workspace:*",
+    "langsmith": "0.10.9",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

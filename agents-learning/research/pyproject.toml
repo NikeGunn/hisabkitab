@@ -1,0 +1,16 @@
+[project]
+name = "rehearsal-research"
+version = "0.1.0"
+description = "Policy learning (GRPO), statistics and dataset export for the HisabKitab Rehearsal Lab"
+requires-python = ">=3.11"
+dependencies = ["numpy>=2.0"]
+
+[project.optional-dependencies]
+tracing = ["langsmith>=0.7"]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+extraPaths = ["."]
