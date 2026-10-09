@@ -23,6 +23,84 @@ export function vatOnExclusive(exclPaisa: Paisa, cfg: TaxConfig = defaultTaxConf
   return mulBps(exclPaisa, cfg.vatRateBps);
 }
 
+/** The taxable value and VAT exactly as PRINTED on a tax invoice (integer paisa). */
+export interface PrintedVat {
+  taxablePaisa: Paisa;
+  vatPaisa: Paisa;
+}
+
+export interface InvoiceVatInput {
+  /** The amount the owner gave: the invoice total if `inclusive`, else its taxable value. */
+  amountPaisa: Paisa;
+  inclusive: boolean;
+  /** false for a non-VAT-registered vendor: no VAT is charged at all. */
+  vatApplies: boolean;
+  /** The invoice's own printed figures, when it shows them. Authoritative when present. */
+  printed?: PrintedVat | undefined;
+}
+
+export type InvoiceVat =
+  | {
+      ok: true;
+      exclPaisa: Paisa;
+      vatPaisa: Paisa;
+      /** 'printed' = the invoice's figures were stored; 'computed' = derived at 13%. */
+      source: 'printed' | 'computed';
+      /** What 13% invoice-level half-up would give, for transparency. */
+      computedVatPaisa: Paisa;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * Resolve the taxable value + VAT to STORE for an invoice.
+ *
+ * A tax invoice is the legal evidence of the VAT charged, so when its printed taxable
+ * and VAT figures are supplied they are stored EXACTLY. Re-deriving VAT from the total
+ * would silently diverge from the invoice whenever the issuer rounded per line (it does
+ * for 19–73% of multi-line bills, by 1–6 paisa). Printed figures are never "corrected":
+ * they must reconcile with the amount the owner gave, or nothing is resolved and the
+ * caller must ask. Whether the printed VAT is 13% of taxable stays the Validation
+ * Engine's job (vat.math → WARN shown to the owner), not something fixed here.
+ *
+ * Invariant (every ok result): exclPaisa + vatPaisa === the invoice total.
+ */
+export function resolveInvoiceVat(input: InvoiceVatInput, cfg: TaxConfig = defaultTaxConfig): InvoiceVat {
+  const { amountPaisa, inclusive, vatApplies, printed } = input;
+  if (amountPaisa <= 0n) return { ok: false, reason: 'amount must be a positive number of paisa' };
+  const computed = !vatApplies
+    ? { exclPaisa: amountPaisa, vatPaisa: 0n }
+    : inclusive
+      ? splitVatInclusive(amountPaisa, cfg)
+      : { exclPaisa: amountPaisa, vatPaisa: vatOnExclusive(amountPaisa, cfg) };
+  if (printed === undefined) {
+    return { ok: true, ...computed, source: 'computed', computedVatPaisa: computed.vatPaisa };
+  }
+
+  const { taxablePaisa, vatPaisa } = printed;
+  if (taxablePaisa < 0n || vatPaisa < 0n) {
+    return { ok: false, reason: 'the printed taxable amount and VAT cannot be negative' };
+  }
+  if (!vatApplies && vatPaisa > 0n) {
+    return {
+      ok: false,
+      reason: 'the bill shows VAT but the vendor is marked NOT VAT-registered — please confirm which is right',
+    };
+  }
+  if (inclusive && taxablePaisa + vatPaisa !== amountPaisa) {
+    return {
+      ok: false,
+      reason: `the bill's taxable amount + VAT (${taxablePaisa + vatPaisa} paisa) does not equal its total (${amountPaisa} paisa) — please confirm the figures`,
+    };
+  }
+  if (!inclusive && taxablePaisa !== amountPaisa) {
+    return {
+      ok: false,
+      reason: `the bill's printed taxable amount (${taxablePaisa} paisa) does not match the amount given (${amountPaisa} paisa) — please confirm the figures`,
+    };
+  }
+  return { ok: true, exclPaisa: taxablePaisa, vatPaisa, source: 'printed', computedVatPaisa: computed.vatPaisa };
+}
+
 export interface VatPosition {
   netPayablePaisa: Paisa;
   /** If input > output, the excess carries forward as credit — never pay/refund negative. */

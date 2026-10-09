@@ -17,18 +17,16 @@ import {
   verifyAgingReport,
   planAutoAllocation,
   planManualAllocation,
-  splitVatInclusive,
   validateSale,
   validateExpense,
-  vatOnExclusive,
   withIdempotency,
   type AgingRow,
   type AllocationTarget,
   type IdempotentResult,
-  type TaxConfig,
 } from '@hisab/shared';
 import type { ToolContext } from './tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
+import { printedVatFields, resolveEntryVat, vatSourceFields } from './invoice-vat.js';
 
 const { parties, arInvoices, apBills, partyPayments, paymentAllocations } = schema;
 
@@ -60,6 +58,7 @@ export const arapInputSchemas = {
     due_on: isoDate.optional().describe('expected receipt date; omit if none — never guess one'),
     amount_paisa: paisa,
     inclusive: z.boolean().default(true).describe('amount includes 13% VAT (default true)'),
+    ...printedVatFields,
     idempotency_key: idempotencyKey,
   },
   record_credit_purchase: {
@@ -72,6 +71,7 @@ export const arapInputSchemas = {
     vendor_is_vat_registered: z.boolean().describe('ask the owner if unknown — do not guess'),
     invoice_type: z.enum(['rule17', 'rule17ka', 'other']).optional(),
     for_taxable_business_use: z.boolean().describe('required for input-credit eligibility'),
+    ...printedVatFields,
     idempotency_key: idempotencyKey,
   },
   record_party_payment: {
@@ -139,11 +139,6 @@ const toDate = (iso: string): Date => {
 const toIso = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function splitAmount(amountPaisa: bigint, inclusive: boolean, vatApplies: boolean, cfg: TaxConfig) {
-  if (!vatApplies) return { exclPaisa: amountPaisa, vatPaisa: 0n };
-  if (inclusive) return splitVatInclusive(amountPaisa, cfg);
-  return { exclPaisa: amountPaisa, vatPaisa: vatOnExclusive(amountPaisa, cfg) };
-}
 
 /** Find or create the party row by case-insensitive name, inside the current tx. */
 async function resolveParty(
@@ -231,7 +226,9 @@ export function createArapToolHandlers(ctx: ToolContext) {
     },
 
     async record_credit_sale(args: Args<'record_credit_sale'>) {
-      const { exclPaisa, vatPaisa } = splitAmount(BigInt(args.amount_paisa), args.inclusive, true, cfg);
+      const resolved = resolveEntryVat(args, true, cfg);
+      if (!resolved.ok) return { saved: false as const, reason: resolved.reason };
+      const { exclPaisa, vatPaisa } = resolved;
       const totalPaisa = exclPaisa + vatPaisa;
       return idemTx('record_credit_sale', args.idempotency_key, async (tx) => {
         const report = validateSale(
@@ -259,7 +256,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: arInvoices.id });
         const invoiceId = row!.id;
-        await auditAgent(tx, tenantId, 'record_credit_sale.draft', { invoice_id: invoiceId, party: args.party, total_paisa: n(totalPaisa) });
+        await auditAgent(tx, tenantId, 'record_credit_sale.draft', { invoice_id: invoiceId, party: args.party, total_paisa: n(totalPaisa), vat_source: resolved.source });
         await appendValidationFails(tx, tenantId, 'ar_invoice', invoiceId, report);
         return {
           saved: true as const,
@@ -270,6 +267,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           vat_paisa: n(vatPaisa),
           total_paisa: n(totalPaisa),
           balance_paisa: n(totalPaisa),
+          ...vatSourceFields(resolved),
           ...(args.due_on ? { due_on: args.due_on } : { due_on: null }),
           assumption: args.inclusive ? 'amount treated as VAT-INCLUSIVE' : 'amount treated as VAT-EXCLUSIVE',
           validation: report.results,
@@ -278,7 +276,9 @@ export function createArapToolHandlers(ctx: ToolContext) {
     },
 
     async record_credit_purchase(args: Args<'record_credit_purchase'>) {
-      const { exclPaisa, vatPaisa } = splitAmount(BigInt(args.amount_paisa), args.inclusive, args.vendor_is_vat_registered, cfg);
+      const resolved = resolveEntryVat(args, args.vendor_is_vat_registered, cfg);
+      if (!resolved.ok) return { saved: false as const, reason: resolved.reason };
+      const { exclPaisa, vatPaisa } = resolved;
       const totalPaisa = exclPaisa + vatPaisa;
       return idemTx('record_credit_purchase', args.idempotency_key, async (tx) => {
         const report = validateExpense(
@@ -317,7 +317,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: apBills.id });
         const billId = row!.id;
-        await auditAgent(tx, tenantId, 'record_credit_purchase.draft', { bill_id: billId, party: args.party, total_paisa: n(totalPaisa) });
+        await auditAgent(tx, tenantId, 'record_credit_purchase.draft', { bill_id: billId, party: args.party, total_paisa: n(totalPaisa), vat_source: resolved.source });
         await appendValidationFails(tx, tenantId, 'ap_bill', billId, report);
         return {
           saved: true as const,
@@ -328,6 +328,7 @@ export function createArapToolHandlers(ctx: ToolContext) {
           vat_paisa: n(vatPaisa),
           total_paisa: n(totalPaisa),
           balance_paisa: n(totalPaisa),
+          ...vatSourceFields(resolved),
           input_credit_eligible: report.inputCreditEligible,
           input_credit_reasons: report.inputCreditReasons,
           ...(args.due_on ? { due_on: args.due_on } : { due_on: null }),
