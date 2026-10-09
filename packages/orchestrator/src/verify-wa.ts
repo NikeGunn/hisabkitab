@@ -91,7 +91,7 @@ await new Promise<void>((r) => graph.listen(GRAPH_PORT, r));
 // ---- reset test DB ------------------------------------------------------------------
 {
   const sql = postgres(ADMIN_URL, { max: 1 });
-  await sql.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+  await sql.unsafe('DROP SCHEMA IF EXISTS rehearsal CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await sql.end({ timeout: 5 });
   await migrate(ADMIN_URL);
 }

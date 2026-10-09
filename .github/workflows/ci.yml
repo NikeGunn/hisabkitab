@@ -48,6 +48,7 @@ jobs:
           filters: |
             backend:
               - 'packages/**'
+              - 'agents-learning/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -93,6 +94,9 @@ jobs:
       TEST_ADMIN_DATABASE_URL: postgres://postgres:postgres@localhost:5432/hisabkitab_test
       TEST_DATABASE_URL: postgres://hisab_app:hisab_app_dev@localhost:5432/hisabkitab_test
       TEST_ORCH_DATABASE_URL: postgres://hisab_orch:hisab_orch_dev@localhost:5432/hisabkitab_test
+      # Rehearsal Lab durable-runner + isolation tests (least-privilege lab role).
+      LAB_TEST_DATABASE_URL: postgres://hisab_lab:hisab_lab_dev@localhost:5432/hisabkitab_test
+      LAB_TEST_ADMIN_DATABASE_URL: postgres://postgres:postgres@localhost:5432/hisabkitab_test
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v7
@@ -117,8 +121,11 @@ jobs:
             IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='hisab_orch') THEN
               CREATE ROLE hisab_orch LOGIN PASSWORD 'hisab_orch_dev' NOSUPERUSER NOBYPASSRLS;
             END IF;
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='hisab_lab') THEN
+              CREATE ROLE hisab_lab LOGIN PASSWORD 'hisab_lab_dev' NOSUPERUSER NOBYPASSRLS;
+            END IF;
           END $$;
-          GRANT CONNECT ON DATABASE hisabkitab_test TO hisab_app, hisab_orch;
+          GRANT CONNECT ON DATABASE hisabkitab_test TO hisab_app, hisab_orch, hisab_lab;
           SQL
 
       - name: Typecheck
@@ -130,6 +137,30 @@ jobs:
       - name: Test (sequential, shared test DB)
         run: pnpm test
 
+      # Agent safety regression gate ($0, deterministic): the committed learned policy
+      # must keep ZERO hard violations on the held-out test split, and the reference
+      # policies must stay at 100%. A change to the env, judge or harness that breaks
+      # this fails the PR before any human looks at it.
+      - name: Rehearsal Lab regression gate
+        working-directory: agents-learning
+        run: pnpm lab weekly
+
+  # ── research layer (Python + numpy): gradient checks, stats, GRPO on a known bandit ──
+  research:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agents-learning/research
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with: { python-version: '3.12' }
+      - run: pip install 'numpy>=2' pytest
+      - run: python -m pytest -q
+
   # ── build all service images (no push); proves the Dockerfile is green ──
   docker-build:
     needs: changes
@@ -139,7 +170,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [orchestrator, mcp-ledger, mcp-payments, mcp-tally]
+        service: [orchestrator, mcp-ledger, mcp-payments, mcp-tally, rehearsal]
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -158,7 +189,7 @@ jobs:
       - name: Smoke test ${{ matrix.service }} boots and serves /healthz
         if: matrix.service != 'orchestrator'
         run: |
-          docker run -d --name smoke -p 8080:8080 \
+          docker run -d --name smoke -p 8080:8080 -e LAB_HOST=0.0.0.0 \
             -e LEDGER_MCP_TOKEN=ci -e PAYMENTS_MCP_TOKEN=ci -e TALLY_MCP_TOKEN=ci \
             -e TENANT_SIGNING_SECRET=ci-secret-123 \
             -e DATABASE_URL=postgres://x:y@localhost:5432/z \
@@ -209,7 +240,7 @@ jobs:
   # ── the ONE required check: green iff nothing that ran failed ──
   ci-ok:
     if: always() && github.event_name != 'push'
-    needs: [changes, test, docker-build, landing, deps-audit]
+    needs: [changes, test, research, docker-build, landing, deps-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

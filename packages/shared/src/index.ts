@@ -30,3 +30,5 @@ export * from './verification/verdict.js';
 export { checks as verificationChecks } from './verification/checks.js';
 export * from './settings/registry.js';
 export * from './signup/signup.js';
+export * from './rehearsal/release-gate.js';
+export * from './rehearsal/event-chain.js';

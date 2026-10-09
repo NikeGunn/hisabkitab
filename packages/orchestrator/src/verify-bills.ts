@@ -68,7 +68,7 @@ const trim = (s: string, n = 140): string => s.replace(/\s+/g, ' ').slice(0, n);
 const billBytes = await generateBillFixtures();
 {
   const sqlAdmin = postgres(ADMIN_URL, { max: 1 });
-  await sqlAdmin.unsafe('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+  await sqlAdmin.unsafe('DROP SCHEMA IF EXISTS rehearsal CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await sqlAdmin.end({ timeout: 5 });
   await migrate(ADMIN_URL);
 }

@@ -60,7 +60,7 @@ services:
       - '127.0.0.1:8803:8080'
     deploy:
       resources:
-        limits: { cpus: '0.5', memory: 384m }
+        limits: { cpus: '0.5', memory: 384m, pids: 128 }
 
   orchestrator:
     image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-orchestrator:${IMAGE_TAG:-latest}
@@ -71,3 +71,11 @@ services:
     deploy:
       resources:
         limits: { cpus: '1.0', memory: 768m }
+
+  lab-worker:
+    image: ghcr.io/${GHCR_OWNER:-nikegunn}/hisab-rehearsal:${IMAGE_TAG:-latest}
+    build: !reset null
+    logging: *logging
+    deploy:
+      resources:
+        limits: { cpus: '0.5', memory: 384m, pids: 128 }

@@ -10,6 +10,7 @@ export { syncSkills, SKILL_DIRS } from './agent/skills.js';
 export { setup, ensureAgent, ensureEnvironment, ENVIRONMENT_NAME, type SetupResult } from './agent/setup.js';
 export {
   auditOutbound,
+  addOwnerFigures,
   addToolResultEvidence,
   newTurnEvidence,
   extractMoneyFigures,
@@ -62,6 +63,7 @@ export {
   SerialQueues,
   UNSUPPORTED_REPLY,
   MEDIA_FAILURE_REPLY,
+  todayContext,
   type RouterDeps,
 } from './whatsapp/router.js';
 export {

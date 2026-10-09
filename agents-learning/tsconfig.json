@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    // Imports orchestrator + mcp-ledger sources, whose SDK types are incompatible with
+    // exactOptionalPropertyTypes — same setting those two packages use.
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["src", "test", "../packages/orchestrator/src/reports/pdfmake-printer.d.ts"]
+}

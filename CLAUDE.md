@@ -520,6 +520,21 @@ One number = one business until "switch business" (§4): inviting a number activ
 Pricing page (`/pay`) has the plan comparison + roles. `team_access_update` template must be submitted
 (admin → Submit missing templates) before owner notices deliver.
 
+**✅ Rehearsal Lab (`agents-learning/`, migration 0024) — DONE (2026-10-09):** synthetic, seeded
+rehearsal of the REAL agent (same SYSTEM_PROMPT/skills/tool zod schemas/VAT/Validation Engine/Audit
+Gate) — 12 families × 10 = 120 scenarios, train/dev/test, hidden oracle. Deterministic judge (hard
+gates UNAPPROVED_SAVE/CROSS_TENANT/DUPLICATE_SAVE → −1, then exact-paisa outcome, then trajectory).
+Agents: careful/eager/claude[:variant]/policy. Durable worker (lease + fencing token, atomic step
+commit, write-ahead decision; kill -9 resume verified). `rehearsal` schema + `hisab_lab` role (no
+grant on public.*; append-only hash-chained events). Release gate + event chain in
+`@hisab/shared/rehearsal` (one rule for lab/panel/CI). Admin → **Agent Lab** (`admin/lab.ts`): runs,
+step-by-step trajectories, training curves, human Approve/Reject (DB CHECK forbids approving non-PASS).
+LangSmith tracing + scored Experiments (test split never exported). Python `research/`: GRPO on a
+skill policy (judge reward → 0 hard; naive reward → hacked), bootstrap stats, SFT export.
+`pnpm lab <cmd>`; docs local in `agents-learning/docs/`; status in `agents-learning/IMPLEMENTATION_STATUS.md`.
+Findings in prod: confirm-before-save is prompt-only; prompt says validate_entry but the gate can't
+use its output; corrections trip the duplicate warning. CI gate: lab regression + research job.
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.

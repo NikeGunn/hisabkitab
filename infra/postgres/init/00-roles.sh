@@ -20,6 +20,7 @@ set -eu
 
 APP_PW="${HISAB_APP_PASSWORD:-hisab_app_dev}"
 ORCH_PW="${HISAB_ORCH_PASSWORD:-hisab_orch_dev}"
+LAB_PW="${HISAB_LAB_PASSWORD:-hisab_lab_dev}"
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<SQL
 DO \$\$
@@ -34,8 +35,14 @@ BEGIN
   ELSE
     ALTER ROLE hisab_orch LOGIN PASSWORD '${ORCH_PW}';
   END IF;
+  -- Rehearsal Lab worker: only ever granted the rehearsal schema (migration 0024).
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'hisab_lab') THEN
+    CREATE ROLE hisab_lab LOGIN PASSWORD '${LAB_PW}' NOSUPERUSER NOBYPASSRLS;
+  ELSE
+    ALTER ROLE hisab_lab LOGIN PASSWORD '${LAB_PW}';
+  END IF;
 END
 \$\$;
 
-GRANT CONNECT ON DATABASE "$POSTGRES_DB" TO hisab_app, hisab_orch;
+GRANT CONNECT ON DATABASE "$POSTGRES_DB" TO hisab_app, hisab_orch, hisab_lab;
 SQL
