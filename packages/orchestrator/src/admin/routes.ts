@@ -41,6 +41,7 @@ import { AdminAuth, SESSION_COOKIE, parseCookies, sessionCookieHeader, verifyPas
 import { csrfField, esc, fmtDate, layout, pill, type Tone } from './html.js';
 import { metaStatus, subscribeApp, syncTemplates, type MetaCreds } from './meta.js';
 import { initiateSubscriptionLink } from './payment-link.js';
+import { DISK_CRIT_PCT, diskTone, fmtGiB, readDisk, type DiskUsage } from './server-health.js';
 import { PAIRING_TTL_MINUTES } from '../onboarding/pairing.js';
 import { isOwnSender } from '../signup/signup.js';
 import { dbNow, deliverApproval, deliverCode, latestDeliveries, retryNow, senderDegraded } from '../onboarding/delivery.js';
@@ -63,6 +64,8 @@ export interface AdminDeps {
   agentConfigured: boolean;
   model: string;
   now?: () => Date;
+  /** Host disk reading (tests inject one); defaults to statfs('/'). */
+  diskUsage?: () => Promise<DiskUsage | null>;
 }
 
 type Req = FastifyRequest & { admin?: AdminSession };
@@ -297,6 +300,12 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
         ),
       );
     const degraded = await senderDegraded(deps.db);
+    const disk = await (deps.diskUsage ?? readDisk)();
+    // Fail-soft: the overview must render even if the size query is refused.
+    const dbBytes = await deps.db
+      .execute(sql`select pg_database_size(current_database())::bigint as b`)
+      .then((r) => Number((r as unknown as Array<{ b: string | number }>)[0]?.b ?? NaN))
+      .catch(() => NaN);
     const outbox = await deps.db
       .select({ status: schema.outboundNotifications.status, n: count() })
       .from(schema.outboundNotifications)
@@ -347,7 +356,16 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
       ? `<div class="card" style="border-color:#dc2626"><h2>${pill('SENDER DEGRADED', 'bad')} WhatsApp is refusing our messages</h2>
           <p>The latest onboarding message failed with an <b>account-level</b> error (for example 131042, a billing or payment-method problem on the WhatsApp account). Fix it in Meta Business Manager. Until a message is delivered again, automatic retries send <b>one probe at a time</b> so nothing is wasted.</p></div>`
       : '';
-    const body = `${degradedBanner}
+    const diskBanner =
+      disk && disk.usedPct >= DISK_CRIT_PCT
+        ? `<div class="card" style="border-color:#dc2626"><h2>${pill('DISK ALMOST FULL', 'bad')} Server disk is ${disk.usedPct}% used</h2>
+          <p>Only <b>${esc(fmtGiB(disk.freeBytes))}</b> left. The disk guard already removed every old image it safely can, so this needs a person: resize the disk in the Lighthouse console, or check what is growing (<code>sudo du -xh / --max-depth=2</code>). If the disk fills completely, the database stops accepting writes.</p></div>`
+        : '';
+    const serverCard = `<div class="card"><h2>Server</h2>
+          <p>Disk: ${disk ? `${pill(`${disk.usedPct}% USED`, diskTone(disk.usedPct))} <span class="mut">${esc(fmtGiB(disk.freeBytes))} free of ${esc(fmtGiB(disk.totalBytes))}</span>` : pill('UNKNOWN', 'muted')}</p>
+          <p class="mut">Database size: ${Number.isFinite(dbBytes) ? esc(`${(dbBytes / 1024 ** 2).toFixed(1)} MB`) : 'unknown'}</p>
+          <p class="mut">Old images are pruned daily and after every deploy.</p></div>`;
+    const body = `${diskBanner}${degradedBanner}
       <div class="grid">
         <div class="card"><h2>Businesses</h2><p>${kv(tenantCounts)}</p><p class="mut">Subscriptions: ${kv(subCounts)}</p><a href="/admin/tenants">Manage →</a></div>
         <div class="card"><h2>Signup</h2><p>${deps.settings.bool('signup.enabled') ? pill('OPEN', 'ok') : pill('CLOSED', 'warn')} ${
@@ -362,6 +380,7 @@ function adminPlugin(app: FastifyInstance, deps: AdminDeps): void {
           <p class="mut">Secret key: ${keySet ? `set (${esc(deps.settings.source('khalti.secret_key'))})` : pill('MISSING', 'bad')}</p></div>
         <div class="card"><h2>Agent</h2><p>${deps.agentConfigured ? pill('CONFIGURED', 'ok') : pill('NO AGENT ID', 'bad')}</p><p class="mut">Model: <code>${esc(deps.model)}</code></p>
           <p class="mut">Receipts outbox: ${kv(outbox)}</p></div>
+        ${serverCard}
       </div>
       <div class="card"><h2>WhatsApp sender</h2>${waCard}</div>
       ${meta ? `<div class="card"><h2>Message templates</h2><table><tr><th>Template</th><th>Meta status</th><th>Category</th></tr>${tplRows}</table></div>` : ''}`;

@@ -32,6 +32,11 @@ const sentCodes: { to: string; code: string }[] = [];
 let failSend: Error | null = null;
 const sentTemplates: { to: string; template: string; params: string[] }[] = [];
 let failTemplate: Error | null = null;
+let fakeDisk: { usedPct: number; freeBytes: number; totalBytes: number } | null = {
+  usedPct: 26,
+  freeBytes: 42 * 1024 ** 3,
+  totalBytes: 59 * 1024 ** 3,
+};
 
 beforeAll(async () => {
   __setPiiKeyForTests(randomBytes(32));
@@ -65,6 +70,7 @@ beforeAll(async () => {
         signingSecret: 'signing-secret-xyz',
         agentConfigured: true,
         model: 'claude-test',
+        diskUsage: async () => fakeDisk,
       }),
   });
 });
@@ -790,5 +796,37 @@ describe('onboarding delivery in the admin panel', () => {
       expect(flash(await post(`/admin/tenants/${target}/retry-delivery`, cookie, { _csrf: csrf }))).toMatch(/t=bad/);
     }
     expect(sentTemplates.length + sentCodes.length).toBe(before);
+  });
+});
+
+describe('server disk health on the Overview', () => {
+  it('normal disk: Server card shows usage + DB size, no banner', async () => {
+    fakeDisk = { usedPct: 26, freeBytes: 42 * 1024 ** 3, totalBytes: 59 * 1024 ** 3 };
+    const { cookie } = await login();
+    const page = await app.inject({ url: '/admin', headers: { cookie } });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('26% USED');
+    expect(page.body).toContain('42.0 GB free of 59.0 GB');
+    expect(page.body).toMatch(/Database size: [0-9.]+ MB/);
+    expect(page.body).not.toContain('DISK ALMOST FULL');
+  });
+
+  it('PROBE: a nearly full disk raises the red banner a human cannot miss', async () => {
+    fakeDisk = { usedPct: 91, freeBytes: 5 * 1024 ** 3, totalBytes: 59 * 1024 ** 3 };
+    const { cookie } = await login();
+    const page = await app.inject({ url: '/admin', headers: { cookie } });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('DISK ALMOST FULL');
+    expect(page.body).toContain('Server disk is 91% used');
+  });
+
+  it('PROBE: an unreadable disk is UNKNOWN (BLOCKED), never a broken admin page', async () => {
+    fakeDisk = null;
+    const { cookie } = await login();
+    const page = await app.inject({ url: '/admin', headers: { cookie } });
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toContain('UNKNOWN');
+    expect(page.body).not.toContain('DISK ALMOST FULL');
+    fakeDisk = { usedPct: 26, freeBytes: 42 * 1024 ** 3, totalBytes: 59 * 1024 ** 3 };
   });
 });
