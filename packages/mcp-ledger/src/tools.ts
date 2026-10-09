@@ -7,6 +7,7 @@
  * Amounts cross the wire as integer paisa numbers (≤ MAX_SAFE_INTEGER, enforced).
  */
 import { z } from 'zod';
+import { printedVatFields, resolveEntryVat, vatSourceFields } from './invoice-vat.js';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { appendAudit, encPII, decPII, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import {
@@ -96,6 +97,7 @@ export const inputSchemas = {
     amount_paisa: paisa,
     inclusive: z.boolean().default(true).describe('amount includes 13% VAT (default true)'),
     payment_method: z.enum(['cash', 'esewa', 'khalti', 'bank']).optional(),
+    ...printedVatFields,
     idempotency_key: idempotencyKey,
   },
   record_expense: {
@@ -114,6 +116,7 @@ export const inputSchemas = {
       .record(z.string(), z.unknown())
       .optional()
       .describe('per-field {value, confidence}'),
+    ...printedVatFields,
     idempotency_key: idempotencyKey,
   },
   validate_entry: {
@@ -404,8 +407,9 @@ export function createToolHandlers(ctx: ToolContext) {
     },
 
     async record_sale(args: Args<'record_sale'>) {
-      const amount = BigInt(args.amount_paisa);
-      const { exclPaisa, vatPaisa } = splitAmount(amount, args.inclusive, true, ctx.cfg);
+      const resolved = resolveEntryVat(args, true, ctx.cfg);
+      if (!resolved.ok) return { saved: false as const, reason: resolved.reason };
+      const { exclPaisa, vatPaisa } = resolved;
       // P13: a future-dated entry is rejected; an earlier-month entry is flagged backdated.
       let period;
       try {
@@ -466,6 +470,7 @@ export function createToolHandlers(ctx: ToolContext) {
             sale_id: saleId,
             inclusive: args.inclusive,
             amount_paisa: args.amount_paisa,
+            vat_source: resolved.source,
             is_backdated: period.isBackdated,
           },
           { report, entryType: 'sale', entryId: saleId },
@@ -477,6 +482,7 @@ export function createToolHandlers(ctx: ToolContext) {
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
           total_paisa: n(exclPaisa + vatPaisa),
+          ...vatSourceFields(resolved),
           assumption: args.inclusive
             ? 'amount treated as VAT-INCLUSIVE'
             : 'amount treated as VAT-EXCLUSIVE',
@@ -492,13 +498,9 @@ export function createToolHandlers(ctx: ToolContext) {
     },
 
     async record_expense(args: Args<'record_expense'>) {
-      const amount = BigInt(args.amount_paisa);
-      const { exclPaisa, vatPaisa } = splitAmount(
-        amount,
-        args.inclusive,
-        args.vendor_is_vat_registered,
-        ctx.cfg,
-      );
+      const resolved = resolveEntryVat(args, args.vendor_is_vat_registered, ctx.cfg);
+      if (!resolved.ok) return { saved: false as const, reason: resolved.reason };
+      const { exclPaisa, vatPaisa } = resolved;
       const totalPaisa = exclPaisa + vatPaisa;
       const invoiceDate = toDate(args.occurred_on);
       // P13: reject a future-dated bill; flag an earlier-month bill as backdated.
@@ -588,6 +590,7 @@ export function createToolHandlers(ctx: ToolContext) {
             expense_id: expenseId,
             inclusive: args.inclusive,
             amount_paisa: args.amount_paisa,
+            vat_source: resolved.source,
             is_backdated: period.isBackdated,
           },
           { report, entryType: 'expense', entryId: expenseId },
@@ -600,6 +603,7 @@ export function createToolHandlers(ctx: ToolContext) {
           vat_paisa: n(vatPaisa),
           total_paisa: n(exclPaisa + vatPaisa),
           input_vat_paisa: n(inputVatPaisa),
+          ...vatSourceFields(resolved),
           input_credit_eligible: report.inputCreditEligible,
           input_credit_reasons: report.inputCreditReasons,
           tds:
