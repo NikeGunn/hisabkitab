@@ -26,6 +26,7 @@ import {
 } from '@hisab/shared';
 import type { ToolContext } from './tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
+import { NO_OWNER_APPROVAL, ownerApprovedAfter } from './owner-approval.js';
 import { printedVatFields, resolveEntryVat, vatSourceFields } from './invoice-vat.js';
 
 const { parties, arInvoices, apBills, partyPayments, paymentAllocations } = schema;
@@ -408,6 +409,13 @@ export function createArapToolHandlers(ctx: ToolContext) {
 
     async confirm_arap_entry(args: Args<'confirm_arap_entry'>) {
       return inTenantTx(async (tx) => {
+        // Server-side confirm-before-save: the owner's explicit yes must postdate the draft.
+        const draftTable = args.entry_type === 'party_payment' ? partyPayments : args.entry_type === 'ar_invoice' ? arInvoices : apBills;
+        const [draft] = await tx
+          .select({ createdAt: draftTable.createdAt })
+          .from(draftTable)
+          .where(and(eq(draftTable.tenantId, tenantId), eq(draftTable.id, args.entry_id), eq(draftTable.status, 'draft')));
+        if (draft && !(await ownerApprovedAfter(tx, tenantId, draft.createdAt))) return NO_OWNER_APPROVAL;
         if (args.entry_type === 'party_payment') {
           return confirmPayment(tx, tenantId, args.entry_id);
         }

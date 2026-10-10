@@ -10,6 +10,8 @@
  *   worker   [--id NAME] [--follow]                      claim + run queued episodes; resumes crashed ones
  *   audit    --run RUN_ID                                verify every episode's event hash-chain + exactly-once saves
  *   weekly   [--allow-spend --budget-rs R]               the scheduled check: free suite always, paid A/B only if allowed
+ *   import-training [--dir research/results] [--no-test]  load committed training results into the lab DB
+ *                                                         (+ held-out TEST pass of each saved policy, $0)
  *   ls-sync        --split train|dev                     upload scenarios as a LangSmith dataset (never test)
  *   ls-experiment  --agent A --split train|dev           LangSmith Experiment scored by our judge
  *
@@ -18,6 +20,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import type { Family, Split } from './contracts.js';
 import { makeAgent } from './agents/registry.js';
 import { RehearsalEnv } from './env/environment.js';
@@ -29,6 +32,8 @@ import { flushTraces, tracingStats } from './telemetry/langsmith.js';
 import { persistReport } from './store/persist.js';
 import { labDb, verifyChain } from './store/db.js';
 import { enqueueRun, workLoop } from './runner/worker.js';
+import { importTrainingResults, policyAgentFor } from './store/training-import.js';
+import { ENV_VERSION } from './env/environment.js';
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -49,6 +54,8 @@ const { positionals, values } = parseArgs({
     save: { type: 'boolean', default: false },
     json: { type: 'boolean', default: false },
     'allow-spend': { type: 'boolean', default: false },
+    dir: { type: 'string', default: 'research/results' },
+    'no-test': { type: 'boolean', default: false },
   },
 });
 
@@ -219,6 +226,25 @@ ${eps.length - bad}/${eps.length} episodes verified`);
     } else {
       console.log('paid arm skipped (no --allow-spend): $0 spent');
     }
+    return;
+  }
+
+  if (cmd === 'import-training') {
+    const sql = labDb();
+    const labRoot = fileURLToPath(new URL('..', import.meta.url));
+    const testEval = values['no-test']
+      ? undefined
+      : async (weightsFile: string) => {
+          const agent = policyAgentFor(weightsFile, labRoot);
+          if (!agent) return undefined;
+          // Held-out TEST split, measured once here with the saved weights: a local policy, no model call.
+          const r = await evaluate(() => makeAgent(agent), scenariosFor('test'));
+          return { pass_rate: r.pass_rate, ci95: [r.pass_ci95.low, r.pass_ci95.high] as [number, number], hard: r.hard_violations, n: r.n, env_version: ENV_VERSION };
+        };
+    const results = await importTrainingResults(sql, fileURLToPath(new URL(`../${values.dir as string}/`, import.meta.url)), testEval);
+    for (const r of results) console.log(`${r.status.padEnd(9)} ${r.name.padEnd(28)} ${r.id ?? ''} ${r.detail ?? ''}`);
+    await sql.end();
+    process.exitCode = results.some((r) => r.status === 'invalid') ? 1 : 0;
     return;
   }
 

@@ -105,6 +105,7 @@ beforeEach(async () => {
     'subscriptions',
     'vendors',
     'usage_counters',
+    'owner_approvals',
     'memberships',
     'users',
     'tenants',

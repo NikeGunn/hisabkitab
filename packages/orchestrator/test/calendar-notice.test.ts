@@ -68,6 +68,7 @@ beforeEach(async () => {
     'outbound_notifications',
     'vendors',
     'usage_counters',
+    'owner_approvals',
     'billing_payments',
     'subscriptions',
     'deletion_log',

@@ -10,6 +10,7 @@ import { DbGateLogger } from './audit/audit-logger.js';
 import { WaClient } from './whatsapp/wa-client.js';
 import { TemplateCategoryGuard, graphCategoryFetcher } from './whatsapp/category-guard.js';
 import { SerialQueues } from './whatsapp/router.js';
+import { OwnerTextMemory } from './audit/owner-text-memory.js';
 import { buildServer } from './server.js';
 import { startScheduler, type SchedulerHandle } from './scheduler/queue.js';
 import {
@@ -117,6 +118,7 @@ const app = buildServer({
     wa,
     gateLogger: new DbGateLogger(config.DATABASE_URL),
     queues: new SerialQueues(),
+    ownerMemory: new OwnerTextMemory(), // owner-typed figures stay gate evidence for the conversation
     rateLimiter: new TenantRateLimiter(), // per-tenant inbound cost guard
     // P11: per-tenant monthly budget + token accounting (runs as hisab_orch).
     costGuard: { db: handle.db, model: HISAB_MODEL },

@@ -153,7 +153,7 @@ export const sales = pgTable('sales', {
   // P13: true when the entry occurred in an EARLIER BS month than it was recorded
   // (a late-logged sale) — flags a prior return period for re-summary. Default false.
   isBackdated: boolean('is_backdated').notNull().default(false),
-  status: text('status', { enum: ['draft', 'confirmed'] })
+  status: text('status', { enum: ['draft', 'confirmed', 'superseded'] })
     .notNull()
     .default('draft'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -180,7 +180,7 @@ export const expenses = pgTable('expenses', {
   extraction: jsonb('extraction'),
   // P13: occurred in an earlier BS month than recorded (a late-logged bill). Default false.
   isBackdated: boolean('is_backdated').notNull().default(false),
-  status: text('status', { enum: ['draft', 'confirmed'] })
+  status: text('status', { enum: ['draft', 'confirmed', 'superseded'] })
     .notNull()
     .default('draft'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -542,6 +542,31 @@ export const usageCounters = pgTable(
   (t) => [
     primaryKey({ columns: [t.tenantId, t.period] }),
     index('usage_counters_period_idx').on(t.period),
+  ],
+);
+
+// ----- 0025: server-side confirm-before-save -----
+
+/**
+ * One row per inbound owner message the orchestrator classified as an explicit
+ * "yes" (pure isOwnerApproval on the VERIFIED webhook text, members who may
+ * confirm only). Ledger confirm tools require a row newer than the draft and at
+ * most OWNER_APPROVAL_WINDOW_MINUTES old. Written by hisab_orch, read by hisab_app.
+ */
+export const ownerApprovals = pgTable(
+  'owner_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    waMessageId: text('wa_message_id').notNull(),
+    userId: uuid('user_id'),
+    approvedAt: timestamp('approved_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('owner_approvals_tenant_id_wa_message_id_key').on(t.tenantId, t.waMessageId),
+    index('owner_approvals_tenant_time_idx').on(t.tenantId, t.approvedAt),
   ],
 );
 
