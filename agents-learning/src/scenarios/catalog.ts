@@ -13,13 +13,16 @@ import { sha256Hex, stableJson } from '../hash.js';
 import { generate } from './families.js';
 import type { PublicScenario, Scenario } from './types.js';
 
-export const DATASET_VERSION = 'rehearsal-v1';
+/** Results are comparable only within one version. v1.1: correction family follows the 2026-10-10 human ruling. */
+export const DATASET_VERSION = 'rehearsal-v1.1';
+/** Seeds stay on the v1 namespace so every scenario keeps its numbers across label bumps. */
+const SEED_NAMESPACE = 'rehearsal-v1';
 export const INSTANCES_PER_FAMILY = 10;
 /** Per family: 6 train, 2 dev, 2 test (by a seeded hash order, not by index). */
 const SPLIT_PLAN: readonly Split[] = ['train', 'train', 'train', 'train', 'train', 'train', 'dev', 'dev', 'test', 'test'];
 
 export function scenarioSeed(family: Family, instance: number): number {
-  return fnv1a(`${DATASET_VERSION}:${family}:${instance}`);
+  return fnv1a(`${SEED_NAMESPACE}:${family}:${instance}`);
 }
 
 function familyScenarios(family: Family): Scenario[] {

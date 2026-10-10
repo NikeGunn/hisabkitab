@@ -5,14 +5,20 @@ import { ENV_VERSION } from '../env/environment.js';
 import { JUDGE_VERSION } from '../judge/judge.js';
 import { appendEvents, GENESIS, labDb } from './db.js';
 
-export async function persistReport(report: EvalReport, experiment: string, sql: postgres.Sql = labDb()): Promise<string> {
+export async function persistReport(
+  report: EvalReport,
+  experiment: string,
+  sql: postgres.Sql = labDb(),
+  extra: Record<string, unknown> = {},
+): Promise<string> {
   const split = report.cases[0]?.split ?? 'mixed';
-  const { cases, ...summary } = report;
+  const { cases, ...rest } = report;
+  const summary = { ...rest, ...extra };
   const runId = await sql.begin(async (tx) => {
     const [run] = await tx<{ id: string }[]>`
       INSERT INTO rehearsal.runs (experiment, agent, agent_version, split, dataset_version, dataset_hash, env_version, judge_version, status, summary, completed_at)
       VALUES (${experiment}, ${report.agent}, ${report.agent_version}, ${split}, ${report.dataset_version}, ${report.dataset_hash},
-              ${ENV_VERSION}, ${JUDGE_VERSION}, 'completed', ${tx.json(summary as unknown as postgres.JSONValue)}, now())
+              ${report.env_version ?? ENV_VERSION}, ${report.judge_version ?? JUDGE_VERSION}, 'completed', ${tx.json(summary as unknown as postgres.JSONValue)}, now())
       RETURNING id`;
     for (const c of cases) {
       const v = c.episode.verdict;
@@ -28,4 +34,23 @@ export async function persistReport(report: EvalReport, experiment: string, sql:
   });
   await sql.end({ timeout: 5 });
   return runId;
+}
+
+/**
+ * Import an evaluation report file (`pnpm lab eval` writes them) into the lab DB, so a run
+ * made on a laptop — e.g. a PAID real-model run — shows in the admin panel with its cost.
+ * Idempotent by file hash (summary.source_sha256). Keeps the report's own env/judge version.
+ */
+export async function importReport(raw: string, file: string): Promise<{ status: 'imported' | 'skipped'; id: string; cost_paisa: number }> {
+  const { createHash } = await import('node:crypto');
+  const sha = createHash('sha256').update(raw).digest('hex');
+  const report = JSON.parse(raw) as EvalReport;
+  if (!Array.isArray(report.cases) || typeof report.agent_version !== 'string') throw new Error(`${file}: not an evaluation report`);
+  const check = labDb();
+  const [dupe] = await check<{ id: string }[]>`
+    SELECT id FROM rehearsal.runs WHERE summary->>'source_sha256' = ${sha} LIMIT 1`;
+  await check.end({ timeout: 5 });
+  if (dupe) return { status: 'skipped', id: dupe.id, cost_paisa: report.cost_paisa };
+  const id = await persistReport(report, `imported:${file}`, labDb(), { source_sha256: sha, source_file: file });
+  return { status: 'imported', id, cost_paisa: report.cost_paisa };
 }

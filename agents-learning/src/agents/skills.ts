@@ -30,6 +30,8 @@ export const FEATURES = [
   'pending_draft',
   'duplicate_warning',
   'already_saved',
+  /** Owner corrected a figure that contradicts the bill and we have not asked about it yet (ruling 2026-10-10). */
+  'correction_unclarified',
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -65,6 +67,11 @@ interface Memory {
   keys: number;
   awaiting_owner: boolean;
   decided: boolean;
+  /** We asked about this owner correction (amount) — the next drafting replaces the old draft. */
+  correction_asked: number | null;
+  supersede_target: string | null;
+  /** Drafts the server refused to confirm (no explicit yes after them): ask again, confirm only these. */
+  reconfirm: string[];
 }
 
 export class SkillHarness {
@@ -85,6 +92,9 @@ export class SkillHarness {
       keys: 0,
       awaiting_owner: true,
       decided: false,
+      correction_asked: null,
+      supersede_target: null,
+      reconfirm: [],
     };
   }
 
@@ -147,11 +157,18 @@ export class SkillHarness {
         m.closing = skill === 'draft_and_ask' ? 'ask' : 'save';
         return;
       case 'ask_clarify':
+        if (saysCorrection(m.owner) && m.correction_asked === null) m.correction_asked = amountsIn(m.owner)[0] ?? 0;
         m.queue.push(say(clarifyQuestion(m)));
         return;
-      case 'confirm_pending':
-        m.queue.push(...save(m, /\bonly the first\b/i.test(m.owner) ? firstMentioned(m) : open(m)));
+      case 'confirm_pending': {
+        // The owner's latest selection wins ("only the first one"); a pending re-confirm list
+        // never widens it — a vague "yes, save it" re-ask must cover exactly what they chose.
+        const onlyFirst = /\bonly the first\b/i.test(m.owner);
+        const again = open(m).filter((d) => m.reconfirm.includes(d.id));
+        m.reconfirm = [];
+        m.queue.push(...save(m, onlyFirst ? firstMentioned(m) : again.length > 0 ? again : open(m)));
         return;
+      }
       case 'decline':
         m.queue.push(say("Sorry, I can only work with this business's own accounts. Anything in your own books I can help with?"));
         return;
@@ -182,6 +199,7 @@ export class SkillHarness {
       pending_draft: pending.length > 0,
       duplicate_warning: pending.some((d) => d.duplicate),
       already_saved: m.drafts.some((d) => d.confirmed) && pending.length === 0,
+      correction_unclarified: saysCorrection(t) && m.correction_asked === null,
     };
     return FEATURES.map((k) => (f[k] ? 1 : 0));
   }
@@ -193,7 +211,10 @@ export class SkillHarness {
     m.owner = text;
     if (/not vat registered/i.test(text)) m.answered_vat = false;
     if (/my mistake|bill is right/i.test(text)) m.confirmed_amount = amountsIn(text)[0] ?? null;
-    if (saysCorrection(text)) for (const d of open(m)) d.superseded = true;
+    if (saysCorrection(text)) {
+      m.supersede_target ??= open(m)[0]?.id ?? null;
+      for (const d of open(m)) d.superseded = true;
+    }
   }
 
   private absorbToolResult(obs: Observation): void {
@@ -203,6 +224,20 @@ export class SkillHarness {
     if (r.name === 'read_bill' && r.ok) {
       const d = r.data as { file_id: string; ocr_text: string };
       if (!m.bills.some((b) => b.file_id === d.file_id)) m.bills.push(parseBill(d.file_id, d.ocr_text));
+      return;
+    }
+    if (r.name === 'confirm_entry' && r.ok) {
+      const d = r.data as { needs_owner_approval?: boolean; draft?: { entry_id?: string } };
+      if (d.needs_owner_approval && d.draft?.entry_id) {
+        // Server saw no explicit yes after this draft: it is NOT saved — re-show it and ask for a clear YES.
+        const draft = m.drafts.find((x) => x.id === d.draft!.entry_id);
+        if (draft) {
+          draft.confirmed = false;
+          if (!m.reconfirm.includes(draft.id)) m.reconfirm.push(draft.id);
+        }
+        const ask = say(`To save ${list(m.drafts.filter((x) => m.reconfirm.includes(x.id)))}, please reply YES.`);
+        m.queue = m.queue.map((a) => (a.type === 'message' && a.text.startsWith('Saved') ? ask : a));
+      }
       return;
     }
     if ((r.name !== 'record_expense' && r.name !== 'record_sale') || !m.inflight) return;
@@ -239,7 +274,9 @@ export class SkillHarness {
     const correction = saysCorrection(t) ? amountsIn(t)[0] : undefined;
     let writes: Write[];
     if (correction !== undefined) {
-      writes = [{ name: 'record_expense', args: expenseArgs(m.bills[0] ?? null, correction, true) }];
+      const supersede = m.supersede_target ? { supersedes_entry_id: m.supersede_target } : {};
+      m.supersede_target = null;
+      writes = [{ name: 'record_expense', args: { ...expenseArgs(m.bills[0] ?? null, correction, true), ...supersede } }];
     } else {
       writes = m.bills
         .filter((b) => !m.drafts.some((d) => d.file === b.file_id && !d.superseded))
@@ -278,6 +315,10 @@ const CLOSINGS: Record<Closing, (m: Memory) => Action[]> = {
 
 function clarifyQuestion(m: Memory): string {
   const ownerAmount = amountsIn(m.owner)[0];
+  if (saysCorrection(m.owner) && ownerAmount !== undefined) {
+    // Only the owner's own figure is stated (the bill's figure is not tool-verified).
+    return `Your bill shows a different total. Should I record the revised ${npr(ownerAmount)} instead? Do you have the revised bill?`;
+  }
   const bill = m.bills[0];
   if (bill && ownerAmount !== undefined && ownerAmount !== bill.total_paisa) {
     return `The bill's total does not match the ${npr(ownerAmount)} you mentioned. Which amount is correct?`;

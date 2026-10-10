@@ -9,1062 +9,1062 @@
   "lr": 2.0,
   "entropy": 0.01,
   "seed": 1,
-  "dataset_version": "rehearsal-v1",
-  "env_version": "rehearsal-env-3",
-  "judge_version": "judge-1",
+  "dataset_version": "rehearsal-v1.1",
+  "env_version": "rehearsal-env-4",
+  "judge_version": "judge-2",
   "numpy": "2.2.6",
   "python": "3.12.3"
  },
  "curve": [
   {
    "iteration": 0,
-   "mean_training_reward": 0.0141,
-   "mean_judge_reward": 0.0141,
-   "pass_rate": 0.1667,
-   "hard_violation_rate": 0.3125
+   "mean_training_reward": 0.5067,
+   "mean_judge_reward": 0.5067,
+   "pass_rate": 0.2812,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 1,
-   "mean_training_reward": 0.4162,
-   "mean_judge_reward": 0.4162,
-   "pass_rate": 0.2917,
-   "hard_violation_rate": 0.0625
+   "mean_training_reward": 0.5971,
+   "mean_judge_reward": 0.5971,
+   "pass_rate": 0.4271,
+   "hard_violation_rate": 0.0312
   },
   {
    "iteration": 2,
-   "mean_training_reward": 0.4946,
-   "mean_judge_reward": 0.4946,
-   "pass_rate": 0.3854,
+   "mean_training_reward": 0.6337,
+   "mean_judge_reward": 0.6337,
+   "pass_rate": 0.5312,
    "hard_violation_rate": 0.0521
   },
   {
    "iteration": 3,
-   "mean_training_reward": 0.4294,
-   "mean_judge_reward": 0.4294,
-   "pass_rate": 0.3229,
-   "hard_violation_rate": 0.0729
+   "mean_training_reward": 0.6567,
+   "mean_judge_reward": 0.6567,
+   "pass_rate": 0.4167,
+   "hard_violation_rate": 0.0312
   },
   {
    "iteration": 4,
-   "mean_training_reward": 0.4617,
-   "mean_judge_reward": 0.4617,
-   "pass_rate": 0.2917,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 5,
-   "mean_training_reward": 0.3562,
-   "mean_judge_reward": 0.3562,
-   "pass_rate": 0.1458,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 6,
-   "mean_training_reward": 0.4859,
-   "mean_judge_reward": 0.4859,
-   "pass_rate": 0.3438,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 7,
-   "mean_training_reward": 0.6166,
-   "mean_judge_reward": 0.6166,
-   "pass_rate": 0.5417,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 8,
-   "mean_training_reward": 0.5071,
-   "mean_judge_reward": 0.5071,
-   "pass_rate": 0.3854,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 9,
-   "mean_training_reward": 0.6979,
-   "mean_judge_reward": 0.6979,
-   "pass_rate": 0.5938,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 10,
-   "mean_training_reward": 0.5044,
-   "mean_judge_reward": 0.5044,
-   "pass_rate": 0.5729,
-   "hard_violation_rate": 0.1875
-  },
-  {
-   "iteration": 11,
-   "mean_training_reward": 0.7262,
-   "mean_judge_reward": 0.7262,
-   "pass_rate": 0.6771,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 12,
-   "mean_training_reward": 0.8063,
-   "mean_judge_reward": 0.8063,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 13,
-   "mean_training_reward": 0.7688,
-   "mean_judge_reward": 0.7688,
-   "pass_rate": 0.6146,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 14,
-   "mean_training_reward": 0.5942,
-   "mean_judge_reward": 0.5942,
-   "pass_rate": 0.6354,
+   "mean_training_reward": 0.5018,
+   "mean_judge_reward": 0.5018,
+   "pass_rate": 0.5104,
    "hard_violation_rate": 0.1562
   },
   {
-   "iteration": 15,
-   "mean_training_reward": 0.7685,
-   "mean_judge_reward": 0.7685,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 16,
-   "mean_training_reward": 0.7844,
-   "mean_judge_reward": 0.7844,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0729
-  },
-  {
-   "iteration": 17,
-   "mean_training_reward": 0.7796,
-   "mean_judge_reward": 0.7796,
-   "pass_rate": 0.6562,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 18,
-   "mean_training_reward": 0.7222,
-   "mean_judge_reward": 0.7222,
-   "pass_rate": 0.7812,
-   "hard_violation_rate": 0.1042
-  },
-  {
-   "iteration": 19,
-   "mean_training_reward": 0.9391,
-   "mean_judge_reward": 0.9391,
-   "pass_rate": 0.8542,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 20,
-   "mean_training_reward": 0.891,
-   "mean_judge_reward": 0.891,
-   "pass_rate": 0.6771,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 21,
-   "mean_training_reward": 0.8319,
-   "mean_judge_reward": 0.8319,
-   "pass_rate": 0.7604,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 22,
-   "mean_training_reward": 0.7672,
-   "mean_judge_reward": 0.7672,
-   "pass_rate": 0.7917,
-   "hard_violation_rate": 0.0833
-  },
-  {
-   "iteration": 23,
-   "mean_training_reward": 0.7871,
-   "mean_judge_reward": 0.7871,
-   "pass_rate": 0.7917,
+   "iteration": 5,
+   "mean_training_reward": 0.707,
+   "mean_judge_reward": 0.707,
+   "pass_rate": 0.5833,
    "hard_violation_rate": 0.0938
   },
   {
+   "iteration": 6,
+   "mean_training_reward": 0.8912,
+   "mean_judge_reward": 0.8912,
+   "pass_rate": 0.6875,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 7,
+   "mean_training_reward": 0.6415,
+   "mean_judge_reward": 0.6415,
+   "pass_rate": 0.5625,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 8,
+   "mean_training_reward": 0.6861,
+   "mean_judge_reward": 0.6861,
+   "pass_rate": 0.6354,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 9,
+   "mean_training_reward": 0.4402,
+   "mean_judge_reward": 0.4402,
+   "pass_rate": 0.4896,
+   "hard_violation_rate": 0.2396
+  },
+  {
+   "iteration": 10,
+   "mean_training_reward": 0.8551,
+   "mean_judge_reward": 0.8551,
+   "pass_rate": 0.5938,
+   "hard_violation_rate": 0.0312
+  },
+  {
+   "iteration": 11,
+   "mean_training_reward": 0.642,
+   "mean_judge_reward": 0.642,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.125
+  },
+  {
+   "iteration": 12,
+   "mean_training_reward": 0.7295,
+   "mean_judge_reward": 0.7295,
+   "pass_rate": 0.7188,
+   "hard_violation_rate": 0.1146
+  },
+  {
+   "iteration": 13,
+   "mean_training_reward": 0.8519,
+   "mean_judge_reward": 0.8519,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0521
+  },
+  {
+   "iteration": 14,
+   "mean_training_reward": 0.88,
+   "mean_judge_reward": 0.88,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.0312
+  },
+  {
+   "iteration": 15,
+   "mean_training_reward": 0.6406,
+   "mean_judge_reward": 0.6406,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 16,
+   "mean_training_reward": 0.6408,
+   "mean_judge_reward": 0.6408,
+   "pass_rate": 0.7604,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 17,
+   "mean_training_reward": 0.7526,
+   "mean_judge_reward": 0.7526,
+   "pass_rate": 0.5208,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 18,
+   "mean_training_reward": 0.8321,
+   "mean_judge_reward": 0.8321,
+   "pass_rate": 0.6667,
+   "hard_violation_rate": 0.0521
+  },
+  {
+   "iteration": 19,
+   "mean_training_reward": 0.5504,
+   "mean_judge_reward": 0.5504,
+   "pass_rate": 0.4062,
+   "hard_violation_rate": 0.1771
+  },
+  {
+   "iteration": 20,
+   "mean_training_reward": 0.6541,
+   "mean_judge_reward": 0.6541,
+   "pass_rate": 0.5208,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 21,
+   "mean_training_reward": 0.6792,
+   "mean_judge_reward": 0.6792,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.1354
+  },
+  {
+   "iteration": 22,
+   "mean_training_reward": 0.6731,
+   "mean_judge_reward": 0.6731,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 23,
+   "mean_training_reward": 0.6546,
+   "mean_judge_reward": 0.6546,
+   "pass_rate": 0.4896,
+   "hard_violation_rate": 0.125
+  },
+  {
    "iteration": 24,
-   "mean_training_reward": 0.9103,
-   "mean_judge_reward": 0.9103,
-   "pass_rate": 0.7708,
+   "mean_training_reward": 0.9,
+   "mean_judge_reward": 0.9,
+   "pass_rate": 0.7812,
    "hard_violation_rate": 0.0208
   },
   {
    "iteration": 25,
-   "mean_training_reward": 0.9581,
-   "mean_judge_reward": 0.9581,
-   "pass_rate": 0.8646,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6482,
+   "mean_judge_reward": 0.6482,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 26,
-   "mean_training_reward": 0.712,
-   "mean_judge_reward": 0.712,
-   "pass_rate": 0.7083,
-   "hard_violation_rate": 0.1146
+   "mean_training_reward": 0.6372,
+   "mean_judge_reward": 0.6372,
+   "pass_rate": 0.625,
+   "hard_violation_rate": 0.1667
   },
   {
    "iteration": 27,
-   "mean_training_reward": 0.8856,
-   "mean_judge_reward": 0.8856,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.9115,
+   "mean_judge_reward": 0.9115,
+   "pass_rate": 0.6667,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 28,
-   "mean_training_reward": 0.9062,
-   "mean_judge_reward": 0.9062,
-   "pass_rate": 0.875,
+   "mean_training_reward": 0.8312,
+   "mean_judge_reward": 0.8312,
+   "pass_rate": 0.625,
    "hard_violation_rate": 0.0417
   },
   {
    "iteration": 29,
-   "mean_training_reward": 0.9533,
-   "mean_judge_reward": 0.9533,
-   "pass_rate": 0.7812,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.9095,
+   "mean_judge_reward": 0.9095,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.0208
   },
   {
    "iteration": 30,
-   "mean_training_reward": 0.9658,
-   "mean_judge_reward": 0.9658,
-   "pass_rate": 0.9792,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.7201,
+   "mean_judge_reward": 0.7201,
+   "pass_rate": 0.6667,
+   "hard_violation_rate": 0.1146
   },
   {
    "iteration": 31,
-   "mean_training_reward": 0.7721,
-   "mean_judge_reward": 0.7721,
+   "mean_training_reward": 0.8247,
+   "mean_judge_reward": 0.8247,
    "pass_rate": 0.75,
-   "hard_violation_rate": 0.0938
+   "hard_violation_rate": 0.0625
   },
   {
    "iteration": 32,
-   "mean_training_reward": 0.8632,
-   "mean_judge_reward": 0.8632,
+   "mean_training_reward": 0.9158,
+   "mean_judge_reward": 0.9158,
    "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0521
+   "hard_violation_rate": 0.0208
   },
   {
    "iteration": 33,
-   "mean_training_reward": 0.7904,
-   "mean_judge_reward": 0.7904,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0938
+   "mean_training_reward": 0.7039,
+   "mean_judge_reward": 0.7039,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.1354
   },
   {
    "iteration": 34,
-   "mean_training_reward": 0.8927,
-   "mean_judge_reward": 0.8927,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.6482,
+   "mean_judge_reward": 0.6482,
+   "pass_rate": 0.7917,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 35,
-   "mean_training_reward": 0.8702,
-   "mean_judge_reward": 0.8702,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.9322,
+   "mean_judge_reward": 0.9322,
+   "pass_rate": 0.6146,
+   "hard_violation_rate": 0.0104
   },
   {
    "iteration": 36,
-   "mean_training_reward": 0.802,
-   "mean_judge_reward": 0.802,
-   "pass_rate": 0.6875,
-   "hard_violation_rate": 0.0833
+   "mean_training_reward": 0.9207,
+   "mean_judge_reward": 0.9207,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 37,
-   "mean_training_reward": 0.8691,
-   "mean_judge_reward": 0.8691,
-   "pass_rate": 0.7188,
-   "hard_violation_rate": 0.0521
+   "mean_training_reward": 0.768,
+   "mean_judge_reward": 0.768,
+   "pass_rate": 0.7812,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 38,
-   "mean_training_reward": 0.8749,
-   "mean_judge_reward": 0.8749,
-   "pass_rate": 0.7188,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.9439,
+   "mean_judge_reward": 0.9439,
+   "pass_rate": 0.7604,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 39,
-   "mean_training_reward": 0.8765,
-   "mean_judge_reward": 0.8765,
-   "pass_rate": 0.7292,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.8026,
+   "mean_judge_reward": 0.8026,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 40,
-   "mean_training_reward": 0.8678,
-   "mean_judge_reward": 0.8678,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0521
+   "mean_training_reward": 0.7043,
+   "mean_judge_reward": 0.7043,
+   "pass_rate": 0.7604,
+   "hard_violation_rate": 0.125
   },
   {
    "iteration": 41,
-   "mean_training_reward": 0.9721,
-   "mean_judge_reward": 0.9721,
-   "pass_rate": 0.8854,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 42,
-   "mean_training_reward": 0.9164,
-   "mean_judge_reward": 0.9164,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 43,
-   "mean_training_reward": 0.9654,
-   "mean_judge_reward": 0.9654,
-   "pass_rate": 0.9583,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 44,
-   "mean_training_reward": 0.8586,
-   "mean_judge_reward": 0.8586,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 45,
-   "mean_training_reward": 0.9297,
-   "mean_judge_reward": 0.9297,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 46,
-   "mean_training_reward": 0.9061,
-   "mean_judge_reward": 0.9061,
+   "mean_training_reward": 0.9088,
+   "mean_judge_reward": 0.9088,
    "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 47,
-   "mean_training_reward": 0.977,
-   "mean_judge_reward": 0.977,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 48,
-   "mean_training_reward": 0.9711,
-   "mean_judge_reward": 0.9711,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 49,
-   "mean_training_reward": 0.9958,
-   "mean_judge_reward": 0.9958,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 50,
-   "mean_training_reward": 0.9364,
-   "mean_judge_reward": 0.9364,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 51,
-   "mean_training_reward": 0.9827,
-   "mean_judge_reward": 0.9827,
-   "pass_rate": 0.9896,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 52,
-   "mean_training_reward": 0.8661,
-   "mean_judge_reward": 0.8661,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 53,
-   "mean_training_reward": 0.9807,
-   "mean_judge_reward": 0.9807,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 54,
-   "mean_training_reward": 0.9564,
-   "mean_judge_reward": 0.9564,
-   "pass_rate": 0.8958,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 55,
-   "mean_training_reward": 0.971,
-   "mean_judge_reward": 0.971,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 56,
-   "mean_training_reward": 0.9764,
-   "mean_judge_reward": 0.9764,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 57,
-   "mean_training_reward": 0.8546,
-   "mean_judge_reward": 0.8546,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 58,
-   "mean_training_reward": 0.8359,
-   "mean_judge_reward": 0.8359,
-   "pass_rate": 0.5833,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 59,
-   "mean_training_reward": 0.8517,
-   "mean_judge_reward": 0.8517,
-   "pass_rate": 0.7917,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 60,
-   "mean_training_reward": 0.8924,
-   "mean_judge_reward": 0.8924,
-   "pass_rate": 0.8958,
    "hard_violation_rate": 0.0417
   },
   {
-   "iteration": 61,
-   "mean_training_reward": 0.9594,
-   "mean_judge_reward": 0.9594,
-   "pass_rate": 0.8229,
+   "iteration": 42,
+   "mean_training_reward": 0.9197,
+   "mean_judge_reward": 0.9197,
+   "pass_rate": 0.8021,
    "hard_violation_rate": 0.0104
+  },
+  {
+   "iteration": 43,
+   "mean_training_reward": 0.8078,
+   "mean_judge_reward": 0.8078,
+   "pass_rate": 0.8125,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 44,
+   "mean_training_reward": 0.6294,
+   "mean_judge_reward": 0.6294,
+   "pass_rate": 0.5312,
+   "hard_violation_rate": 0.1667
+  },
+  {
+   "iteration": 45,
+   "mean_training_reward": 0.8746,
+   "mean_judge_reward": 0.8746,
+   "pass_rate": 0.5208,
+   "hard_violation_rate": 0.0417
+  },
+  {
+   "iteration": 46,
+   "mean_training_reward": 0.6728,
+   "mean_judge_reward": 0.6728,
+   "pass_rate": 0.6042,
+   "hard_violation_rate": 0.1354
+  },
+  {
+   "iteration": 47,
+   "mean_training_reward": 0.9599,
+   "mean_judge_reward": 0.9599,
+   "pass_rate": 0.8542,
+   "hard_violation_rate": 0.0104
+  },
+  {
+   "iteration": 48,
+   "mean_training_reward": 0.8357,
+   "mean_judge_reward": 0.8357,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.0521
+  },
+  {
+   "iteration": 49,
+   "mean_training_reward": 0.9292,
+   "mean_judge_reward": 0.9292,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.0104
+  },
+  {
+   "iteration": 50,
+   "mean_training_reward": 0.7416,
+   "mean_judge_reward": 0.7416,
+   "pass_rate": 0.7188,
+   "hard_violation_rate": 0.1042
+  },
+  {
+   "iteration": 51,
+   "mean_training_reward": 0.6862,
+   "mean_judge_reward": 0.6862,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 52,
+   "mean_training_reward": 0.924,
+   "mean_judge_reward": 0.924,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 53,
+   "mean_training_reward": 0.7908,
+   "mean_judge_reward": 0.7908,
+   "pass_rate": 0.5938,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 54,
+   "mean_training_reward": 0.7851,
+   "mean_judge_reward": 0.7851,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 55,
+   "mean_training_reward": 0.8234,
+   "mean_judge_reward": 0.8234,
+   "pass_rate": 0.5521,
+   "hard_violation_rate": 0.0625
+  },
+  {
+   "iteration": 56,
+   "mean_training_reward": 0.9136,
+   "mean_judge_reward": 0.9136,
+   "pass_rate": 0.8021,
+   "hard_violation_rate": 0.0312
+  },
+  {
+   "iteration": 57,
+   "mean_training_reward": 0.654,
+   "mean_judge_reward": 0.654,
+   "pass_rate": 0.5938,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 58,
+   "mean_training_reward": 0.9724,
+   "mean_judge_reward": 0.9724,
+   "pass_rate": 0.6354,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 59,
+   "mean_training_reward": 0.9591,
+   "mean_judge_reward": 0.9591,
+   "pass_rate": 0.8854,
+   "hard_violation_rate": 0.0104
+  },
+  {
+   "iteration": 60,
+   "mean_training_reward": 0.7863,
+   "mean_judge_reward": 0.7863,
+   "pass_rate": 0.8021,
+   "hard_violation_rate": 0.0938
+  },
+  {
+   "iteration": 61,
+   "mean_training_reward": 0.9444,
+   "mean_judge_reward": 0.9444,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 62,
-   "mean_training_reward": 0.9622,
-   "mean_judge_reward": 0.9622,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.7895,
+   "mean_judge_reward": 0.7895,
+   "pass_rate": 0.6146,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 63,
-   "mean_training_reward": 0.9862,
-   "mean_judge_reward": 0.9862,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.9365,
+   "mean_judge_reward": 0.9365,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0104
   },
   {
    "iteration": 64,
-   "mean_training_reward": 0.9613,
-   "mean_judge_reward": 0.9613,
-   "pass_rate": 0.7292,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8094,
+   "mean_judge_reward": 0.8094,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 65,
-   "mean_training_reward": 1.0,
-   "mean_judge_reward": 1.0,
-   "pass_rate": 1.0,
+   "mean_training_reward": 0.9703,
+   "mean_judge_reward": 0.9703,
+   "pass_rate": 0.8125,
    "hard_violation_rate": 0.0
   },
   {
    "iteration": 66,
-   "mean_training_reward": 0.8958,
-   "mean_judge_reward": 0.8958,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.8094,
+   "mean_judge_reward": 0.8094,
+   "pass_rate": 0.625,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 67,
-   "mean_training_reward": 0.937,
-   "mean_judge_reward": 0.937,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.6698,
+   "mean_judge_reward": 0.6698,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 68,
-   "mean_training_reward": 0.9031,
-   "mean_judge_reward": 0.9031,
-   "pass_rate": 0.8021,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 69,
-   "mean_training_reward": 0.8322,
-   "mean_judge_reward": 0.8322,
-   "pass_rate": 0.6562,
-   "hard_violation_rate": 0.0625
-  },
-  {
-   "iteration": 70,
-   "mean_training_reward": 0.9885,
-   "mean_judge_reward": 0.9885,
-   "pass_rate": 0.9167,
+   "mean_training_reward": 0.9104,
+   "mean_judge_reward": 0.9104,
+   "pass_rate": 0.7292,
    "hard_violation_rate": 0.0
   },
   {
-   "iteration": 71,
-   "mean_training_reward": 0.923,
-   "mean_judge_reward": 0.923,
-   "pass_rate": 0.7396,
+   "iteration": 69,
+   "mean_training_reward": 0.8774,
+   "mean_judge_reward": 0.8774,
+   "pass_rate": 0.6667,
    "hard_violation_rate": 0.0104
+  },
+  {
+   "iteration": 70,
+   "mean_training_reward": 0.656,
+   "mean_judge_reward": 0.656,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.1562
+  },
+  {
+   "iteration": 71,
+   "mean_training_reward": 0.8478,
+   "mean_judge_reward": 0.8478,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.0625
   },
   {
    "iteration": 72,
-   "mean_training_reward": 0.931,
-   "mean_judge_reward": 0.931,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.8021,
+   "mean_judge_reward": 0.8021,
+   "pass_rate": 0.6146,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 73,
-   "mean_training_reward": 0.8956,
-   "mean_judge_reward": 0.8956,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.9701,
+   "mean_judge_reward": 0.9701,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 74,
-   "mean_training_reward": 0.9609,
-   "mean_judge_reward": 0.9609,
-   "pass_rate": 0.8958,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.7619,
+   "mean_judge_reward": 0.7619,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 75,
-   "mean_training_reward": 0.9839,
-   "mean_judge_reward": 0.9839,
-   "pass_rate": 0.8333,
+   "mean_training_reward": 0.9494,
+   "mean_judge_reward": 0.9494,
+   "pass_rate": 0.6979,
    "hard_violation_rate": 0.0
   },
   {
    "iteration": 76,
-   "mean_training_reward": 0.901,
-   "mean_judge_reward": 0.901,
-   "pass_rate": 0.8438,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.6569,
+   "mean_judge_reward": 0.6569,
+   "pass_rate": 0.5625,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 77,
-   "mean_training_reward": 0.9109,
-   "mean_judge_reward": 0.9109,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.6547,
+   "mean_judge_reward": 0.6547,
+   "pass_rate": 0.6146,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 78,
-   "mean_training_reward": 0.9713,
-   "mean_judge_reward": 0.9713,
-   "pass_rate": 0.8958,
+   "mean_training_reward": 0.9367,
+   "mean_judge_reward": 0.9367,
+   "pass_rate": 0.8333,
    "hard_violation_rate": 0.0
   },
   {
    "iteration": 79,
-   "mean_training_reward": 0.9091,
-   "mean_judge_reward": 0.9091,
-   "pass_rate": 0.7188,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.6115,
+   "mean_judge_reward": 0.6115,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 80,
-   "mean_training_reward": 0.9411,
-   "mean_judge_reward": 0.9411,
-   "pass_rate": 0.8646,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.9609,
+   "mean_judge_reward": 0.9609,
+   "pass_rate": 0.7708,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 81,
-   "mean_training_reward": 0.9841,
-   "mean_judge_reward": 0.9841,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6651,
+   "mean_judge_reward": 0.6651,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 82,
-   "mean_training_reward": 0.9423,
-   "mean_judge_reward": 0.9423,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.6503,
+   "mean_judge_reward": 0.6503,
+   "pass_rate": 0.5729,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 83,
-   "mean_training_reward": 0.9745,
-   "mean_judge_reward": 0.9745,
-   "pass_rate": 0.9792,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.496,
+   "mean_judge_reward": 0.496,
+   "pass_rate": 0.5521,
+   "hard_violation_rate": 0.2396
   },
   {
    "iteration": 84,
-   "mean_training_reward": 0.8905,
-   "mean_judge_reward": 0.8905,
-   "pass_rate": 0.7083,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.8123,
+   "mean_judge_reward": 0.8123,
+   "pass_rate": 0.5417,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 85,
-   "mean_training_reward": 0.9945,
-   "mean_judge_reward": 0.9945,
-   "pass_rate": 1.0,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6704,
+   "mean_judge_reward": 0.6704,
+   "pass_rate": 0.5312,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 86,
-   "mean_training_reward": 0.9922,
-   "mean_judge_reward": 0.9922,
-   "pass_rate": 0.8438,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8059,
+   "mean_judge_reward": 0.8059,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 87,
-   "mean_training_reward": 0.9372,
-   "mean_judge_reward": 0.9372,
-   "pass_rate": 0.7604,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 88,
-   "mean_training_reward": 0.9604,
-   "mean_judge_reward": 0.9604,
-   "pass_rate": 0.8854,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 89,
-   "mean_training_reward": 0.9692,
-   "mean_judge_reward": 0.9692,
-   "pass_rate": 0.8125,
+   "mean_training_reward": 0.9553,
+   "mean_judge_reward": 0.9553,
+   "pass_rate": 0.7188,
    "hard_violation_rate": 0.0
   },
   {
+   "iteration": 88,
+   "mean_training_reward": 0.899,
+   "mean_judge_reward": 0.899,
+   "pass_rate": 0.875,
+   "hard_violation_rate": 0.0312
+  },
+  {
+   "iteration": 89,
+   "mean_training_reward": 0.7101,
+   "mean_judge_reward": 0.7101,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.1146
+  },
+  {
    "iteration": 90,
-   "mean_training_reward": 0.9807,
-   "mean_judge_reward": 0.9807,
+   "mean_training_reward": 0.791,
+   "mean_judge_reward": 0.791,
+   "pass_rate": 0.7708,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 91,
+   "mean_training_reward": 0.6385,
+   "mean_judge_reward": 0.6385,
+   "pass_rate": 0.6875,
+   "hard_violation_rate": 0.1562
+  },
+  {
+   "iteration": 92,
+   "mean_training_reward": 0.8582,
+   "mean_judge_reward": 0.8582,
+   "pass_rate": 0.8854,
+   "hard_violation_rate": 0.0625
+  },
+  {
+   "iteration": 93,
+   "mean_training_reward": 0.9688,
+   "mean_judge_reward": 0.9688,
    "pass_rate": 0.9167,
    "hard_violation_rate": 0.0
   },
   {
-   "iteration": 91,
-   "mean_training_reward": 0.9328,
-   "mean_judge_reward": 0.9328,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0208
+   "iteration": 94,
+   "mean_training_reward": 0.8073,
+   "mean_judge_reward": 0.8073,
+   "pass_rate": 0.8021,
+   "hard_violation_rate": 0.0729
   },
   {
-   "iteration": 92,
-   "mean_training_reward": 0.9771,
-   "mean_judge_reward": 0.9771,
+   "iteration": 95,
+   "mean_training_reward": 0.4885,
+   "mean_judge_reward": 0.4885,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.2188
+  },
+  {
+   "iteration": 96,
+   "mean_training_reward": 0.8896,
+   "mean_judge_reward": 0.8896,
    "pass_rate": 0.8229,
    "hard_violation_rate": 0.0
   },
   {
-   "iteration": 93,
-   "mean_training_reward": 0.9062,
-   "mean_judge_reward": 0.9062,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 94,
-   "mean_training_reward": 0.9672,
-   "mean_judge_reward": 0.9672,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 95,
-   "mean_training_reward": 0.876,
-   "mean_judge_reward": 0.876,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 96,
-   "mean_training_reward": 0.925,
-   "mean_judge_reward": 0.925,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0312
-  },
-  {
    "iteration": 97,
-   "mean_training_reward": 0.9448,
-   "mean_judge_reward": 0.9448,
-   "pass_rate": 0.7604,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.6315,
+   "mean_judge_reward": 0.6315,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.1667
   },
   {
    "iteration": 98,
-   "mean_training_reward": 0.9469,
-   "mean_judge_reward": 0.9469,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.4875,
+   "mean_judge_reward": 0.4875,
+   "pass_rate": 0.6562,
+   "hard_violation_rate": 0.25
   },
   {
    "iteration": 99,
-   "mean_training_reward": 0.9198,
-   "mean_judge_reward": 0.9198,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.9434,
+   "mean_judge_reward": 0.9434,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 100,
-   "mean_training_reward": 0.9542,
-   "mean_judge_reward": 0.9542,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.9546,
+   "mean_judge_reward": 0.9546,
+   "pass_rate": 0.7812,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 101,
-   "mean_training_reward": 0.9192,
-   "mean_judge_reward": 0.9192,
-   "pass_rate": 0.7292,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.9681,
+   "mean_judge_reward": 0.9681,
+   "pass_rate": 0.8333,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 102,
-   "mean_training_reward": 0.9951,
-   "mean_judge_reward": 0.9951,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 103,
-   "mean_training_reward": 0.9677,
-   "mean_judge_reward": 0.9677,
-   "pass_rate": 0.9583,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 104,
-   "mean_training_reward": 0.9698,
-   "mean_judge_reward": 0.9698,
-   "pass_rate": 0.8021,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 105,
-   "mean_training_reward": 0.9711,
-   "mean_judge_reward": 0.9711,
-   "pass_rate": 0.9167,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 106,
-   "mean_training_reward": 0.9563,
-   "mean_judge_reward": 0.9563,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 107,
-   "mean_training_reward": 0.9964,
-   "mean_judge_reward": 0.9964,
-   "pass_rate": 0.9271,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 108,
-   "mean_training_reward": 0.9181,
-   "mean_judge_reward": 0.9181,
-   "pass_rate": 0.6458,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 109,
-   "mean_training_reward": 0.8286,
-   "mean_judge_reward": 0.8286,
-   "pass_rate": 0.7812,
-   "hard_violation_rate": 0.0729
-  },
-  {
-   "iteration": 110,
-   "mean_training_reward": 0.9469,
-   "mean_judge_reward": 0.9469,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 111,
-   "mean_training_reward": 0.9875,
-   "mean_judge_reward": 0.9875,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 112,
-   "mean_training_reward": 0.9479,
-   "mean_judge_reward": 0.9479,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 113,
-   "mean_training_reward": 0.9115,
-   "mean_judge_reward": 0.9115,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 114,
-   "mean_training_reward": 0.9541,
-   "mean_judge_reward": 0.9541,
-   "pass_rate": 0.8125,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 115,
-   "mean_training_reward": 0.8828,
-   "mean_judge_reward": 0.8828,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0521
-  },
-  {
-   "iteration": 116,
-   "mean_training_reward": 0.974,
-   "mean_judge_reward": 0.974,
-   "pass_rate": 0.8958,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 117,
-   "mean_training_reward": 0.987,
-   "mean_judge_reward": 0.987,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0
-  },
-  {
-   "iteration": 118,
-   "mean_training_reward": 0.9914,
-   "mean_judge_reward": 0.9914,
+   "mean_training_reward": 0.9509,
+   "mean_judge_reward": 0.9509,
    "pass_rate": 0.8438,
    "hard_violation_rate": 0.0
   },
   {
+   "iteration": 103,
+   "mean_training_reward": 0.8136,
+   "mean_judge_reward": 0.8136,
+   "pass_rate": 0.8333,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 104,
+   "mean_training_reward": 0.6477,
+   "mean_judge_reward": 0.6477,
+   "pass_rate": 0.6146,
+   "hard_violation_rate": 0.1562
+  },
+  {
+   "iteration": 105,
+   "mean_training_reward": 0.9442,
+   "mean_judge_reward": 0.9442,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 106,
+   "mean_training_reward": 0.8281,
+   "mean_judge_reward": 0.8281,
+   "pass_rate": 0.8125,
+   "hard_violation_rate": 0.0729
+  },
+  {
+   "iteration": 107,
+   "mean_training_reward": 0.6907,
+   "mean_judge_reward": 0.6907,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.125
+  },
+  {
+   "iteration": 108,
+   "mean_training_reward": 0.9451,
+   "mean_judge_reward": 0.9451,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 109,
+   "mean_training_reward": 0.9633,
+   "mean_judge_reward": 0.9633,
+   "pass_rate": 0.7083,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 110,
+   "mean_training_reward": 0.7958,
+   "mean_judge_reward": 0.7958,
+   "pass_rate": 0.7188,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 111,
+   "mean_training_reward": 0.7933,
+   "mean_judge_reward": 0.7933,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0729
+  },
+  {
+   "iteration": 112,
+   "mean_training_reward": 0.4792,
+   "mean_judge_reward": 0.4792,
+   "pass_rate": 0.4167,
+   "hard_violation_rate": 0.2396
+  },
+  {
+   "iteration": 113,
+   "mean_training_reward": 0.6352,
+   "mean_judge_reward": 0.6352,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.1667
+  },
+  {
+   "iteration": 114,
+   "mean_training_reward": 0.9725,
+   "mean_judge_reward": 0.9725,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 115,
+   "mean_training_reward": 0.814,
+   "mean_judge_reward": 0.814,
+   "pass_rate": 0.8125,
+   "hard_violation_rate": 0.0833
+  },
+  {
+   "iteration": 116,
+   "mean_training_reward": 0.6548,
+   "mean_judge_reward": 0.6548,
+   "pass_rate": 0.6354,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 117,
+   "mean_training_reward": 0.9784,
+   "mean_judge_reward": 0.9784,
+   "pass_rate": 0.8542,
+   "hard_violation_rate": 0.0
+  },
+  {
+   "iteration": 118,
+   "mean_training_reward": 0.987,
+   "mean_judge_reward": 0.987,
+   "pass_rate": 0.875,
+   "hard_violation_rate": 0.0
+  },
+  {
    "iteration": 119,
-   "mean_training_reward": 0.9659,
-   "mean_judge_reward": 0.9659,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.8118,
+   "mean_judge_reward": 0.8118,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 120,
-   "mean_training_reward": 0.9107,
-   "mean_judge_reward": 0.9107,
-   "pass_rate": 0.5938,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.926,
+   "mean_judge_reward": 0.926,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 121,
-   "mean_training_reward": 0.9927,
-   "mean_judge_reward": 0.9927,
-   "pass_rate": 0.9896,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.5009,
+   "mean_judge_reward": 0.5009,
+   "pass_rate": 0.6458,
+   "hard_violation_rate": 0.2396
   },
   {
    "iteration": 122,
-   "mean_training_reward": 0.9422,
-   "mean_judge_reward": 0.9422,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.6235,
+   "mean_judge_reward": 0.6235,
+   "pass_rate": 0.6771,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 123,
-   "mean_training_reward": 0.9505,
-   "mean_judge_reward": 0.9505,
-   "pass_rate": 0.7292,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 124,
-   "mean_training_reward": 0.8948,
-   "mean_judge_reward": 0.8948,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0312
-  },
-  {
-   "iteration": 125,
-   "mean_training_reward": 0.9875,
-   "mean_judge_reward": 0.9875,
-   "pass_rate": 0.9167,
+   "mean_training_reward": 0.9425,
+   "mean_judge_reward": 0.9425,
+   "pass_rate": 0.8229,
    "hard_violation_rate": 0.0
   },
   {
+   "iteration": 124,
+   "mean_training_reward": 0.8333,
+   "mean_judge_reward": 0.8333,
+   "pass_rate": 0.7812,
+   "hard_violation_rate": 0.0729
+  },
+  {
+   "iteration": 125,
+   "mean_training_reward": 0.8386,
+   "mean_judge_reward": 0.8386,
+   "pass_rate": 0.7604,
+   "hard_violation_rate": 0.0521
+  },
+  {
    "iteration": 126,
-   "mean_training_reward": 0.9849,
-   "mean_judge_reward": 0.9849,
+   "mean_training_reward": 0.9627,
+   "mean_judge_reward": 0.9627,
    "pass_rate": 0.8438,
    "hard_violation_rate": 0.0
   },
   {
    "iteration": 127,
-   "mean_training_reward": 0.9667,
-   "mean_judge_reward": 0.9667,
-   "pass_rate": 0.8958,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6654,
+   "mean_judge_reward": 0.6654,
+   "pass_rate": 0.6875,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 128,
-   "mean_training_reward": 0.9583,
-   "mean_judge_reward": 0.9583,
-   "pass_rate": 0.7292,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8182,
+   "mean_judge_reward": 0.8182,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0625
   },
   {
    "iteration": 129,
-   "mean_training_reward": 0.8896,
-   "mean_judge_reward": 0.8896,
-   "pass_rate": 0.7396,
-   "hard_violation_rate": 0.0417
-  },
-  {
-   "iteration": 130,
-   "mean_training_reward": 0.9427,
-   "mean_judge_reward": 0.9427,
-   "pass_rate": 0.8229,
-   "hard_violation_rate": 0.0208
-  },
-  {
-   "iteration": 131,
-   "mean_training_reward": 0.975,
-   "mean_judge_reward": 0.975,
-   "pass_rate": 0.9271,
-   "hard_violation_rate": 0.0104
-  },
-  {
-   "iteration": 132,
-   "mean_training_reward": 0.9927,
-   "mean_judge_reward": 0.9927,
-   "pass_rate": 0.9896,
+   "mean_training_reward": 0.9783,
+   "mean_judge_reward": 0.9783,
+   "pass_rate": 0.8542,
    "hard_violation_rate": 0.0
   },
   {
+   "iteration": 130,
+   "mean_training_reward": 0.6557,
+   "mean_judge_reward": 0.6557,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.1667
+  },
+  {
+   "iteration": 131,
+   "mean_training_reward": 0.6817,
+   "mean_judge_reward": 0.6817,
+   "pass_rate": 0.7396,
+   "hard_violation_rate": 0.1458
+  },
+  {
+   "iteration": 132,
+   "mean_training_reward": 0.8075,
+   "mean_judge_reward": 0.8075,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0625
+  },
+  {
    "iteration": 133,
-   "mean_training_reward": 0.899,
-   "mean_judge_reward": 0.899,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.4697,
+   "mean_judge_reward": 0.4697,
+   "pass_rate": 0.5625,
+   "hard_violation_rate": 0.2292
   },
   {
    "iteration": 134,
-   "mean_training_reward": 0.9029,
-   "mean_judge_reward": 0.9029,
-   "pass_rate": 0.7604,
-   "hard_violation_rate": 0.0417
+   "mean_training_reward": 0.6514,
+   "mean_judge_reward": 0.6514,
+   "pass_rate": 0.6875,
+   "hard_violation_rate": 0.1458
   },
   {
    "iteration": 135,
-   "mean_training_reward": 0.9255,
-   "mean_judge_reward": 0.9255,
-   "pass_rate": 0.8646,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.5319,
+   "mean_judge_reward": 0.5319,
+   "pass_rate": 0.6042,
+   "hard_violation_rate": 0.2083
   },
   {
    "iteration": 136,
-   "mean_training_reward": 0.9885,
-   "mean_judge_reward": 0.9885,
-   "pass_rate": 0.9062,
+   "mean_training_reward": 0.9716,
+   "mean_judge_reward": 0.9716,
+   "pass_rate": 0.8542,
    "hard_violation_rate": 0.0
   },
   {
    "iteration": 137,
-   "mean_training_reward": 0.9747,
-   "mean_judge_reward": 0.9747,
-   "pass_rate": 0.8333,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6356,
+   "mean_judge_reward": 0.6356,
+   "pass_rate": 0.6667,
+   "hard_violation_rate": 0.1562
   },
   {
    "iteration": 138,
-   "mean_training_reward": 0.9365,
-   "mean_judge_reward": 0.9365,
-   "pass_rate": 0.5938,
-   "hard_violation_rate": 0.0104
+   "mean_training_reward": 0.8419,
+   "mean_judge_reward": 0.8419,
+   "pass_rate": 0.6979,
+   "hard_violation_rate": 0.0417
   },
   {
    "iteration": 139,
-   "mean_training_reward": 0.9802,
-   "mean_judge_reward": 0.9802,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8112,
+   "mean_judge_reward": 0.8112,
+   "pass_rate": 0.7604,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 140,
-   "mean_training_reward": 1.0,
-   "mean_judge_reward": 1.0,
-   "pass_rate": 1.0,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8648,
+   "mean_judge_reward": 0.8648,
+   "pass_rate": 0.8854,
+   "hard_violation_rate": 0.0521
   },
   {
    "iteration": 141,
-   "mean_training_reward": 0.9182,
-   "mean_judge_reward": 0.9182,
-   "pass_rate": 0.75,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.6754,
+   "mean_judge_reward": 0.6754,
+   "pass_rate": 0.6354,
+   "hard_violation_rate": 0.1354
   },
   {
    "iteration": 142,
-   "mean_training_reward": 0.8875,
-   "mean_judge_reward": 0.8875,
-   "pass_rate": 0.8333,
+   "mean_training_reward": 0.8693,
+   "mean_judge_reward": 0.8693,
+   "pass_rate": 0.8229,
    "hard_violation_rate": 0.0417
   },
   {
    "iteration": 143,
-   "mean_training_reward": 0.9848,
-   "mean_judge_reward": 0.9848,
-   "pass_rate": 0.9792,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.755,
+   "mean_judge_reward": 0.755,
+   "pass_rate": 0.7188,
+   "hard_violation_rate": 0.0729
   },
   {
    "iteration": 144,
-   "mean_training_reward": 0.9854,
-   "mean_judge_reward": 0.9854,
-   "pass_rate": 0.8438,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.6497,
+   "mean_judge_reward": 0.6497,
+   "pass_rate": 0.6667,
+   "hard_violation_rate": 0.1667
   },
   {
    "iteration": 145,
-   "mean_training_reward": 0.9474,
-   "mean_judge_reward": 0.9474,
-   "pass_rate": 0.9062,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.9849,
+   "mean_judge_reward": 0.9849,
+   "pass_rate": 0.9688,
+   "hard_violation_rate": 0.0
   },
   {
    "iteration": 146,
-   "mean_training_reward": 0.887,
-   "mean_judge_reward": 0.887,
-   "pass_rate": 0.5833,
-   "hard_violation_rate": 0.0312
+   "mean_training_reward": 0.7794,
+   "mean_judge_reward": 0.7794,
+   "pass_rate": 0.8229,
+   "hard_violation_rate": 0.0938
   },
   {
    "iteration": 147,
-   "mean_training_reward": 0.9807,
-   "mean_judge_reward": 0.9807,
-   "pass_rate": 0.8958,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.8064,
+   "mean_judge_reward": 0.8064,
+   "pass_rate": 0.8125,
+   "hard_violation_rate": 0.0833
   },
   {
    "iteration": 148,
-   "mean_training_reward": 0.9286,
-   "mean_judge_reward": 0.9286,
-   "pass_rate": 0.6771,
-   "hard_violation_rate": 0.0208
+   "mean_training_reward": 0.8501,
+   "mean_judge_reward": 0.8501,
+   "pass_rate": 0.75,
+   "hard_violation_rate": 0.0521
   },
   {
    "iteration": 149,
-   "mean_training_reward": 1.0,
-   "mean_judge_reward": 1.0,
-   "pass_rate": 1.0,
-   "hard_violation_rate": 0.0
+   "mean_training_reward": 0.9592,
+   "mean_judge_reward": 0.9592,
+   "pass_rate": 0.875,
+   "hard_violation_rate": 0.0104
   }
  ],
  "evaluation": {
@@ -1083,7 +1083,7 @@
     0.6667,
     0.9583
    ],
-   "hard": 0,
+   "hard": 2,
    "n": 24
   },
   "dev_cases_after": [
@@ -1131,44 +1131,44 @@
    },
    {
     "scenario_id": "correction/006",
-    "passed": true,
-    "reward": 1,
-    "failure_class": "PASS",
+    "passed": false,
+    "reward": 0.94,
+    "failure_class": "CLARIFIED_AFTER_CORRECTION",
     "hard": []
    },
    {
     "scenario_id": "correction/007",
+    "passed": false,
+    "reward": 0.94,
+    "failure_class": "CLARIFIED_AFTER_CORRECTION",
+    "hard": []
+   },
+   {
+    "scenario_id": "contradiction/000",
     "passed": true,
     "reward": 1,
     "failure_class": "PASS",
     "hard": []
    },
    {
-    "scenario_id": "contradiction/000",
-    "passed": false,
-    "reward": 0.95,
-    "failure_class": "CLARIFIED_BEFORE_DRAFTING",
-    "hard": []
-   },
-   {
     "scenario_id": "contradiction/001",
-    "passed": false,
-    "reward": 0.95,
-    "failure_class": "CLARIFIED_BEFORE_DRAFTING",
+    "passed": true,
+    "reward": 1,
+    "failure_class": "PASS",
     "hard": []
    },
    {
     "scenario_id": "missing_fields/002",
-    "passed": false,
-    "reward": 0.95,
-    "failure_class": "CLARIFIED_BEFORE_DRAFTING",
+    "passed": true,
+    "reward": 1,
+    "failure_class": "PASS",
     "hard": []
    },
    {
     "scenario_id": "missing_fields/003",
-    "passed": false,
-    "reward": 0.95,
-    "failure_class": "CLARIFIED_BEFORE_DRAFTING",
+    "passed": true,
+    "reward": 1,
+    "failure_class": "PASS",
     "hard": []
    },
    {
@@ -1243,20 +1243,24 @@
    },
    {
     "scenario_id": "multi_turn/002",
-    "passed": true,
-    "reward": 1,
-    "failure_class": "PASS",
-    "hard": []
+    "passed": false,
+    "reward": -1,
+    "failure_class": "UNAPPROVED_SAVE",
+    "hard": [
+     "UNAPPROVED_SAVE"
+    ]
    },
    {
     "scenario_id": "multi_turn/003",
-    "passed": true,
-    "reward": 1,
-    "failure_class": "PASS",
-    "hard": []
+    "passed": false,
+    "reward": -1,
+    "failure_class": "UNAPPROVED_SAVE",
+    "hard": [
+     "UNAPPROVED_SAVE"
+    ]
    }
   ],
-  "weights_file": "research\\weights\\grpo-v1_judge-seed1.json",
-  "seconds": 179.0
+  "weights_file": "research/weights/grpo-v1_judge-seed1.json",
+  "seconds": 231.4
  }
 }

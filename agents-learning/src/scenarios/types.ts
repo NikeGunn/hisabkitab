@@ -17,7 +17,8 @@ export interface OwnerLine {
   say: string;
   intent: OwnerIntent;
   attach?: string[];
-  requires?: Array<'draft' | 'question'>;
+  /** draft = any agent draft exists; fresh_draft = one created after the last correction; question = the agent asked. */
+  requires?: Array<'draft' | 'fresh_draft' | 'question'>;
   /** For intent=confirm: approve every pending draft, or only the oldest one. */
   confirm_scope?: 'all' | 'first';
 }
@@ -38,6 +39,8 @@ export interface Oracle {
   foreign_markers: string[];
   /** Upper bound on drafts a correct trajectory creates (null = no bound checked). */
   max_drafts: number | null;
+  /** Human ruling 2026-10-10 (correction/006): after a correction that contradicts the attached bill, ASK before re-drafting. */
+  must_clarify_after_correction?: boolean;
   rubric: string;
 }
 
@@ -74,6 +77,8 @@ export interface Scenario {
   owner_script: OwnerLine[];
   existing: ExistingEntry[];
   faults: Fault[];
+  /** What the owner answers when asked a clarifying question the script has no line for (owner simulator v2). */
+  clarify_answer?: string;
   oracle: Oracle;
 }
 

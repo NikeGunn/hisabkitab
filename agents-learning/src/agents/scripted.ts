@@ -44,7 +44,11 @@ interface Mem {
   drafts: Draft[];
   queue: Action[];
   /** Intent of the last owner message, as this agent understood it. */
-  intent: 'none' | 'request' | 'yes' | 'yes_first' | 'no' | 'correction' | 'info' | 'foreign';
+  intent: 'none' | 'request' | 'yes' | 'yes_first' | 'no' | 'correction' | 'correction_ok' | 'info' | 'foreign';
+  /** Corrected amount we asked the owner about (ruling: ask before re-drafting a contradicting figure). */
+  pending_correction: number | null;
+  /** Drafts the server refused to confirm (no explicit yes after them): ask again, confirm only these. */
+  reconfirm: string[];
   owner_amount: number | null;
   sale: { amount: number; inclusive: boolean } | null;
   vat_answer: boolean | null;
@@ -66,6 +70,8 @@ const fresh = (scenario: string): Mem => ({
   drafts: [],
   queue: [],
   intent: 'none',
+  pending_correction: null,
+  reconfirm: [],
   owner_amount: null,
   sale: null,
   vat_answer: null,
@@ -119,7 +125,8 @@ export class CarefulAgent implements Agent {
     const m = this.m;
     m.awaiting_owner = false;
     m.owner_text = text;
-    if (foreignRequest(text)) m.intent = 'foreign';
+    if (m.pending_correction !== null && !saysNo(text)) m.intent = 'correction_ok';
+    else if (foreignRequest(text)) m.intent = 'foreign';
     else if (holdOff(text) && amountsIn(text).length > 0) {
       m.intent = 'request';
       m.owner_amount = amountsIn(text)[0] ?? null;
@@ -188,9 +195,17 @@ export class CarefulAgent implements Agent {
       return;
     }
     if (r.name === 'confirm_entry' && r.ok) {
-      const d = r.data as { ok?: boolean; entry_id?: string };
+      const d = r.data as { ok?: boolean; entry_id?: string; needs_owner_approval?: boolean };
       const draft = m.drafts.find((x) => x.id === d.entry_id);
       if (draft && d.ok) draft.confirmed = true;
+      if (d.needs_owner_approval) {
+        // The server did not see an explicit yes after this draft: never claim it is saved; ask for a clear YES.
+        const refused = m.drafts.find((x) => !x.confirmed && !x.superseded && !m.reconfirm.includes(x.id) && m.queue.every((a) => a.type !== 'tool' || a.args['entry_id'] !== x.id));
+        if (refused) m.reconfirm.push(refused.id);
+        m.done_saving = false;
+        const ask = msg(`To save ${this.listOf(m.reconfirm)}, please reply YES.`);
+        m.queue = m.queue.map((a) => (a.type === 'message' && a.text.startsWith('Saved') ? ask : a));
+      }
     }
   }
 
@@ -211,7 +226,9 @@ export class CarefulAgent implements Agent {
     if (m.intent === 'yes' || m.intent === 'yes_first') {
       const pending = m.drafts.filter((d) => !d.confirmed && !d.superseded);
       if (pending.length === 0 && m.done_saving) return this.say('That is already saved — nothing more to do.');
-      const target = m.intent === 'yes_first' ? this.firstMentioned(pending) : pending;
+      const again = pending.filter((d) => m.reconfirm.includes(d.id));
+      const target = again.length > 0 ? again : m.intent === 'yes_first' ? this.firstMentioned(pending) : pending;
+      m.reconfirm = [];
       for (const d of target) m.queue.push({ type: 'tool', name: 'confirm_entry', args: { entry_type: d.type, entry_id: d.id } });
       m.done_saving = true;
       m.intent = 'none';
@@ -221,10 +238,20 @@ export class CarefulAgent implements Agent {
     }
 
     if (m.intent === 'correction' && m.owner_amount !== null) {
-      const bill = m.bills[0];
+      // Ruling 2026-10-10: the owner's figure contradicts the bill → ask before re-drafting.
+      // Only the owner's own figure is stated (the bill's is not tool-verified).
       m.intent = 'none';
+      m.pending_correction = m.owner_amount;
+      return this.say(`Your bill shows a different total. Should I record the revised ${npr(m.owner_amount)} instead? Do you have the revised bill?`);
+    }
+    if (m.intent === 'correction_ok' && m.pending_correction !== null) {
+      const bill = m.bills[0];
+      const amount = m.pending_correction;
+      m.intent = 'none';
+      m.pending_correction = null;
+      const old = m.drafts.find((d) => !d.confirmed && !d.superseded);
       for (const d of m.drafts) if (!d.confirmed) d.superseded = true;
-      return this.writeExpense(bill ?? null, m.owner_amount, true);
+      return this.writeExpense(bill ?? null, amount, true, old?.id);
     }
 
     // Sales from a typed message.
@@ -297,8 +324,16 @@ export class CarefulAgent implements Agent {
     return byVendor ? [byVendor] : pending.slice(0, 1);
   }
 
-  private writeExpense(b: ParsedBill | null, totalPaisa: number, vatRegistered: boolean): Action {
+  private listOf(ids: string[]): string {
+    return this.m.drafts
+      .filter((d) => ids.includes(d.id))
+      .map((d) => `${d.vendor ?? d.type} ${npr(d.total_paisa)}`)
+      .join(' and ');
+  }
+
+  private writeExpense(b: ParsedBill | null, totalPaisa: number, vatRegistered: boolean, supersedes?: string): Action {
     const args: Record<string, unknown> = {
+      ...(supersedes ? { supersedes_entry_id: supersedes } : {}),
       occurred_on: b?.date ?? '2026-09-20',
       amount_paisa: totalPaisa,
       inclusive: true,

@@ -81,7 +81,7 @@ def main() -> None:
         "config": {**asdict(cfg), "dataset_version": spec["dataset_version"], "env_version": spec.get("env_version"), "judge_version": spec.get("judge_version"), "numpy": np.__version__, "python": platform.python_version()},
         "curve": out["curve"],
         "evaluation": {"dev_before": summary(out["dev_before"]), "dev_after": summary(out["dev_after"]), "dev_cases_after": out["dev_after"],
-                       "weights_file": str(weights.relative_to(ROOT.parent)), "seconds": out["seconds"]},
+                       "weights_file": weights.relative_to(ROOT.parent).as_posix(), "seconds": out["seconds"]},
     }
     results = ROOT / "results" / f"{name}.json"
     results.parent.mkdir(parents=True, exist_ok=True)

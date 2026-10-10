@@ -27,6 +27,6 @@ docs
 
 # Rehearsal Lab artifacts that never belong in an image
 agents-learning/reports
-agents-learning/research/results
+# research/results ship in the lab image: `pnpm lab import-training` loads them into the admin panel
 **/__pycache__
 **/.pytest_cache
