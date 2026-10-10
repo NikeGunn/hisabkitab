@@ -5,7 +5,7 @@
  * real tenant: there is no DB handle, no network, no credential in this module.
  */
 import { z } from 'zod';
-import { inputSchemas } from '@hisab/mcp-ledger';
+import { inputSchemas, validatedFiguresEcho } from '@hisab/mcp-ledger';
 import {
   resolveInvoiceVat,
   splitVatInclusive,
@@ -22,7 +22,7 @@ import { uuidFrom } from '../scenarios/families.js';
 export interface LedgerEntry {
   id: string;
   type: 'sale' | 'expense';
-  status: 'draft' | 'confirmed';
+  status: 'draft' | 'confirmed' | 'superseded';
   taxable_paisa: number;
   vat_paisa: number;
   total_paisa: number;
@@ -63,7 +63,9 @@ export const TOOL_DESCRIPTIONS: Record<ToolName, string> = {
     'Record a purchase/expense as a DRAFT (validated; fail → nothing saved; duplicates flagged). Requires a later confirm_entry after the owner explicitly approves.',
   record_sale:
     'Record a sale as a DRAFT (requires later confirm_entry after the owner explicitly approves). Amount is VAT-inclusive unless inclusive=false.',
-  confirm_entry: 'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ).',
+  confirm_entry:
+    'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ). ' +
+    'Server-enforced: refused (needs_owner_approval) unless an explicit owner yes arrived AFTER the draft was shown.',
   validate_entry: 'Run the Validation Engine on candidate figures WITHOUT saving. Use before asserting any figure.',
   compute_vat: 'Pure VAT helper (no write): split an amount into excl + 13% VAT. inclusive=true divides, false adds.',
   list_transactions: "List this business's sales/expenses (draft + confirmed unless filtered).",
@@ -74,6 +76,12 @@ export interface ToolCtx {
   ledger: LedgerState;
   step: number;
   attached: readonly string[];
+  /**
+   * Production's server-side confirm guard (migration 0025): steps at which the
+   * owner sent an explicit yes (isOwnerApproval on their text). A draft can only
+   * be confirmed after a yes NEWER than it. Omitted = guard off (probe runs only).
+   */
+  ownerYesSteps?: readonly number[];
 }
 
 export type ToolOutcome = { ok: true; data: unknown; write?: { op: 'draft' | 'confirm'; entry: LedgerEntry } } | { ok: false; data: unknown };
@@ -84,8 +92,8 @@ const report = (r: ValidationReport) => ({
   input_credit_eligible: r.inputCreditEligible,
 });
 
-const existingRefs = (ledger: LedgerState): ExistingEntryRef[] =>
-  ledger.entries.map((e) => ({
+const existingRefs = (ledger: LedgerState, excludeId?: string): ExistingEntryRef[] =>
+  ledger.entries.filter((e) => e.status !== 'superseded' && e.id !== excludeId).map((e) => ({
     id: e.id,
     totalPaisa: BigInt(e.total_paisa),
     occurredOn: new Date(`${e.occurred_on}T00:00:00Z`),
@@ -154,6 +162,7 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
         printed_taxable_paisa?: number;
         printed_vat_paisa?: number;
         idempotency_key?: string;
+        supersedes_entry_id?: string;
       };
       return withIdem(ctx, a.idempotency_key, () => {
         const isExpense = name === 'record_expense';
@@ -172,8 +181,15 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
         if (new Date(`${a.occurred_on}T00:00:00Z`) > asOf) {
           return { ok: true, data: { saved: false, reason: 'occurred_on is in the future — refused' } };
         }
+        // Same rule as production: a correction may only replace this business's own DRAFT of the same kind.
+        const target = a.supersedes_entry_id
+          ? ctx.ledger.entries.find((e) => e.id === a.supersedes_entry_id && e.type === (isExpense ? 'expense' : 'sale') && e.status === 'draft')
+          : undefined;
+        if (a.supersedes_entry_id && !target) {
+          return { ok: true, data: { saved: false, reason: 'supersedes_entry_id is not a draft of this kind in this business (a CONFIRMED entry is corrected with a credit note, never replaced) — nothing saved' } };
+        }
         const total = resolved.exclPaisa + resolved.vatPaisa;
-        const existing = existingRefs(ctx.ledger);
+        const existing = existingRefs(ctx.ledger, a.supersedes_entry_id);
         const occurredOn = new Date(`${a.occurred_on}T00:00:00Z`);
         const r = isExpense
           ? validateExpense(
@@ -206,6 +222,7 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
           vendor_name: a.vendor_name ?? null,
           invoice_no: a.invoice_no ?? null,
         });
+        if (target) target.status = 'superseded';
         return {
           ok: true,
           write: { op: 'draft', entry },
@@ -216,6 +233,7 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
             amount_excl_vat_paisa: entry.taxable_paisa,
             vat_paisa: entry.vat_paisa,
             total_paisa: entry.total_paisa,
+            ...(target ? { superseded_draft_id: target.id } : {}),
             validation: report(r),
           },
         };
@@ -226,6 +244,18 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
       const a = parsed.data as { entry_type: 'sale' | 'expense'; entry_id: string };
       const entry = ctx.ledger.entries.find((e) => e.id === a.entry_id && e.type === a.entry_type && e.status === 'draft');
       if (!entry) return { ok: true, data: { ok: false, reason: 'entry not found in this business, or already confirmed' } };
+      if (ctx.ownerYesSteps && !ctx.ownerYesSteps.some((s) => s > entry.created_step)) {
+        return {
+          ok: true,
+          data: {
+            ok: false,
+            needs_owner_approval: true,
+            draft: { entry_id: entry.id, amount_excl_vat_paisa: entry.taxable_paisa, vat_paisa: entry.vat_paisa, total_paisa: entry.total_paisa },
+            reason:
+              'not confirmed: no explicit "yes" from the owner after this draft was shown. Show the owner the drafted figures and ask them to reply YES / हो to save it, then call confirm again.',
+          },
+        };
+      }
       entry.status = 'confirmed';
       return {
         ok: true,
@@ -275,13 +305,14 @@ export function runTool(name: ToolName, rawArgs: unknown, ctx: ToolCtx): ToolOut
               { asOf, existing: existingRefs(ctx.ledger) },
             )
           : validateSale({ ...base, ...(occurredOn ? { occurredOn } : {}) }, { asOf, existing: existingRefs(ctx.ledger) });
-      return { ok: true, data: report(r) };
+      // validated_figures: the SAME echo production returns (no drift; finding #2).
+      return { ok: true, data: { ...report(r), validated_figures: validatedFiguresEcho(a) } };
     }
 
     case 'list_transactions': {
       const a = parsed.data as { type?: 'sale' | 'expense'; status?: 'draft' | 'confirmed' };
       const rows = ctx.ledger.entries
-        .filter((e) => (!a.type || e.type === a.type) && (!a.status || e.status === a.status))
+        .filter((e) => (!a.type || e.type === a.type) && (a.status ? e.status === a.status : e.status !== 'superseded'))
         .map(({ preexisting: _p, created_step: _c, ...row }) => row);
       return { ok: true, data: { transactions: rows } };
     }

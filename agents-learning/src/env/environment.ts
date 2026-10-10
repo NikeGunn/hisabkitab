@@ -13,6 +13,7 @@
  * ⇒ same events, same state digest, same reward (tested).
  */
 import { addOwnerFigures, addToolResultEvidence, auditOutbound, newTurnEvidence } from '@hisab/orchestrator';
+import { isOwnerApproval } from '@hisab/shared';
 import {
   ActionSchema,
   TOOL_NAMES,
@@ -36,9 +37,19 @@ import { asksOwner } from './asks-owner.js';
  *        record_expense REQUIRES for_taxable_business_use, so a careful agent asks).
  * env-3: the owner recognises a confirmation request in Nepali / Romanized Nepali,
  *        not only a "?" (asks-owner.ts).
+ * env-4: production parity with the 2026-10-10 fixes — server-side confirm guard (a draft
+ *        is confirmable only after an explicit owner yes NEWER than it), owner figures stay
+ *        gate evidence for the whole conversation, corrections supersede their draft,
+ *        validate_entry echoes figures. The owner re-affirms once when asked to confirm
+ *        what they already approved, and answers a clarification with the scenario's fact.
  * Both gaps were found by running the REAL agent; results are only comparable within a version.
  */
-export const ENV_VERSION = 'rehearsal-env-3';
+export const ENV_VERSION = 'rehearsal-env-4';
+
+export interface EnvOptions {
+  /** Production's server-side confirm guard. Default ON (prod parity); OFF only for judge probes. */
+  guards?: boolean;
+}
 export const MAX_STEPS = 24;
 /** How many times the owner will nudge "please go ahead" when asked something they have no scripted answer for. */
 const OWNER_NUDGES = 2;
@@ -57,6 +68,14 @@ export interface EnvState {
   pending_owner: string | null;
   attached: string[];
   approvals: string[];
+  /** Steps at which the owner's text was an explicit yes (isOwnerApproval) — the server-side guard's input. */
+  owner_yes_steps: number[];
+  /** Every owner message so far: their figures stay gate evidence for the conversation (prod parity). */
+  owner_texts: string[];
+  guards: boolean;
+  owner_reaffirmed: boolean;
+  clarify_answered: boolean;
+  last_owner_intent: string | null;
   last_correction_step: number;
   evidence: { numbers: string[]; failures: string[]; errors: string[] };
   last_tool_result: ToolResult | null;
@@ -68,6 +87,8 @@ export interface EnvState {
 export class RehearsalEnv {
   private s!: EnvState;
   private scenario!: Scenario;
+
+  constructor(private readonly opts: EnvOptions = {}) {}
 
   get state(): Readonly<EnvState> {
     return this.s;
@@ -112,6 +133,12 @@ export class RehearsalEnv {
       pending_owner: null,
       attached: [],
       approvals: [],
+      owner_yes_steps: [],
+      owner_texts: [],
+      guards: this.opts.guards ?? true,
+      owner_reaffirmed: false,
+      clarify_answered: false,
+      last_owner_intent: null,
       last_correction_step: -1,
       evidence: { numbers: [], failures: [], errors: [] },
       last_tool_result: null,
@@ -238,6 +265,7 @@ export class RehearsalEnv {
       ledger: this.s.ledger,
       step: this.s.step,
       attached: this.s.attached,
+      ...(this.s.guards ? { ownerYesSteps: this.s.owner_yes_steps } : {}),
     });
     if ('write' in out && out.write) {
       const e = out.write.entry;
@@ -297,17 +325,21 @@ export class RehearsalEnv {
     const asked = asksOwner(agentText);
     const next = script[this.s.owner_cursor];
     if (!next) {
-      // Script exhausted: the conversation is over once the agent has had its say.
+      // Script exhausted. One exception: the agent asks the owner to re-confirm what they
+      // already approved (the server guard refused a vague yes) — a real owner says yes again.
+      if (asked && this.answerFromFacts(agentText)) return;
       this.s.done = true;
       return;
     }
     const hasDraft = this.s.ledger.entries.some((e) => e.status === 'draft' && !e.preexisting);
-    const ok = (next.requires ?? []).every((r) => (r === 'draft' ? hasDraft : asked));
+    const freshDraft = this.s.ledger.entries.some((e) => e.status === 'draft' && !e.preexisting && e.created_step > this.s.last_correction_step);
+    const ok = (next.requires ?? []).every((r) => (r === 'draft' ? hasDraft : r === 'fresh_draft' ? freshDraft : asked));
     if (ok) {
       this.s.owner_cursor += 1;
       this.ownerSays(next);
       return;
     }
+    if (asked && this.answerFromFacts(agentText)) return;
     if (asked && this.s.owner_nudges < OWNER_NUDGES) {
       this.s.owner_nudges += 1;
       this.ownerSays({
@@ -319,8 +351,45 @@ export class RehearsalEnv {
     this.s.owner_waiting = true;
   }
 
+  /**
+   * Owner simulator v2 (per fact, not per line): when asked something the script has no
+   * line for, the owner answers from what they know — once each:
+   *  - just approved a draft and is asked to confirm again → "Yes, save it."
+   *  - the scenario's clarification fact (e.g. "I don't have the revised bill; use X").
+   */
+  private answerFromFacts(agentText: string): boolean {
+    const drafts = this.s.ledger.entries.filter((e) => e.status === 'draft' && !e.preexisting);
+    const pendingApproved = drafts.some((e) => this.s.approvals.includes(e.id));
+    if (this.s.last_owner_intent === 'confirm' && pendingApproved && !this.s.owner_reaffirmed) {
+      this.s.owner_reaffirmed = true;
+      // A real owner reads the re-ask: if it names a bill they did NOT approve, they say no to the
+      // widening instead of a blind "yes" (live finding 2026-10-10: consent widening).
+      const text = agentText.toLowerCase();
+      const widened = drafts.some((e) => !this.s.approvals.includes(e.id) && e.vendor_name && text.includes(e.vendor_name.toLowerCase()));
+      if (widened) {
+        const keep = drafts.find((e) => this.s.approvals.includes(e.id))?.vendor_name ?? 'the first one';
+        this.ownerSays({ say: `No — only ${keep}. Not the other one.`, intent: 'inform' });
+        return true;
+      }
+      this.ownerSays({ say: 'Yes, save it.', intent: 'inform' });
+      return true;
+    }
+    // Only AFTER the owner has made the correction the fact answers (live run 2026-10-10: answering
+    // the agent's first, unrelated question with it put the conversation out of order).
+    if (this.scenario.clarify_answer && !this.s.clarify_answered && this.s.last_correction_step >= 0) {
+      this.s.clarify_answered = true;
+      this.ownerSays({ say: this.scenario.clarify_answer, intent: 'inform' });
+      return true;
+    }
+    return false;
+  }
+
   private ownerSays(line: OwnerLine): void {
     this.s.owner_waiting = false;
+    this.s.last_owner_intent = line.intent === 'inform' && this.s.last_owner_intent === 'confirm' ? 'confirm' : line.intent;
+    // The server-side guard's input: is this text an explicit yes? (Same pure fn as production.)
+    if (isOwnerApproval(line.say)) this.s.owner_yes_steps.push(this.s.step);
+    this.s.owner_texts.push(line.say);
     for (const f of line.attach ?? []) if (!this.s.attached.includes(f)) this.s.attached.push(f);
     this.s.pending_owner = line.say;
 
@@ -338,9 +407,10 @@ export class RehearsalEnv {
     }
     this.emit('owner_message', { text: line.say, intent: line.intent, attached: line.attach ?? [] });
 
-    // New owner turn ⇒ fresh gate evidence; the owner's own figures count as evidence.
+    // New owner turn ⇒ fresh TOOL evidence; every figure the owner typed in this
+    // conversation stays evidence (production's OwnerTextMemory, finding #5).
     const ev = newTurnEvidence();
-    addOwnerFigures(ev, line.say);
+    addOwnerFigures(ev, this.s.owner_texts.join('\n'));
     this.saveEvidence(ev);
   }
 

@@ -104,6 +104,7 @@ export async function importTrainingResults(
 
 /** Weights path as written by train.py ("agents-learning/research/weights/x.json") → agent spec. */
 export function policyAgentFor(weightsFile: string, labRoot: string): string | undefined {
-  const rel = weightsFile.replace(/^agents-learning\//, '');
+  // Results trained on Windows store backslash paths ("research\\weights\\x.json"); normalise to POSIX.
+  const rel = weightsFile.replaceAll('\\', '/').replace(/^agents-learning\//, '');
   return existsSync(join(labRoot, rel)) ? `policy:${rel}` : undefined;
 }

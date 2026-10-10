@@ -52,6 +52,8 @@ export interface EvalOptions {
   budgetPaisa?: number;
   experiment?: string;
   onCase?(c: CaseResult): void | Promise<void>;
+  /** Environment options (default: production parity, guards ON). */
+  env?: import('../env/environment.js').EnvOptions;
 }
 
 export async function evaluate(makeAgent: () => Agent, scenarios: Scenario[], opts: EvalOptions = {}): Promise<EvalReport> {
@@ -79,7 +81,7 @@ export async function evaluate(makeAgent: () => Agent, scenarios: Scenario[], op
         judge_version: JUDGE_VERSION,
         ...(opts.experiment ? { experiment: opts.experiment } : {}),
       },
-      () => runEpisode(agent, s.id),
+      () => runEpisode(agent, s.id, opts.env ? { env: opts.env } : {}),
     );
     const cost = episodeCost(ep);
     spent += cost;

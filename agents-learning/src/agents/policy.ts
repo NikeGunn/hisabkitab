@@ -1,7 +1,7 @@
 /**
  * PolicyAgent: a linear softmax policy over the skill harness.
  *
- *   logits = W · features        (W: 6 skills × 12 features = 72 numbers)
+ *   logits = W · features        (W: 6 skills × 13 features = 78 numbers)
  *   π(skill | features) = softmax(logits)
  *
  * The weights are LEARNED by the Python research layer (agents-learning/research,
@@ -94,5 +94,6 @@ export function ruleWeights(): PolicyWeights {
   set('acknowledge', 'owner_no', 6);
   set('decline', 'other_business', 9);
   set('draft_and_ask', 'owner_correction', 4);
+  set('ask_clarify', 'correction_unclarified', 6);
   return { name: 'rules', skills: SKILLS, features: FEATURES, W };
 }

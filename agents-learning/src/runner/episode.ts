@@ -4,7 +4,7 @@
  * directly.
  */
 import type { Action, LabEvent, Observation } from '../contracts.js';
-import { RehearsalEnv } from '../env/environment.js';
+import { RehearsalEnv, type EnvOptions } from '../env/environment.js';
 import type { Verdict } from '../judge/judge.js';
 import type { Agent, DecisionUsage } from '../agents/types.js';
 import { span } from '../telemetry/langsmith.js';
@@ -43,10 +43,12 @@ export interface EpisodeHooks {
   /** Called after every executed step — the durable runner commits here. */
   onStep?(rec: StepRecord, env: RehearsalEnv): Promise<void> | void;
   now?(): number;
+  /** Environment options (default: production parity, guards ON). */
+  env?: EnvOptions;
 }
 
 export async function runEpisode(agent: Agent, scenarioId: string, hooks: EpisodeHooks = {}): Promise<EpisodeResult> {
-  const env = new RehearsalEnv();
+  const env = new RehearsalEnv(hooks.env);
   const [first] = env.reset({ scenario_id: scenarioId });
   agent.begin(scenarioId);
   return continueEpisode(env, agent, first, [], hooks);

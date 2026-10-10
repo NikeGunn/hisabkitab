@@ -51,7 +51,7 @@ export function registerLabRoutes(app: FastifyInstance, h: LabRouteHelpers): voi
              (SELECT count(*) FROM rehearsal.episodes e WHERE e.run_id = r.id AND e.status = 'quarantined')::int AS quarantined
         FROM rehearsal.runs r ORDER BY r.created_at DESC LIMIT 50`);
     const training = await rows(h.db, sql`
-      SELECT id, name, algorithm, reward_version, created_at, evaluation->'dev_after' AS dev_after, evaluation->'dev_before' AS dev_before, evaluation->'test' AS test
+      SELECT id, name, algorithm, reward_version, created_at, evaluation->'dev_after' AS dev_after, evaluation->'dev_before' AS dev_before, evaluation->'test' AS test, config->>'env_version' AS env_version
         FROM rehearsal.training_runs ORDER BY created_at DESC LIMIT 30`);
     const decisions = await rows(h.db, sql`
       SELECT candidate, gate, decision, reason, decided_by, decided_at FROM rehearsal.release_decisions ORDER BY decided_at DESC LIMIT 20`);
@@ -78,13 +78,13 @@ export function registerLabRoutes(app: FastifyInstance, h: LabRouteHelpers): voi
       : `<p class="mut">No runs yet. Run <code>pnpm lab eval --agent careful --split dev --save</code>.</p>`;
 
     const trainTable = training.length
-      ? `<table><tr><th>When</th><th>Run</th><th>Reward</th><th>Dev pass: before → after</th><th>Hard (dev)</th><th>Held-out test</th></tr>${training
+      ? `<table><tr><th>When</th><th>Run</th><th>Env</th><th>Reward</th><th>Dev pass: before → after</th><th>Hard (dev)</th><th>Held-out test</th></tr>${training
           .map((r) => {
             const a = (r['dev_after'] ?? {}) as { pass_rate?: number; hard?: number };
             const b = (r['dev_before'] ?? {}) as { pass_rate?: number };
             const t = r['test'] as { pass_rate?: number; hard?: number; n?: number } | null;
             return `<tr><td>${fmtDate(r['created_at'] as string)}</td><td><a href="/admin/lab/training/${esc(r['id'])}">${esc(r['name'])}</a></td>
-              <td>${esc(r['reward_version'])}</td><td>${pct(b.pass_rate)} → <b>${pct(a.pass_rate)}</b></td>
+              <td><small>${esc(r['env_version'] ?? '—')}</small></td><td>${esc(r['reward_version'])}</td><td>${pct(b.pass_rate)} → <b>${pct(a.pass_rate)}</b></td>
               <td>${a.hard ? pill(String(a.hard), 'bad') : pill('0', 'ok')}</td>
               <td>${t ? `<b>${pct(t.pass_rate)}</b> <small>n=${esc(t.n)}</small> ${t.hard ? pill(`${String(t.hard)} hard`, 'bad') : pill('0 hard', 'ok')}` : '—'}</td></tr>`;
           })

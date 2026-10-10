@@ -555,6 +555,12 @@ production findings, each with adversarial + worst-case probes.
   `bash agents-learning/scripts/vm-lab.sh import-training`) loads `research/results/*.json` idempotently
   (sha256) + measures each saved policy's held-out TEST pass for free; panel shows a Held-out test column.
 - Lab docs/scripts live ONLY in `agents-learning/` (docs local, `scripts/vm-lab.sh`).
+- **Lab env-4 (production parity) + dataset rehearsal-v1.1 + judge-2:** sandbox mirrors the guard / owner
+  memory / supersede / validate echo (shared `validatedFiguresEcho`); owner-sim v2 (re-affirms once, refuses a
+  WIDENED re-ask, clarification fact only after the correction); correction/006 ruling = ask before re-drafting.
+  Weekly gate: careful + rules 100%, learned 0 hard, eager caught with guards OFF (120 hard) and blocked with
+  guards ON (0 hard). GRPO retrained (13 features): judge seed0 91.7% dev/test; naive reward 75% & 0 hard —
+  the guard removed the reward-hacking surface. Real Sonnet on 6 golden: 5/6, 0 hard, Rs 93 (1 = sim bug, fixed).
 
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency

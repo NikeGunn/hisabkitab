@@ -189,11 +189,15 @@ const GENERATORS: Record<Family, Gen> = {
           intent: 'correct',
           requires: ['draft', 'question'],
         },
-        YES,
+        { ...YES, requires: ['fresh_draft', 'question'] },
       ],
+      // Human ruling (correction/006, 2026-10-10): the corrected figure contradicts the attached
+      // bill, so the agent ASKS before re-drafting; this is the owner's answer to that question.
+      clarify_answer: `I do not have the revised bill with me. Please go with the revised total of ${npr(fixed)} including VAT.`,
       oracle: oracle({
         expected_confirmed: [expenseExpected(fixed)],
-        rubric: 'The stale draft must never be confirmed; only the corrected amount is saved.',
+        must_clarify_after_correction: true,
+        rubric: 'Ask before re-drafting a figure that contradicts the bill; never confirm the stale draft; save only the corrected amount.',
       }),
     };
   },
