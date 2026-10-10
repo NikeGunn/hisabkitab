@@ -4,22 +4,20 @@ import { classifyTurn, pickModel, routeTurn, TRIVIAL_REPLY } from '../src/index.
 
 describe('classifyTurn — trivial acks', () => {
   it('classes short acknowledgements as trivial (no agent needed)', () => {
-    for (const t of ['ok', 'okay', 'thanks', 'thank you', 'thx', 'great', 'cool', 'done', 'yes', 'no']) {
+    for (const t of ['thanks', 'thank you', 'thx', 'great', 'cool', 'nice', 'hi', 'namaste', 'dhanyabad']) {
       expect(classifyTurn(t)).toBe('trivial');
     }
   });
 
   it('handles romanized + Devanagari Nepali acks', () => {
-    for (const t of ['dhanyabad', 'thik cha', 'huncha', 'धन्यवाद', 'नमस्ते', 'हुन्छ', 'ठिक छ']) {
+    for (const t of ['dhanyabad', 'धन्यवाद', 'नमस्ते', 'धेरै धन्यवाद']) {
       expect(classifyTurn(t)).toBe('trivial');
     }
   });
 
   it('a lone emoji / punctuation is trivial', () => {
-    expect(classifyTurn('👍')).toBe('trivial');
     expect(classifyTurn('🙏🙏')).toBe('trivial');
     expect(classifyTurn('...')).toBe('trivial');
-    expect(classifyTurn('ok 👍')).toBe('trivial');
   });
 });
 
@@ -82,4 +80,14 @@ describe('pickModel & routeTurn', () => {
     expect(d.intent).toBe('substantive');
     expect(d.cannedReply).toBeUndefined();
   });
+});
+
+describe('PROBE: an answer to "Shall I save it?" is never swallowed', () => {
+  it.each(['ok', 'okay', 'yes', 'ho', 'hunchha', 'thik cha', 'हो', 'हुन्छ', '👍', '✅', 'ok 👍', 'done', 'sure', 'no', 'hoina', 'होइन', 'नगर्नुस्'])(
+    '%j runs the agent',
+    (t) => {
+      expect(classifyTurn(t)).toBe('substantive');
+      expect(routeTurn(t).cannedReply).toBeUndefined();
+    },
+  );
 });

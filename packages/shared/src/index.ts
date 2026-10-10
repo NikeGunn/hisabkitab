@@ -32,3 +32,4 @@ export * from './settings/registry.js';
 export * from './signup/signup.js';
 export * from './rehearsal/release-gate.js';
 export * from './rehearsal/event-chain.js';
+export * from './approval/owner-approval.js';

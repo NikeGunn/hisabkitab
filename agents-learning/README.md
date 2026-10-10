@@ -18,13 +18,13 @@ ledger: the lab's database role can only see the `rehearsal` schema.
 
 ## What is reused from production (not re-implemented)
 
-| Production piece | Used here as |
-|---|---|
-| `SYSTEM_PROMPT`, `skills/*/SKILL.md`, `todayContext` | the real agent's brain in `ClaudeAgent` |
-| ledger tool zod schemas (`@hisab/mcp-ledger` `inputSchemas`) | the sandbox tools' contract + the JSON schema the model sees |
-| `resolveInvoiceVat`, `validateExpense/Sale`, `splitVatInclusive` | sandbox ledger behaviour **and** oracle figures |
-| Audit Gate (`auditOutbound`, `addToolResultEvidence`, `correctiveInstruction`, `HELD_FALLBACK_MESSAGE`) | every agent message in every episode |
-| `estimateCostPaisa` price table | episode cost (with prompt-cache discounts) |
+| Production piece                                                                                        | Used here as                                                 |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `SYSTEM_PROMPT`, `skills/*/SKILL.md`, `todayContext`                                                    | the real agent's brain in `ClaudeAgent`                      |
+| ledger tool zod schemas (`@hisab/mcp-ledger` `inputSchemas`)                                            | the sandbox tools' contract + the JSON schema the model sees |
+| `resolveInvoiceVat`, `validateExpense/Sale`, `splitVatInclusive`                                        | sandbox ledger behaviour **and** oracle figures              |
+| Audit Gate (`auditOutbound`, `addToolResultEvidence`, `correctiveInstruction`, `HELD_FALLBACK_MESSAGE`) | every agent message in every episode                         |
+| `estimateCostPaisa` price table                                                                         | episode cost (with prompt-cache discounts)                   |
 
 ## Quick start
 
@@ -66,6 +66,25 @@ Experiment. The test split is never uploaded.
 
 Admin panel: **`/admin/lab`** — runs, step-by-step trajectories with the hash-chain check, training
 curves, and the release review where a person approves or rejects a candidate.
+
+For future production evaluations, log in to the VM over SSH and run:
+
+```bash
+cd /opt/hisabkitab
+bash agents-learning/scripts/vm-lab.sh enqueue --agent careful --split golden --budget-rs 0
+```
+
+The existing worker processes the run automatically. Refresh `/admin/lab` to see
+results; the panel currently has no button to start runs. Each enqueue command
+creates another evaluation. Viewing existing results needs no SSH command.
+pnpm lives inside Docker, so you do not need to install it on the VM.
+
+See the [step-by-step guide](docs/08-production-vm.md#starting-a-new-free-evaluation-in-the-future)
+for SSH login, run IDs, expected terminal notices, audits, and troubleshooting.
+
+The worker does not inherit the production Anthropic key. A separate
+`LAB_ANTHROPIC_API_KEY` is only needed for explicitly authorized paid rehearsals;
+leave it unset for free runs. Deployment steps: `agents-learning/docs/08-production-vm.md (local)`.
 
 ## Layout
 

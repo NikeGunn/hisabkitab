@@ -8,7 +8,7 @@
  */
 import { z } from 'zod';
 import { printedVatFields, resolveEntryVat, vatSourceFields } from './invoice-vat.js';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, lte, ne, sql } from 'drizzle-orm';
 import { appendAudit, encPII, decPII, schema, withTenant, type Db, type Tx } from '@hisab/db';
 import {
   assignBsPeriod,
@@ -47,6 +47,7 @@ import {
   createCalendarToolHandlers,
 } from './calendar-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
+import { noOwnerApproval, ownerApprovedAfter } from './owner-approval.js';
 
 const {
   sales,
@@ -77,6 +78,11 @@ const uuid = z.string().uuid();
  * is retried with the same key, the ORIGINAL result is returned and no second row
  * is written. Shared by every entry-creating tool.
  */
+const supersedesEntryId = uuid
+  .optional()
+  .describe(
+    'when the owner CORRECTS a draft you made, pass that draft id: it is replaced (marked superseded) instead of being flagged as a duplicate. Drafts only — a confirmed entry needs a credit note.',
+  );
 const idempotencyKey = z
   .string()
   .min(1)
@@ -92,6 +98,7 @@ export const inputSchemas = {
     inclusive: z.boolean().default(true),
   },
   record_sale: {
+    supersedes_entry_id: supersedesEntryId,
     occurred_on: isoDate,
     description: z.string().max(500).optional(),
     amount_paisa: paisa,
@@ -102,6 +109,7 @@ export const inputSchemas = {
   },
   record_expense: {
     occurred_on: isoDate,
+    supersedes_entry_id: supersedesEntryId,
     vendor_name: z.string().max(200).optional(),
     vendor_is_vat_registered: z.boolean().describe('ask the owner if unknown — do not guess'),
     invoice_no: z.string().max(100).optional(),
@@ -249,6 +257,20 @@ const toDate = (iso: string): Date => {
 const toIso = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+/** A correction's target must be THIS business's own draft of the same kind. */
+async function supersedableDraft(tx: Tx, ctx: ToolContext, table: typeof sales | typeof expenses, id: string | undefined) {
+  if (!id) return true;
+  const [row] = await tx
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.tenantId, ctx.tenantId), eq(table.id, id), eq(table.status, 'draft')))
+    .for('update');
+  return Boolean(row);
+}
+
+const NOT_SUPERSEDABLE =
+  'supersedes_entry_id is not a draft of this kind in this business (a CONFIRMED entry is corrected with a credit note, never replaced) — nothing saved';
+
 function serializeValidation(report: ValidationReport) {
   return {
     overall: report.overall,
@@ -289,12 +311,16 @@ async function findDuplicateCandidates(
   occurredOn: string,
   totalPaisa: bigint,
   vendor?: { name?: string | undefined; invoiceNo?: string | undefined },
+  /** The draft this entry supersedes (a correction): never its own duplicate. */
+  excludeId?: string,
 ): Promise<ExistingEntryRef[]> {
   const refs: ExistingEntryRef[] = [];
+  const live = (t: typeof sales | typeof expenses) =>
+    and(ne(t.status, 'superseded'), excludeId ? ne(t.id, excludeId) : undefined);
   const sameDay = await tx
     .select()
     .from(table)
-    .where(and(eq(table.tenantId, ctx.tenantId), eq(table.occurredOn, occurredOn)));
+    .where(and(eq(table.tenantId, ctx.tenantId), eq(table.occurredOn, occurredOn), live(table)));
   for (const row of sameDay) {
     refs.push({
       id: row.id,
@@ -312,6 +338,7 @@ async function findDuplicateCandidates(
       .where(
         and(
           eq(expenses.tenantId, ctx.tenantId),
+          live(expenses),
           sql`lower(${expenses.vendorName}) = lower(${vendor.name})`,
           sql`lower(${expenses.invoiceNo}) = lower(${vendor.invoiceNo})`,
         ),
@@ -374,6 +401,28 @@ const monthAggregate = async (
 
 type Args<K extends keyof typeof inputSchemas> = z.infer<z.ZodObject<(typeof inputSchemas)[K]>>;
 
+/**
+ * What validate_entry echoes back: the figures it validated, plus — when only a
+ * total was given — that total's VAT-inclusive 13% split. Pure; the Rehearsal Lab
+ * sandbox calls the SAME function so the two can never drift (finding #2 was
+ * partly exactly that drift).
+ */
+export function validatedFiguresEcho(
+  args: { taxable_paisa?: number | undefined; vat_paisa?: number | undefined; total_paisa?: number | undefined },
+  cfg?: TaxConfig,
+) {
+  const split =
+    args.total_paisa !== undefined && args.taxable_paisa === undefined && args.vat_paisa === undefined
+      ? splitVatInclusive(BigInt(args.total_paisa), cfg)
+      : undefined;
+  return {
+    ...(args.taxable_paisa !== undefined ? { taxable_paisa: args.taxable_paisa } : {}),
+    ...(args.vat_paisa !== undefined ? { vat_paisa: args.vat_paisa } : {}),
+    ...(args.total_paisa !== undefined ? { total_paisa: args.total_paisa } : {}),
+    ...(split ? { if_vat_inclusive_13pct: { excl_paisa: n(split.exclPaisa), vat_paisa: n(split.vatPaisa) } } : {}),
+  };
+}
+
 export function createToolHandlers(ctx: ToolContext) {
   const inTenantTx = <T>(fn: (tx: Tx) => Promise<T>) => withTenant(ctx.db, ctx.tenantId, fn);
 
@@ -418,12 +467,17 @@ export function createToolHandlers(ctx: ToolContext) {
         return { saved: false as const, reason: err instanceof Error ? err.message : String(err) };
       }
       return idemTx('record_sale', args.idempotency_key, async (tx) => {
+        if (!(await supersedableDraft(tx, ctx, sales, args.supersedes_entry_id))) {
+          return { saved: false as const, reason: NOT_SUPERSEDABLE };
+        }
         const existing = await findDuplicateCandidates(
           tx,
           ctx,
           sales,
           args.occurred_on,
           exclPaisa + vatPaisa,
+          undefined,
+          args.supersedes_entry_id,
         );
         const report = validateSale(
           {
@@ -462,6 +516,9 @@ export function createToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: sales.id });
         const saleId = row!.id;
+        if (args.supersedes_entry_id) {
+          await tx.update(sales).set({ status: 'superseded' }).where(and(eq(sales.tenantId, ctx.tenantId), eq(sales.id, args.supersedes_entry_id)));
+        }
         await logWrite(
           tx,
           ctx,
@@ -472,12 +529,14 @@ export function createToolHandlers(ctx: ToolContext) {
             amount_paisa: args.amount_paisa,
             vat_source: resolved.source,
             is_backdated: period.isBackdated,
+            ...(args.supersedes_entry_id ? { supersedes: args.supersedes_entry_id } : {}),
           },
           { report, entryType: 'sale', entryId: saleId },
         );
         return {
           saved: true as const,
           sale_id: saleId,
+          ...(args.supersedes_entry_id ? { superseded_draft_id: args.supersedes_entry_id } : {}),
           status: 'draft' as const,
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
@@ -522,6 +581,9 @@ export function createToolHandlers(ctx: ToolContext) {
       const tdsComputed = tds.kind === 'computed' ? tds : null;
 
       return idemTx('record_expense', args.idempotency_key, async (tx) => {
+        if (!(await supersedableDraft(tx, ctx, expenses, args.supersedes_entry_id))) {
+          return { saved: false as const, reason: NOT_SUPERSEDABLE };
+        }
         const existing = await findDuplicateCandidates(
           tx,
           ctx,
@@ -532,6 +594,7 @@ export function createToolHandlers(ctx: ToolContext) {
             name: args.vendor_name,
             invoiceNo: args.invoice_no,
           },
+          args.supersedes_entry_id,
         );
         const candidate: ExpenseCandidate = {
           vendorVatRegistered: args.vendor_is_vat_registered,
@@ -582,6 +645,9 @@ export function createToolHandlers(ctx: ToolContext) {
           })
           .returning({ id: expenses.id });
         const expenseId = row!.id;
+        if (args.supersedes_entry_id) {
+          await tx.update(expenses).set({ status: 'superseded' }).where(and(eq(expenses.tenantId, ctx.tenantId), eq(expenses.id, args.supersedes_entry_id)));
+        }
         await logWrite(
           tx,
           ctx,
@@ -592,12 +658,14 @@ export function createToolHandlers(ctx: ToolContext) {
             amount_paisa: args.amount_paisa,
             vat_source: resolved.source,
             is_backdated: period.isBackdated,
+            ...(args.supersedes_entry_id ? { supersedes: args.supersedes_entry_id } : {}),
           },
           { report, entryType: 'expense', entryId: expenseId },
         );
         return {
           saved: true as const,
           expense_id: expenseId,
+          ...(args.supersedes_entry_id ? { superseded_draft_id: args.supersedes_entry_id } : {}),
           status: 'draft' as const,
           amount_excl_vat_paisa: n(exclPaisa),
           vat_paisa: n(vatPaisa),
@@ -669,20 +737,30 @@ export function createToolHandlers(ctx: ToolContext) {
       );
       return {
         ...serializeValidation(report),
-        // Echo the validated figures back: the relay Audit Gate only delivers
-        // outbound figures it can match against same-turn tool results, and
-        // the agent must echo a bill BEFORE anything is saved.
-        validated_figures: {
-          ...(args.taxable_paisa !== undefined ? { taxable_paisa: args.taxable_paisa } : {}),
-          ...(args.vat_paisa !== undefined ? { vat_paisa: args.vat_paisa } : {}),
-          ...(args.total_paisa !== undefined ? { total_paisa: args.total_paisa } : {}),
-        },
+        // Echo the validated figures back (+ the 13% split of a bare total): the relay
+        // Audit Gate only delivers figures it can match against tool results, so the
+        // agent can show the owner a bill's figures BEFORE drafting, without extra calls.
+        validated_figures: validatedFiguresEcho(args, ctx.cfg),
       };
     },
 
     async confirm_entry(args: Args<'confirm_entry'>) {
       const table = args.entry_type === 'sale' ? sales : expenses;
       return inTenantTx(async (tx) => {
+        // Server-side confirm-before-save: the owner's explicit yes must postdate the draft.
+        const [draft] = await tx
+          .select({ createdAt: table.createdAt, exclPaisa: table.amountExclVatPaisa, vatPaisa: table.vatPaisa })
+          .from(table)
+          .where(and(eq(table.tenantId, ctx.tenantId), eq(table.id, args.entry_id), eq(table.status, 'draft')))
+          .for('update');
+        if (draft && !(await ownerApprovedAfter(tx, ctx.tenantId, draft.createdAt))) {
+          return noOwnerApproval({
+            entry_id: args.entry_id,
+            amount_excl_vat_paisa: n(draft.exclPaisa),
+            vat_paisa: n(draft.vatPaisa),
+            total_paisa: n(draft.exclPaisa + draft.vatPaisa),
+          });
+        }
         const updated = await tx
           .update(table)
           .set({ status: 'confirmed' })
@@ -907,7 +985,7 @@ export function createToolHandlers(ctx: ToolContext) {
             eq(table.tenantId, ctx.tenantId),
             gte(table.occurredOn, fromIso),
             lte(table.occurredOn, toIsoDate),
-            ...(args.status ? [eq(table.status, args.status)] : []),
+            ...(args.status ? [eq(table.status, args.status)] : [ne(table.status, 'superseded')]),
           );
         const items: Array<Record<string, unknown>> = [];
         if (args.type !== 'expense') {
@@ -1042,7 +1120,8 @@ export const toolDescriptions: Record<keyof typeof inputSchemas, string> = {
   validate_entry:
     'Run the Validation Engine on candidate figures WITHOUT saving. Use before asserting any figure.',
   confirm_entry:
-    'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ).',
+    'Flip a draft entry to confirmed. Call ONLY after the owner explicitly confirmed (OK / yes / सहि छ). ' +
+    'Server-enforced: refused (needs_owner_approval) unless an explicit owner yes arrived AFTER the draft was shown.',
   generate_return_summary:
     'Compute the VAT return for a BS month from CONFIRMED entries only (does NOT file). Net payable = max(output−input, 0); excess input carries forward.',
   verify_filing_deadline:

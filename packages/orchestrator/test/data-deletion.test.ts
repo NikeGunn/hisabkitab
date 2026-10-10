@@ -34,6 +34,8 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
   await adminSql`INSERT INTO reminder_log (tenant_id, bs_year, bs_month, kind, verdict) VALUES (${id}, 2082, 1, 'return_prepared', 'PASS')`;
   await adminSql`INSERT INTO tenant_sessions (tenant_id, session_id, vault_id) VALUES (${id}, ${'sesn_' + id.slice(0, 8)}, ${'vault_' + id.slice(0, 8)})`;
   await adminSql`INSERT INTO usage_counters (tenant_id, period, turns, cost_paisa) VALUES (${id}, '2026-06', 3, 1500)`;
+  await adminSql`
+    INSERT INTO owner_approvals (tenant_id, wa_message_id) VALUES (${id}, ${'wamid.del.' + id})`;
   // P10 + 0019: trial subscription, a billing payment, a queued receipt.
   await adminSql`INSERT INTO subscriptions (tenant_id, plan_code, status, current_period_end) VALUES (${id}, 'pro', 'trial', '2026-12-31')`;
   await adminSql`INSERT INTO billing_payments (tenant_id, plan_code, pidx, purchase_order_id, amount_paisa) VALUES (${id}, 'pro', ${'del-' + id}, 'po', 499900)`;
@@ -47,7 +49,7 @@ async function seedFullTenant(name: string, e164: string): Promise<string> {
 const TENANT_TABLES = [
   'sales', 'expenses', 'vendors', 'vat_returns', 'validation_events',
   'audit_log', 'onboarding_messages', 'pairing_codes', 'payments', 'reminder_log', 'tenant_sessions',
-  'usage_counters', 'memberships', 'subscriptions', 'billing_payments', 'outbound_notifications',
+  'usage_counters', 'memberships', 'subscriptions', 'billing_payments', 'outbound_notifications', 'owner_approvals',
 ];
 
 async function rowCount(table: string, tenantId: string): Promise<number> {

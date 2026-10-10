@@ -45,6 +45,8 @@ import {
 import type { InboundMessage } from './inbound.js';
 import type { WaClient } from './wa-client.js';
 import { inboundCtx, type ObsCtx } from '../obs.js';
+import { recordOwnerApproval } from './owner-approval.js';
+import type { OwnerTextMemory } from '../audit/owner-text-memory.js';
 
 /**
  * Cost-control wiring (P11). `db` is the cross-tenant orch handle used to read the
@@ -101,6 +103,8 @@ export interface RouterDeps extends SessionStoreDeps {
   dispatchReport?: (tenantId: string, toE164: string, req: CapturedReportRequest) => Promise<void>;
   /** Plan a newly paired business starts its free trial on (runtime setting). Omitted = no trial row. */
   trialPlan?: () => PlanCode;
+  /** Owner's recent messages: figures they typed earlier stay gate evidence. Omitted = this turn only. */
+  ownerMemory?: OwnerTextMemory;
 }
 
 export const UNSUPPORTED_REPLY =
@@ -306,6 +310,19 @@ async function handleClaimed(
       return true;
     }
 
+    // Server-side confirm-before-save: an explicit "yes" from a member who may
+    // confirm is recorded BEFORE the turn, so confirm_* in this turn can see it
+    // (and a draft created later in this same turn can't ride on it).
+    if (await recordOwnerApproval(deps.db, {
+      tenantId: tenant.tenantId,
+      waMessageId: msg.waMessageId,
+      userId: member.userId,
+      role: member.role,
+      text: msg.text,
+    })) {
+      tlog.info('owner approval recorded');
+    }
+
     // Model routing (P11 §7): a trivial turn ("ok"/"thanks"/👍) is answered LOCALLY
     // with a canned reply — no agent session, no model call (the biggest cost saver).
     // Media always forces a real turn (a bill must reach the agent). The turn still
@@ -367,6 +384,8 @@ async function handleClaimed(
     }
 
     const turnStart = Date.now();
+    const ownerHistory = deps.ownerMemory?.recent(tenant.tenantId) ?? [];
+    deps.ownerMemory?.remember(tenant.tenantId, msg.text);
     // The agent has no clock: without this it guessed "today" a year off and
     // recorded a sale as backdated. Nepal date, AD + BS, from the server clock.
     // A team member (not the owner) is told their role so the agent never offers an
@@ -376,7 +395,10 @@ async function handleClaimed(
         ? ''
         : `[Context: this message is from a team member with the ${member.role} role. They can ${ROLE_ACCESS[member.role]}. Do not offer anything else; money actions and team changes are the owner's.]\n`;
     const turn = await runTurn(deps.anthropic, sessionId, `${todayContext(new Date())}\n${roleContext}${turnText}`, {
-      ...(msg.text ? { ownerText: msg.text } : {}),
+      // the owner's figures from THIS and recent messages are evidence (finding #5)
+      ...(msg.text || ownerHistory.length
+        ? { ownerText: [...ownerHistory, msg.text ?? ''].join('\n') }
+        : {}),
       tenantId: tenant.tenantId,
       logger: deps.gateLogger,
       deliver: (text) => send(msg.fromE164, text),

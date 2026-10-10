@@ -31,6 +31,7 @@ import {
   type TaxConfig,
 } from '@hisab/shared';
 import type { ToolContext } from './tools.js';
+import { NO_OWNER_APPROVAL, ownerApprovedAfter } from './owner-approval.js';
 
 const { invoiceSequences, creditNotes, arInvoices, expenses, sales, parties, openingBalances } =
   schema;
@@ -302,6 +303,11 @@ export function createAccountingToolHandlers(ctx: ToolContext) {
 
     async confirm_note(args: Args<'confirm_note'>) {
       return inTenantTx(async (tx) => {
+        const [draft] = await tx
+          .select({ createdAt: creditNotes.createdAt })
+          .from(creditNotes)
+          .where(and(eq(creditNotes.tenantId, tenantId), eq(creditNotes.id, args.note_id), eq(creditNotes.status, 'draft')));
+        if (draft && !(await ownerApprovedAfter(tx, tenantId, draft.createdAt))) return NO_OWNER_APPROVAL;
         const updated = await tx
           .update(creditNotes)
           .set({ status: 'confirmed' })
@@ -450,6 +456,11 @@ export function createAccountingToolHandlers(ctx: ToolContext) {
 
     async confirm_opening_balance(args: Args<'confirm_opening_balance'>) {
       return inTenantTx(async (tx) => {
+        const [draft] = await tx
+          .select({ createdAt: openingBalances.createdAt })
+          .from(openingBalances)
+          .where(and(eq(openingBalances.tenantId, tenantId), eq(openingBalances.id, args.opening_id), eq(openingBalances.status, 'draft')));
+        if (draft && !(await ownerApprovedAfter(tx, tenantId, draft.createdAt))) return NO_OWNER_APPROVAL;
         const updated = await tx
           .update(openingBalances)
           .set({ status: 'confirmed' })

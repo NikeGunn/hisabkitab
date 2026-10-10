@@ -78,7 +78,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await adminDb.db.execute(sql`TRUNCATE rehearsal.release_decisions, rehearsal.events, rehearsal.episodes, rehearsal.runs`);
+  await adminDb.db.execute(sql`TRUNCATE rehearsal.training_runs, rehearsal.release_decisions, rehearsal.events, rehearsal.episodes, rehearsal.runs`);
   settings.stop();
   await app.close();
   await orch.close();
@@ -114,6 +114,27 @@ describe('admin Agent Lab', () => {
     const ep = await app.inject({ url: `/admin/lab/episodes/${episodeId}`, headers: { cookie: s.cookie } });
     expect(ep.body).toContain('intact (2 events)');
     expect(ep.body).toContain('NOT approved by owner');
+  });
+
+  it('training card: empty state tells how to import; an imported run shows dev + held-out test', async () => {
+    const s = await login();
+    await adminDb.db.execute(sql`TRUNCATE rehearsal.training_runs`);
+    const empty = await app.inject({ url: '/admin/lab', headers: { cookie: s.cookie } });
+    expect(empty.body).toContain('vm-lab.sh import-training');
+    const [t] = (await adminDb.db.execute(sql`
+      INSERT INTO rehearsal.training_runs (name, algorithm, reward_version, config, curve, evaluation)
+      VALUES ('grpo-v1_judge-seed0', 'grpo', 'v1_judge', '{}'::jsonb,
+              ${JSON.stringify([{ mean_judge_reward: 0.1, pass_rate: 0.1, hard_violation_rate: 0.2 }, { mean_judge_reward: 0.8, pass_rate: 0.83, hard_violation_rate: 0 }])}::jsonb,
+              ${JSON.stringify({ dev_before: { pass_rate: 0.25, hard: 0 }, dev_after: { pass_rate: 0.83, hard: 0 }, test: { pass_rate: 0.8333, hard: 0, n: 24 } })}::jsonb)
+      RETURNING id`)) as unknown as Array<{ id: string }>;
+    const page = await app.inject({ url: '/admin/lab', headers: { cookie: s.cookie } });
+    expect(page.body).toContain('grpo-v1_judge-seed0');
+    expect(page.body).toContain('83.3%');
+    expect(page.body).toContain('n=24');
+    const detail = await app.inject({ url: `/admin/lab/training/${t!.id}`, headers: { cookie: s.cookie } });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.body).toContain('Held-out TEST');
+    expect(detail.body).toContain('<svg');
   });
 
   it('PROBE: agent/owner text is escaped (no stored XSS from a trajectory)', async () => {

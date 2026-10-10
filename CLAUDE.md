@@ -535,6 +535,27 @@ skill policy (judge reward → 0 hard; naive reward → hacked), bootstrap stats
 Findings in prod: confirm-before-save is prompt-only; prompt says validate_entry but the gate can't
 use its output; corrections trip the duplicate warning. CI gate: lab regression + research job.
 
+**✅ Lab findings fixed in production (2026-10-10, migrations 0025 + 0026):** the Rehearsal Lab's
+production findings, each with adversarial + worst-case probes.
+- **Server-side confirm-before-save:** pure `@hisab/shared` `classifyOwnerApproval` (EN/NE/Romanized;
+  any figure, `?`, negation, change-word or >12 tokens ⇒ NOT a yes; 2,000-case fuzz). The router writes
+  `owner_approvals` for a verified inbound yes from a role that may confirm (staff's yes ignored); ALL
+  confirm tools (`confirm_entry`/`_arap_entry`/`_note`/`_opening_balance`) refuse (`needs_owner_approval`)
+  unless a yes is NEWER than the draft and ≤30 min old (one DB clock). hisab_app can only SELECT it.
+  Residual: two members' concurrent turns (queues are per sender) — the guard is a floor, the prompt still governs.
+- **Trivial-turn bug (found while wiring):** "ok"/"yes"/"ho"/👍/"no" were answered with the canned
+  "You are welcome!" and never reached the agent, so a draft could not be confirmed by a short yes. Answers
+  now always run the agent; only thanks/greetings short-circuit.
+- **Owner figures stay gate evidence** for the conversation (`OwnerTextMemory`: last 10 msgs, 6h, in-memory ⇒ restart = stricter).
+- **Corrections:** `supersedes_entry_id` on record_sale/record_expense marks the agent's own DRAFT
+  `superseded` (never a confirmed entry; tenant + kind checked; FOR UPDATE race-safe) so it no longer trips
+  the duplicate check; excluded from listings/reports. `validate_entry` echoes figures + the 13% split of a
+  bare total via exported `validatedFiguresEcho` (the lab sandbox must reuse it — drift caused finding #2).
+- **GRPO card was empty** because results were never imported: `pnpm lab import-training` (VM:
+  `bash agents-learning/scripts/vm-lab.sh import-training`) loads `research/results/*.json` idempotently
+  (sha256) + measures each saved policy's held-out TEST pass for free; panel shows a Held-out test column.
+- Lab docs/scripts live ONLY in `agents-learning/` (docs local, `scripts/vm-lab.sh`).
+
 **⬜ PENDING — build in this order:**
 - ✅ **Required-for-first-paid-customer subset COMPLETE:** ✅ **P8** identity/RBAC → ✅ **P9** idempotency
   → ✅ **P10** billing → ✅ **P11** cost controls → ✅ **P15** security (minimal) → ✅ **P16** infra/CI-CD.

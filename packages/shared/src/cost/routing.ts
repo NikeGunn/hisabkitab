@@ -13,7 +13,14 @@
  * So: a message is trivial ONLY if, after stripping a small acknowledgement
  * vocabulary + punctuation/emoji, NOTHING substantive remains. Any digit, any
  * currency hint, any unknown word ⇒ substantive. When in doubt, run the agent.
+ *
+ * ANSWERS ARE NEVER TRIVIAL: "yes" / "ok" / "ho" / 👍 / "no" / "hoina" is usually the
+ * owner answering "Shall I save it?". Short-circuiting it with a canned reply meant
+ * the agent never heard the approval and the draft was never confirmed (or never
+ * dropped). So an explicit approval (isOwnerApproval) or a no-word always runs the
+ * agent; only thanks / greetings / bare pleasantries are answered locally.
  */
+import { classifyOwnerApproval } from '../approval/owner-approval.js';
 
 export type TurnIntent =
   | 'trivial' // ack/greeting/thanks — answer locally, no model call
@@ -40,16 +47,16 @@ const TRIVIAL_WORDS = new Set<string>([
   // english acks
   'ok', 'okay', 'k', 'kk', 'thanks', 'thank', 'thankyou', 'thx', 'ty', 'tysm',
   'great', 'good', 'nice', 'cool', 'fine', 'sure', 'yes', 'yep', 'yeah', 'yup',
-  'no', 'nope', 'hi', 'hello', 'hey', 'hii', 'hiii', 'namaste', 'namaskar',
+  'hi', 'hello', 'hey', 'hii', 'hiii', 'namaste', 'namaskar',
   'bye', 'goodbye', 'welcome', 'perfect', 'awesome', 'understood', 'got', 'it',
   'done', 'noted', 'alright', 'right', 'sorry', 'please', 'pls', 'plz',
   'morning', 'afternoon', 'evening', 'night', 'you', 'u', 'very', 'much', 'so',
   // romanized nepali acks
   'dhanyabad', 'dhanyavad', 'huncha', 'hunchha', 'hajur', 'thik', 'thikcha',
-  'thikchha', 'cha', 'chha', 'ramro', 'la', 'lai', 'hola', 'ho', 'hoina',
+  'thikchha', 'cha', 'chha', 'ramro', 'la', 'lai', 'hola', 'ho',
   // devanagari nepali acks
   'धन्यवाद', 'नमस्ते', 'नमस्कार', 'हुन्छ', 'हजुर', 'ठिक', 'ठीक', 'राम्रो',
-  'हो', 'होइन', 'ल', 'सुभप्रभात', 'छ', 'छैन', 'धेरै',
+  'हो', 'ल', 'सुभप्रभात', 'छ', 'धेरै',
 ]);
 
 /** Strip emoji, punctuation, and symbols, leaving words + digits + spaces. */
@@ -73,6 +80,9 @@ function looksSubstantive(token: string): boolean {
 export function classifyTurn(text: string | undefined): TurnIntent {
   const raw = (text ?? '').trim();
   if (!raw) return 'substantive'; // empty/odd → let the agent handle it safely
+  // An answer to "Shall I save it?" must reach the agent (and the approval record).
+  const approval = classifyOwnerApproval(raw);
+  if (approval.approved || approval.reason === 'negation' || approval.reason === 'conditional') return 'substantive';
 
   const cleaned = stripDecoration(raw).toLowerCase().trim();
   if (!cleaned) {

@@ -162,6 +162,15 @@ async function purgePostgres(db: Db, tenantId: string): Promise<Record<string, n
       ).length,
     );
     await n(
+      'owner_approvals',
+      (
+        await tx
+          .delete(schema.ownerApprovals)
+          .where(eq(schema.ownerApprovals.tenantId, tenantId))
+          .returning({ id: schema.ownerApprovals.id })
+      ).length,
+    );
+    await n(
       'usage_counters',
       (
         await tx

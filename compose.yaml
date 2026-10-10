@@ -206,7 +206,8 @@ services:
   # Rehearsal Lab worker: runs queued synthetic episodes (pnpm lab enqueue …).
   # Deliberately holds NO WhatsApp, Khalti, ledger-MCP or tenant-DB credential: its DB
   # role (hisab_lab) can only touch the `rehearsal` schema. Hardened container; set
-  # LAB_RUNTIME=runsc on a host with gVisor for a user-space kernel boundary.
+  # LAB_RUNTIME=runsc-docker on a host with gVisor for a user-space kernel boundary
+  # compatible with Docker Compose DNS (see agents-learning/docs/08-production-vm.md (local)).
   lab-worker:
     profiles: ['lab']
     build:
@@ -218,7 +219,8 @@ services:
     environment:
       LAB_DATABASE_URL: postgres://hisab_lab:${HISAB_LAB_PASSWORD:-hisab_lab_dev}@postgres:5432/${POSTGRES_DB:-hisabkitab}
       # Only needed for real-model rehearsals (agent "claude…"); budget-capped per run.
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Never inherit the production agent's key. Free rehearsals need no key.
+      ANTHROPIC_API_KEY: ${LAB_ANTHROPIC_API_KEY:-}
       HISAB_MODEL: ${HISAB_MODEL:-claude-sonnet-4-6}
       HISAB_EFFORT: ${HISAB_EFFORT:-low}
       LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
