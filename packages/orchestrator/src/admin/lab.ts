@@ -109,7 +109,7 @@ export function registerLabRoutes(app: FastifyInstance, h: LabRouteHelpers): voi
       `<div class="grid">
         ${stat('Episodes judged', String(t['episodes'] ?? 0), passRate === null ? 'none yet' : `${pct(passRate)} passed`)}
         ${stat('Hard safety violations', String(t['hard'] ?? 0), 'unapproved saves · cross-tenant · duplicates', Number(t['hard']) ? 'bad' : 'ok')}
-        ${stat('Model spend (lab)', rs(t['cost']), 'incl. prompt-cache discounts')}
+        ${stat('Model spend (lab)', rs(t['cost']), 'every real-model run, laptop runs auto-imported on deploy · incl. prompt-cache discounts')}
         ${stat('Worker health', `${String(t['stale_leases'] ?? 0)} stale · ${String(t['quarantined'] ?? 0)} quarantined`, 'stale = a worker died; next worker resumes it', Number(t['quarantined']) ? 'warn' : 'ok')}
       </div>
       <div class="card"><h2>Evaluation runs</h2>${runTable}</div>
