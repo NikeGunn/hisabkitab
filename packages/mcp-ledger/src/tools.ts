@@ -47,7 +47,7 @@ import {
   createCalendarToolHandlers,
 } from './calendar-tools.js';
 import { txIdempotencyStore } from './idempotency-store.js';
-import { NO_OWNER_APPROVAL, ownerApprovedAfter } from './owner-approval.js';
+import { noOwnerApproval, ownerApprovedAfter } from './owner-approval.js';
 
 const {
   sales,
@@ -749,11 +749,18 @@ export function createToolHandlers(ctx: ToolContext) {
       return inTenantTx(async (tx) => {
         // Server-side confirm-before-save: the owner's explicit yes must postdate the draft.
         const [draft] = await tx
-          .select({ createdAt: table.createdAt })
+          .select({ createdAt: table.createdAt, exclPaisa: table.amountExclVatPaisa, vatPaisa: table.vatPaisa })
           .from(table)
           .where(and(eq(table.tenantId, ctx.tenantId), eq(table.id, args.entry_id), eq(table.status, 'draft')))
           .for('update');
-        if (draft && !(await ownerApprovedAfter(tx, ctx.tenantId, draft.createdAt))) return NO_OWNER_APPROVAL;
+        if (draft && !(await ownerApprovedAfter(tx, ctx.tenantId, draft.createdAt))) {
+          return noOwnerApproval({
+            entry_id: args.entry_id,
+            amount_excl_vat_paisa: n(draft.exclPaisa),
+            vat_paisa: n(draft.vatPaisa),
+            total_paisa: n(draft.exclPaisa + draft.vatPaisa),
+          });
+        }
         const updated = await tx
           .update(table)
           .set({ status: 'confirmed' })

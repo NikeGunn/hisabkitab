@@ -48,12 +48,14 @@ const status = async (id: string) =>
 describe("confirm_entry requires the owner's yes AFTER the draft", () => {
   it('PROBE: no approval at all → refused, still a draft', async () => {
     const id = await draftSale();
-    const r = await s.callTool<{ ok: boolean; needs_owner_approval?: boolean }>('confirm_entry', {
+    const r = await s.callTool<{ ok: boolean; needs_owner_approval?: boolean; draft?: Record<string, number> }>('confirm_entry', {
       entry_type: 'sale',
       entry_id: id,
     });
     expect(r.ok).toBe(false);
     expect(r.needs_owner_approval).toBe(true);
+    // the refusal echoes the draft's figures so the agent can re-show them (Audit Gate evidence)
+    expect(r.draft).toMatchObject({ total_paisa: 113000, vat_paisa: 13000 });
     expect(await status(id)).toBe('draft');
   });
 

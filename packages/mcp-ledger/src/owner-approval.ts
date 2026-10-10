@@ -19,6 +19,9 @@ export const NO_OWNER_APPROVAL = {
     'Show the owner the drafted figures and ask them to reply YES / हो to save it, then call confirm again.',
 };
 
+/** The refusal, echoing the draft's own figures so the agent can re-show them (Audit Gate evidence). */
+export const noOwnerApproval = (draft: Record<string, unknown> = {}) => ({ ...NO_OWNER_APPROVAL, draft });
+
 export async function ownerApprovedAfter(
   tx: Tx,
   tenantId: string,
